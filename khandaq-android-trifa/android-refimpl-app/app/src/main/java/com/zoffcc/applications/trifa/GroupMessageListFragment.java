@@ -512,6 +512,12 @@ public class GroupMessageListFragment extends Fragment
 
     synchronized void refresh_file_progress_by_hash(final String msgIdHash)
     {
+        refresh_file_progress_by_hash(msgIdHash, false);
+    }
+
+    /** progressOnly: a step of a transfer under way, see HelperGroup.post_group_file_progress_refresh. */
+    synchronized void refresh_file_progress_by_hash(final String msgIdHash, final boolean progressOnly)
+    {
         Runnable myRunnable = new Runnable()
         {
             @Override
@@ -519,7 +525,7 @@ public class GroupMessageListFragment extends Fragment
             {
                 try
                 {
-                    adapter.refresh_file_progress_by_hash(msgIdHash);
+                    adapter.refresh_file_progress_by_hash(msgIdHash, progressOnly);
                 }
                 catch (Exception e)
                 {

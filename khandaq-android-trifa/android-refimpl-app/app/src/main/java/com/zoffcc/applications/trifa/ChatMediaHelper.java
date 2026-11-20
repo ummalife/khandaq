@@ -562,12 +562,17 @@ public final class ChatMediaHelper
                 optionalTransform(new RoundedCorners(ChatBubbleUiHelper.media_corner_radius_px(context)));
 
         // Cached composed thumb → bind synchronously, no spinner, no flicker (#172).
+        // KHANDAQ (beta 2026-11-20): through Glide's memory, which hands the rounded picture back in the same frame.
+        // skipMemoryCache(true) made every bind decode it again on another thread: the rows clear the preview first
+        // (hideMediaPreview), so it stood blank for a few frames each time a row was drawn whole, and a video being
+        // sent to a group blinked with its progress (Khandaq Testers, Android, 8240). The model is the cached bitmap
+        // itself, so the memory holds one rounded copy of it at the size of the box.
         final Bitmap cached = video_thumb_cache.get(vfsPath);
         if (cached != null)
         {
             previewImage.setTag(R.id.ft_preview_image, previewSig);
             GlideApp.with(context).load(cached).
-                    diskCacheStrategy(DiskCacheStrategy.NONE).skipMemoryCache(true).
+                    diskCacheStrategy(DiskCacheStrategy.NONE).
                     apply(glideOptions).into(previewImage);
             return;
         }
@@ -648,11 +653,11 @@ public final class ChatMediaHelper
 
                         if (frameFinal != null)
                         {
+                            // In Glide's memory too, so that the next bind of the cached bitmap finds it there.
                             GlideApp.
                                     with(context).
                                     load(frameFinal).
                                     diskCacheStrategy(DiskCacheStrategy.NONE).
-                                    skipMemoryCache(true).
                                     apply(glideOptions).
                                     placeholder(R.drawable.round_loading_animation).
                                     error(playOverlay).

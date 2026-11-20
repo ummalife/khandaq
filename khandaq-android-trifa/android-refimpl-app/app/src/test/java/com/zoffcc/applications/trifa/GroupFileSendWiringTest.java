@@ -435,6 +435,47 @@ public class GroupFileSendWiringTest
     }
 
     @Test
+    public void a_step_of_a_group_file_redraws_its_progress_alone() throws Exception
+    {
+        // Beta (Khandaq Testers, Android, 8240; 0.2.67 on a Galaxy S25): the picture of a video being sent to a group
+        // went blank and came back about twice a second. Every step of the transfer drew the whole row again, and the
+        // whole row puts the preview back. A step under 100 % now draws the progress alone, as a 1:1 transfer does.
+        final String group = code("HelperGroup.java");
+        assertTrue(body(group, "private static void set_ngc_file_transfer_progress(")
+                           .contains("post_group_file_progress_refresh(groupId, msgIdHash, percent < 100)"));
+        final String received = body(group, "static void notify_group_file_recv_progress_bytes(");
+        assertTrue(received.contains("post_group_file_progress_refresh(groupId, msgIdHash, percent < 100)"));
+        assertFalse(received.contains("post_group_file_progress_refresh(groupId, msgIdHash)"));
+
+        // A step and a change of state are throttled apart: a step must not eat the "sent" that comes right after it.
+        final String post = body(group, "post_group_file_progress_refresh(final String groupId, final String msgIdHash,");
+        assertTrue(post.contains("(progressOnly ? PROGRESS_STEP_KEY : \"\")"));
+        assertTrue(post.contains("refresh_file_progress_by_hash(msgIdHash, progressOnly)"));
+        assertTrue(body(code("GroupMessageListFragment.java"),
+                        "void refresh_file_progress_by_hash(final String msgIdHash, final boolean progressOnly)")
+                           .contains("adapter.refresh_file_progress_by_hash(msgIdHash, progressOnly)"));
+
+        final String adapter = code("GroupMessagelistAdapter.java");
+        assertTrue(body(adapter, "public void refresh_file_progress_by_hash(final String msgIdHash, final boolean progressOnly)")
+                           .contains("this.notifyItemChanged(pos, MessagelistAdapter.PAYLOAD_TRANSFER_PROGRESS)"));
+        // That payload draws the progress of a group file by itself.
+        assertTrue(body(adapter, "public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position,")
+                           .contains("ChatTransferProgressHelper.applyGroup(context, holder.itemView, m, m.direction == 1)"));
+    }
+
+    @Test
+    public void a_video_preview_drawn_again_is_back_in_the_same_frame() throws Exception
+    {
+        // A row drawn whole (a change of state, a reaction) clears its preview first (hideMediaPreview) and puts the
+        // video's picture back from the cache of composed pictures. From Glide's memory it is there in the same frame;
+        // with the memory skipped it was decoded again on another thread, a few frames later: a blink.
+        final String video = body(code("ChatMediaHelper.java"),
+                                  "static void bindVideoPreview(final Context context, final String vfsPath,");
+        assertTrue(video.contains("video_thumb_cache.get(vfsPath)"));
+        assertFalse(video.contains("skipMemoryCache(true)"));
+    }
+
+    @Test
     public void a_group_number_is_the_files_group_only_while_it_has_the_files_id()
     {
         // The id of the group at the number (tox_group_by_groupnum__wrapper), in whatever case it comes.

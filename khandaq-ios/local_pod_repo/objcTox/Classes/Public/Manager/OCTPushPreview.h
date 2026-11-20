@@ -5,6 +5,7 @@
 #import <Foundation/Foundation.h>
 
 @class OCTTox;
+@class OCTPushPreviewGroup;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -59,8 +60,8 @@ FOUNDATION_EXPORT NSString *const kOCTPushPreviewWakeFieldPid;
 + (BOOL)isAllowedSenderPublicKey:(NSString *)publicKeyHex;
 
 /// A profile was deleted: the master key goes, and with it every key its contacts were given, together with the
-/// allowed senders, the keys contacts sent and their group presence. A new master key is made the next time one
-/// is handed out.
+/// allowed senders, the keys contacts sent, their group presence and their group wake sets. A new master key is
+/// made the next time one is handed out.
 + (void)resetAll;
 
 #pragma mark - Group presence
@@ -74,6 +75,43 @@ FOUNDATION_EXPORT NSString *const kOCTPushPreviewWakeFieldPid;
 /// Packet 190/02 listing `hashes` (the first 64 well-formed ones).
 + (NSData *)groupPresencePacketWithHashes:(NSArray<NSString *> *)hashes;
 
+#pragma mark - Group message wakes
+
+/// KHANDAQ (0.2.69, group message wakes): packet 190/03 listing `hashes` (the first 64 well-formed ones).
++ (NSData *)groupWakePacketWithHashes:(NSArray<NSString *> *)hashes;
+
+/**
+ * KHANDAQ (0.2.69, group message wakes): the 190/03 set for a friend whose stored 190/02 set is
+ * `friendPresenceHashes` (docs/PUSH_PREVIEWS.md, "Group message wakes"): the presence hash of each of `groups`, in
+ * their order, but a muted group and a group in which a member muted here is that friend (the presence hash of the
+ * member's key there is in `friendPresenceHashes`). The first 64.
+ */
++ (NSArray<NSString *> *)groupWakeHashesForGroups:(NSArray<OCTPushPreviewGroup *> *)groups
+                             friendPresenceHashes:(nullable NSArray<NSString *> *)friendPresenceHashes;
+
+/**
+ * KHANDAQ (0.2.69, group message wakes): whom a message of ours to the group with this chat id wakes, as contact
+ * public key (the key of `contactWakeSets`) → the member key (lower case) the contact is woken for. A member counts
+ * when it is one of `memberKeys`, is not connected (`connectedKeys`), is not us (`ownKey`) and has not left
+ * (`leftKeys`); it wakes the one contact whose 190/03 set in `contactWakeSets` holds the presence hash of the group
+ * and that key. A hash two contacts hold wakes neither: one of them replayed the other's. A contact is woken for one
+ * member at most, the first in `memberKeys`. Whether the contact is away and can be woken is for the caller.
+ */
++ (NSDictionary<NSString *, NSString *> *)groupWakeMembersForChatIdHex:(NSString *)chatIdHex
+                                                           memberKeys:(NSArray<NSString *> *)memberKeys
+                                                        connectedKeys:(NSArray<NSString *> *)connectedKeys
+                                                               ownKey:(nullable NSString *)ownKey
+                                                             leftKeys:(NSArray<NSString *> *)leftKeys
+                                                      contactWakeSets:(NSDictionary<NSString *, NSArray<NSString *> *> *)contactWakeSets;
+
+/// KHANDAQ (0.2.69, group message wakes): the event key of a group text, `gt:` + the message id (8 uppercase hex,
+/// big-endian) + `:` + the sender's public key in the group (64 uppercase hex); nil without such a key.
++ (nullable NSString *)groupTextEventKeyWithMessageId:(uint32_t)messageId senderPeerKeyHex:(nullable NSString *)senderPeerKeyHex;
+
+/// KHANDAQ (0.2.69, group message wakes): the event key of a group file, `gf:` + its 32-byte hash (64 uppercase
+/// hex); nil without one.
++ (nullable NSString *)groupFileEventKeyWithMsgIdHex:(nullable NSString *)msgIdHex;
+
 #pragma mark - Incoming packet 190
 
 /// The `K` a contact sent in packet 190/01 (the whole packet, id byte included), or nil.
@@ -82,14 +120,24 @@ FOUNDATION_EXPORT NSString *const kOCTPushPreviewWakeFieldPid;
 /// The hashes a contact sent in packet 190/02 (the whole packet, id byte included), or nil.
 + (nullable NSArray<NSString *> *)groupPresenceHashesFromPacket:(NSData *)packet;
 
+/// The hashes a contact sent in packet 190/03 (the whole packet, id byte included), or nil.
++ (nullable NSArray<NSString *> *)groupWakeHashesFromPacket:(NSData *)packet;
+
 #pragma mark - What contacts sent us
 
 + (void)storePeerKey:(NSData *)key forFriendPublicKey:(NSString *)publicKeyHex;
 + (nullable NSData *)peerKeyForFriendPublicKey:(NSString *)publicKeyHex;
 + (void)storeGroupPresence:(NSArray<NSString *> *)hashes forFriendPublicKey:(NSString *)publicKeyHex;
 + (BOOL)friendPublicKey:(NSString *)publicKeyHex hasGroupPresenceHash:(NSString *)hash;
-/// Drops the key and the group presence of a contact that was removed (or blocked), and takes it off the
-/// allowed senders.
+/// The 190/02 set the contact sent last, empty without one.
++ (NSArray<NSString *> *)groupPresenceHashesForFriendPublicKey:(NSString *)publicKeyHex;
+/// KHANDAQ (0.2.69, group message wakes): the 190/03 set the contact sent last replaces the one before.
++ (void)storeGroupWake:(NSArray<NSString *> *)hashes forFriendPublicKey:(NSString *)publicKeyHex;
+/// The 190/03 set the contact sent last, empty without one: a client before 0.2.69 is never woken for a group
+/// message.
++ (NSArray<NSString *> *)groupWakeHashesForFriendPublicKey:(NSString *)publicKeyHex;
+/// Drops the key, the group presence and the group wake set of a contact that was removed (or blocked), and takes
+/// it off the allowed senders.
 + (void)forgetFriendPublicKey:(NSString *)publicKeyHex;
 
 #pragma mark - Message text
@@ -124,6 +172,28 @@ FOUNDATION_EXPORT NSString *const kOCTPushPreviewWakeFieldPid;
 /// sent us a key (an older client: its wake stays the generic one).
 + (nullable NSDictionary<NSString *, NSString *> *)wakeFieldsForFriendPublicKey:(NSString *)publicKeyHex
                                                                           fields:(NSDictionary<NSString *, id> *)fields;
+
+@end
+
+/**
+ * KHANDAQ (0.2.69, group message wakes): one group of this device as the 190/03 set for a friend sees it
+ * (+[OCTPushPreview groupWakeHashesForGroups:friendPresenceHashes:]).
+ */
+@interface OCTPushPreviewGroup : NSObject
+
+@property (nonatomic, copy, readonly) NSString *chatIdHex;
+/// This device's own peer key in the group.
+@property (nonatomic, copy, readonly) NSString *ownPeerKeyHex;
+/// The group is muted on this device.
+@property (nonatomic, readonly) BOOL muted;
+/// The keys of the members muted on this device in the group.
+@property (nonatomic, copy, readonly) NSArray<NSString *> *mutedMemberKeyHexes;
+
+- (instancetype)initWithChatIdHex:(NSString *)chatIdHex
+                    ownPeerKeyHex:(NSString *)ownPeerKeyHex
+                            muted:(BOOL)muted
+              mutedMemberKeyHexes:(NSArray<NSString *> *)mutedMemberKeyHexes NS_DESIGNATED_INITIALIZER;
+- (instancetype)init NS_UNAVAILABLE;
 
 @end
 

@@ -92,6 +92,10 @@ typedef void (^OCTNgcGroupFileTransferIncomingDroppedBlock)(uint32_t groupNumber
 /// gave the file up a minute later. Called on the main thread, where the Realm lives; `reply` takes any thread.
 @property (atomic, copy, nullable) void (^sentFileLookupBlock)
     (uint32_t groupNumber, NSString *msgIdHex, void (^reply)(NSString *_Nullable filePath));
+/// KHANDAQ (0.2.69, group message wakes): the offer of a file this device sends the group went out, its single packet
+/// or the BEGIN of a chunked one, under the name the members get. Each time a sending of it starts, so a file sent
+/// again offers itself again. Called on the queues that send, never on the main one.
+@property (atomic, copy, nullable) void (^offerSentBlock)(uint32_t groupNumber, NSString *msgIdHex, NSString *fileName);
 
 - (instancetype)initWithSendPacketBlock:(OCTNgcGroupFileTransferSendPacketBlock)sendPacketBlock
                 incomingFilesDirectory:(NSString *(^)(uint32_t groupNumber))incomingFilesDirectoryBlock

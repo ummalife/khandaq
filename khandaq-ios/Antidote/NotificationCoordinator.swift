@@ -355,6 +355,20 @@ extension NotificationCoordinator {
         }
         return nil
     }
+
+    /// KHANDAQ (0.2.69, group message wakes): the event a group message wake names in `khq_ev`: a text by its message
+    /// id and its author's key in the group, a file by its 32-byte hash. None for a private message or a row from
+    /// history sync, which no wake names, nor for a text whose author key the row did not keep.
+    static func groupEventKey(of message: OCTMessageAbstract) -> String? {
+        guard !message.groupPrivateMessage, !message.groupHistorySync, !message.groupSystemMessage else {
+            return nil
+        }
+        if let text = message.messageText {
+            return OCTPushPreview.groupTextEventKey(withMessageId: UInt32(bitPattern: text.messageId),
+                                                    senderPeerKeyHex: AirGroupTranscript.authorKey(of: message))
+        }
+        return OCTPushPreview.groupFileEventKey(withMsgIdHex: message.messageFile?.groupMsgIdHashHex)
+    }
 }
 
 private extension NotificationCoordinator {
@@ -529,11 +543,15 @@ private extension NotificationCoordinator {
     }
 
     /// The event a push preview names in `khq_ev` (docs/PUSH_PREVIEWS.md): a text by its msgV3 hash, a file
-    /// by its Tox file id, a reaction by its anchor and emoji. Group messages never come as previews.
+    /// by its Tox file id, a reaction by its anchor and emoji, a group message as groupEventKey(of:) says.
     func eventKey(of notification: NotificationType) -> String? {
         switch notification {
             case .newMessage(let message):
                 let chat = submanagerObjects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat
+                // KHANDAQ (0.2.69, group message wakes): the sender's device woke us with a preview of it.
+                if chat?.isGroup == true {
+                    return NotificationCoordinator.groupEventKey(of: message)
+                }
                 guard chat?.isGroup == false else {
                     return nil
                 }

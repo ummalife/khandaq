@@ -14,6 +14,7 @@
 #import "OCTMessageFile.h"
 #import "OCTChat.h"
 #import "OCTFriend.h"
+#import "OCTGroupPeer.h"
 #import "OCTLogging.h"
 #import "OCTSendMessageOperation.h"
 #import "OCTSeenReceipt.h"
@@ -329,6 +330,7 @@ static const NSTimeInterval kOCTSeenReportedMaxLeadSec = 300.0;
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
     RLMResults *friends = [realmManager objectsWithClass:[OCTFriend class] predicate:nil];
     NSData *presencePacket = [OCTPushPreview groupPresencePacketWithHashes:[OCTPushPreview ownGroupPresenceHashesWithTox:tox]];
+    NSArray<OCTPushPreviewGroup *> *wakeGroups = [self groupWakeGroupsWithTox:tox];
     for (OCTFriend *friend in friends) {
         if (!friend.isConnected) {
             continue;
@@ -351,6 +353,8 @@ static const NSTimeInterval kOCTSeenReportedMaxLeadSec = 300.0;
             [tox sendLosslessPacketWithFriendNumber:friend.friendNumber bytes:keyPacket error:nil];
         }
         [tox sendLosslessPacketWithFriendNumber:friend.friendNumber bytes:presencePacket error:nil];
+        // KHANDAQ (0.2.69, group message wakes): 190/03 goes wherever 190/02 goes.
+        [self sendGroupWakeToFriend:friend groups:wakeGroups tox:tox];
     }
 #else
     NSLog(@"PUSH:broadcastOwnPushURL:firebase not configured");
@@ -366,13 +370,102 @@ static const NSTimeInterval kOCTSeenReportedMaxLeadSec = 300.0;
 
     OCTTox *tox = [self.dataSource managerGetTox];
     NSData *presencePacket = [OCTPushPreview groupPresencePacketWithHashes:[OCTPushPreview ownGroupPresenceHashesWithTox:tox]];
+    NSArray<OCTPushPreviewGroup *> *wakeGroups = [self groupWakeGroupsWithTox:tox];
     RLMResults *friends = [[self.dataSource managerGetRealmManager] objectsWithClass:[OCTFriend class] predicate:nil];
     for (OCTFriend *friend in friends) {
         if (friend.isConnected) {
             [tox sendLosslessPacketWithFriendNumber:friend.friendNumber bytes:presencePacket error:nil];
+            // KHANDAQ (0.2.69, group message wakes): a group joined or created may wake us too.
+            [self sendGroupWakeToFriend:friend groups:wakeGroups tox:tox];
         }
     }
 #endif
+}
+
+- (void)broadcastGroupWakeToConnectedFriends
+{
+#if OCTHasFirebase
+    if ([FIRApp defaultApp] == nil || [FIRMessaging messaging].FCMToken.length == 0) {
+        return; // as for the group presence: no wake URL of ours is out there to wake us with
+    }
+
+    OCTTox *tox = [self.dataSource managerGetTox];
+    NSArray<OCTPushPreviewGroup *> *wakeGroups = [self groupWakeGroupsWithTox:tox];
+    RLMResults *friends = [[self.dataSource managerGetRealmManager] objectsWithClass:[OCTFriend class] predicate:nil];
+    for (OCTFriend *friend in friends) {
+        if (friend.isConnected) {
+            [self sendGroupWakeToFriend:friend groups:wakeGroups tox:tox];
+        }
+    }
+#endif
+}
+
+- (void)sendGroupWakeToFriendWithPublicKey:(NSString *)publicKey
+{
+#if OCTHasFirebase
+    if ([FIRApp defaultApp] == nil || [FIRMessaging messaging].FCMToken.length == 0) {
+        return;
+    }
+
+    OCTFriend *friend = publicKey.length > 0 ? [[self.dataSource managerGetRealmManager] friendWithPublicKey:publicKey] : nil;
+    if (friend == nil || ! friend.isConnected) {
+        return;
+    }
+    OCTTox *tox = [self.dataSource managerGetTox];
+    [self sendGroupWakeToFriend:friend groups:[self groupWakeGroupsWithTox:tox] tox:tox];
+#endif
+}
+
+/// KHANDAQ (0.2.69, group message wakes): the friend's own 190/03 set, which leaves out a group where a member muted
+/// here is that friend (its 190/02 set tells which member it is).
+- (void)sendGroupWakeToFriend:(OCTFriend *)friend groups:(NSArray<OCTPushPreviewGroup *> *)groups tox:(OCTTox *)tox
+{
+    NSArray<NSString *> *presence = [OCTPushPreview groupPresenceHashesForFriendPublicKey:friend.publicKey];
+    NSArray<NSString *> *hashes = [OCTPushPreview groupWakeHashesForGroups:groups friendPresenceHashes:presence];
+    [tox sendLosslessPacketWithFriendNumber:friend.friendNumber bytes:[OCTPushPreview groupWakePacketWithHashes:hashes] error:nil];
+}
+
+/**
+ * KHANDAQ (0.2.69, group message wakes): our groups as the 190/03 sets see them, in the order of the 190/02 set:
+ * each group toxcore has with a known own peer key and the app still has a chat for, with whether it is muted and
+ * the keys of the members muted in it. A group left loses its chat at once, while toxcore may keep it a few seconds
+ * more to resend the leave notice. Main thread.
+ */
+- (NSArray<OCTPushPreviewGroup *> *)groupWakeGroupsWithTox:(OCTTox *)tox
+{
+    NSMutableArray<NSArray<NSString *> *> *toxGroups = [NSMutableArray array];
+    [tox performSyncBlockOnToxQueue:^{
+        for (NSNumber *number in [tox groupNumbers]) {
+            OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)number.unsignedIntValue;
+            NSString *chatId = [tox groupChatIdHexForGroupNumber:groupNumber error:nil];
+            NSString *selfKey = [tox groupSelfPublicKeyHexForGroupNumber:groupNumber error:nil];
+            if (chatId.length == 64 && selfKey.length == 64) {
+                [toxGroups addObject:@[chatId, selfKey]];
+            }
+        }
+    }];
+
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    NSMutableArray<OCTPushPreviewGroup *> *groups = [NSMutableArray array];
+    for (NSArray<NSString *> *toxGroup in toxGroups) {
+        OCTChat *chat = [realmManager chatWithGroupChatIdHex:toxGroup[0]];
+        if (chat == nil) {
+            continue;
+        }
+        NSPredicate *mutedPeers = [NSPredicate predicateWithFormat:@"chatUniqueIdentifier == %@ AND peerNotificationsSilent == YES",
+                                                                   chat.uniqueIdentifier];
+        NSMutableArray<NSString *> *mutedMemberKeys = [NSMutableArray array];
+        for (OCTGroupPeer *peer in [realmManager objectsWithClass:[OCTGroupPeer class] predicate:mutedPeers]) {
+            if (peer.peerPublicKeyHex.length > 0) {
+                [mutedMemberKeys addObject:peer.peerPublicKeyHex];
+            }
+        }
+        [groups addObject:[[OCTPushPreviewGroup alloc] initWithChatIdHex:toxGroup[0]
+                                                           ownPeerKeyHex:toxGroup[1]
+                                                                   muted:chat.groupNotificationsSilent
+                                                     mutedMemberKeyHexes:mutedMemberKeys]];
+    }
+    return groups;
 }
 
 - (NSMutableDictionary<NSString *, id> *)pushPreviewFieldsWithKind:(NSString *)kind

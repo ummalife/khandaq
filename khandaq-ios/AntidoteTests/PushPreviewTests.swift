@@ -154,6 +154,244 @@ final class PushPreviewTests: XCTestCase {
         XCTAssertEqual(OCTPushPreview.groupPresenceHashes(fromPacket: empty), [])
     }
 
+    // MARK: Group message wakes (0.2.69)
+
+    private let groupChatId = "0102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F20"
+    private let groupPeerKey = "A1A2A3A4A5A6A7A8A9AAABACADAEAFB0B1B2B3B4B5B6B7B8B9BABBBCBDBEBFC0"
+
+    func testGroupWakePacketMatchesTheVector() {
+        let hash = OCTPushPreview.groupPresenceHash(forChatIdHex: groupChatId, peerPublicKeyHex: groupPeerKey)
+        XCTAssertEqual(hash, "9f033743ff83e9574563245fe61fac74")
+
+        let packet = OCTPushPreview.groupWakePacket(withHashes: [hash!])
+        XCTAssertEqual(packet, data("BE0301019F033743FF83E9574563245FE61FAC74"))
+        XCTAssertEqual(OCTPushPreview.groupWakeHashes(fromPacket: packet), ["9f033743ff83e9574563245fe61fac74"])
+        XCTAssertNil(OCTPushPreview.groupPresenceHashes(fromPacket: packet), "a 190/03 is no 190/02")
+        XCTAssertNil(OCTPushPreview.groupWakeHashes(fromPacket: data("BE0201019F033743FF83E9574563245FE61FAC74")),
+                     "nor the other way round")
+
+        let empty = OCTPushPreview.groupWakePacket(withHashes: [])
+        XCTAssertEqual(empty, data("BE030100"))
+        XCTAssertEqual(OCTPushPreview.groupWakeHashes(fromPacket: empty), [])
+
+        // The first 64 well-formed hashes.
+        let many = (0..<70).map { String(format: "%032x", $0) }
+        let capped = OCTPushPreview.groupWakePacket(withHashes: ["not a hash"] + many)
+        XCTAssertEqual(capped.count, 4 + 64 * 16)
+        XCTAssertEqual(OCTPushPreview.groupWakeHashes(fromPacket: capped), Array(many.prefix(64)))
+    }
+
+    func testAMalformedGroupWakePacketIsDropped() {
+        let packet = data("BE0301019F033743FF83E9574563245FE61FAC74")
+        XCTAssertNil(OCTPushPreview.groupWakeHashes(fromPacket: packet.prefix(19)), "a byte short")
+        XCTAssertNil(OCTPushPreview.groupWakeHashes(fromPacket: packet + data("00")), "a byte over")
+        XCTAssertNil(OCTPushPreview.groupWakeHashes(fromPacket: data("BE0301")), "no count")
+        XCTAssertNil(OCTPushPreview.groupWakeHashes(fromPacket: Data()))
+        var otherVersion = packet
+        otherVersion[2] = 0x02
+        XCTAssertNil(OCTPushPreview.groupWakeHashes(fromPacket: otherVersion))
+        var otherPacket = packet
+        otherPacket[0] = 0xB5
+        XCTAssertNil(OCTPushPreview.groupWakeHashes(fromPacket: otherPacket))
+        // 65 hashes, more than a set holds, though the length matches the count.
+        XCTAssertNil(OCTPushPreview.groupWakeHashes(fromPacket: data("BE030141") + Data(count: 65 * 16)))
+        XCTAssertNil(OCTPushPreview.peerKey(fromPacket: packet))
+    }
+
+    func testGroupEventKeysMatchTheVector() {
+        XCTAssertEqual(OCTPushPreview.groupTextEventKey(withMessageId: 0x0000ABCD, senderPeerKeyHex: groupPeerKey.lowercased()),
+                       "gt:0000ABCD:A1A2A3A4A5A6A7A8A9AAABACADAEAFB0B1B2B3B4B5B6B7B8B9BABBBCBDBEBFC0")
+        // toxcore's ids are unsigned; iOS keeps them in an Int32.
+        XCTAssertEqual(OCTPushPreview.groupTextEventKey(withMessageId: UInt32(bitPattern: -2), senderPeerKeyHex: groupPeerKey),
+                       "gt:FFFFFFFE:" + groupPeerKey)
+        XCTAssertNil(OCTPushPreview.groupTextEventKey(withMessageId: 1, senderPeerKeyHex: ""))
+        XCTAssertNil(OCTPushPreview.groupTextEventKey(withMessageId: 1, senderPeerKeyHex: nil))
+        XCTAssertNil(OCTPushPreview.groupTextEventKey(withMessageId: 1, senderPeerKeyHex: String(groupPeerKey.dropLast(2))))
+
+        let fileHash = String(repeating: "ab", count: 32)
+        XCTAssertEqual(OCTPushPreview.groupFileEventKey(withMsgIdHex: fileHash), "gf:" + fileHash.uppercased())
+        XCTAssertNil(OCTPushPreview.groupFileEventKey(withMsgIdHex: String(repeating: "ab", count: 16)))
+        XCTAssertNil(OCTPushPreview.groupFileEventKey(withMsgIdHex: nil))
+    }
+
+    func testTheWakeSetLeavesOutAMutedGroupAndAGroupWhereTheFriendIsMuted() {
+        let ownKey = String(repeating: "1a", count: 32)
+        let friendMember = String(repeating: "2B", count: 32)
+        let otherMember = String(repeating: "3c", count: 32)
+        let chatId = { (n: Int) in String(format: "%064X", n) }
+        let own = { (n: Int) in OCTPushPreview.groupPresenceHash(forChatIdHex: chatId(n), peerPublicKeyHex: ownKey)! }
+        let friendPresence = (1...4).map { OCTPushPreview.groupPresenceHash(forChatIdHex: chatId($0), peerPublicKeyHex: friendMember)! }
+        let groups = [
+            OCTPushPreviewGroup(chatIdHex: chatId(1), ownPeerKeyHex: ownKey, muted: false, mutedMemberKeyHexes: []),
+            OCTPushPreviewGroup(chatIdHex: chatId(2), ownPeerKeyHex: ownKey, muted: true, mutedMemberKeyHexes: []),
+            OCTPushPreviewGroup(chatIdHex: chatId(3), ownPeerKeyHex: ownKey, muted: false,
+                                mutedMemberKeyHexes: [otherMember, friendMember.lowercased()]),
+            OCTPushPreviewGroup(chatIdHex: chatId(4), ownPeerKeyHex: ownKey, muted: false, mutedMemberKeyHexes: [otherMember]),
+            OCTPushPreviewGroup(chatIdHex: "0102", ownPeerKeyHex: ownKey, muted: false, mutedMemberKeyHexes: []),
+            OCTPushPreviewGroup(chatIdHex: chatId(1), ownPeerKeyHex: ownKey, muted: false, mutedMemberKeyHexes: []),
+        ]
+        XCTAssertEqual(OCTPushPreview.groupWakeHashes(for: groups, friendPresenceHashes: friendPresence), [own(1), own(4)],
+                       "group 2 is muted, and in group 3 the friend is a muted member")
+        XCTAssertEqual(OCTPushPreview.groupWakeHashes(for: groups, friendPresenceHashes: friendPresence.map { $0.uppercased() }),
+                       [own(1), own(4)])
+        // Without the friend's 190/02 set, nothing tells which member the friend is.
+        XCTAssertEqual(OCTPushPreview.groupWakeHashes(for: groups, friendPresenceHashes: nil), [own(1), own(3), own(4)])
+
+        // More than 64 groups: the first 64 that may wake us.
+        let many = [OCTPushPreviewGroup(chatIdHex: chatId(0), ownPeerKeyHex: ownKey, muted: true, mutedMemberKeyHexes: [])]
+            + (1...70).map { OCTPushPreviewGroup(chatIdHex: chatId($0), ownPeerKeyHex: ownKey, muted: false, mutedMemberKeyHexes: []) }
+        let set = OCTPushPreview.groupWakeHashes(for: many, friendPresenceHashes: [])
+        XCTAssertEqual(set, (1...64).map(own))
+        XCTAssertEqual(OCTPushPreview.groupWakeHashes(fromPacket: OCTPushPreview.groupWakePacket(withHashes: set)), set)
+    }
+
+    func testAGroupMessageWakesTheOneContactThatClaimsAnAwayMember() {
+        let ownKey = String(repeating: "a0", count: 32)
+        let away = String(repeating: "a1", count: 32)
+        let replayed = String(repeating: "a2", count: 32)
+        let online = String(repeating: "a3", count: 32)
+        let gone = String(repeating: "a4", count: 32)
+        let alsoAway = String(repeating: "a5", count: 32)
+        let unclaimed = String(repeating: "a6", count: 32)
+        let hash = { (key: String) in OCTPushPreview.groupPresenceHash(forChatIdHex: self.groupChatId, peerPublicKeyHex: key)! }
+        let contact = (1...6).map { String(repeating: "C\($0)", count: 32) }
+        var wakeSets: [String: [String]] = [
+            contact[0]: [hash(away), hash(alsoAway)],
+            contact[1]: [hash(replayed)],
+            contact[2]: ["0" + String(repeating: "f", count: 31), hash(replayed).uppercased()],
+            contact[3]: [hash(online)],
+            contact[4]: [hash(gone)],
+            contact[5]: [hash(ownKey)],
+        ]
+        let members = [away, replayed, online, gone, alsoAway, unclaimed, ownKey].map { $0.uppercased() }
+        func woken() -> [String: String] {
+            return OCTPushPreview.groupWakeMembers(forChatIdHex: groupChatId,
+                                                   memberKeys: members,
+                                                   connectedKeys: [online],
+                                                   ownKey: ownKey.uppercased(),
+                                                   leftKeys: [gone.uppercased()],
+                                                   contactWakeSets: wakeSets)
+        }
+        // Two claimants of one member wake neither; a connected member, one that left and our own key wake nobody; a
+        // contact claiming two away members is woken once, for the first.
+        XCTAssertEqual(woken(), [contact[0]: away])
+
+        // Without the replay, the member's own contact is woken.
+        wakeSets[contact[2]] = nil
+        XCTAssertEqual(woken(), [contact[0]: away, contact[1]: replayed])
+
+        // A contact whose set the group is not in wakes for nothing.
+        XCTAssertEqual(OCTPushPreview.groupWakeMembers(forChatIdHex: String(repeating: "00", count: 32),
+                                                       memberKeys: members,
+                                                       connectedKeys: [],
+                                                       ownKey: nil,
+                                                       leftKeys: [],
+                                                       contactWakeSets: wakeSets), [:])
+        XCTAssertEqual(OCTPushPreview.groupWakeMembers(forChatIdHex: groupChatId, memberKeys: members, connectedKeys: [],
+                                                       ownKey: nil, leftKeys: [], contactWakeSets: [:]), [:])
+    }
+
+    func testAContactsWakeSetIsKeptUntilTheContactGoes() {
+        let contact = String(repeating: "4D", count: 32)
+        let hashes = ["9f033743ff83e9574563245fe61fac74"]
+        OCTPushPreview.forgetFriendPublicKey(contact)
+        defer { OCTPushPreview.forgetFriendPublicKey(contact) }
+        XCTAssertEqual(OCTPushPreview.groupWakeHashes(forFriendPublicKey: contact), [], "a client before 0.2.69 sent none")
+
+        OCTPushPreview.storeGroupWake(hashes, forFriendPublicKey: contact.lowercased())
+        XCTAssertEqual(UserDefaults.standard.array(forKey: "khandaq.groupWake." + contact) as? [String], hashes)
+        XCTAssertEqual(OCTPushPreview.groupWakeHashes(forFriendPublicKey: contact.lowercased()), hashes)
+        OCTPushPreview.storeGroupWake([], forFriendPublicKey: contact)
+        XCTAssertEqual(OCTPushPreview.groupWakeHashes(forFriendPublicKey: contact), [], "a set replaces the one before")
+        XCTAssertNil(UserDefaults.standard.object(forKey: "khandaq.groupWake." + contact))
+
+        // Removed or blocked: the wake set goes with the presence set.
+        OCTPushPreview.storeGroupWake(hashes, forFriendPublicKey: contact)
+        OCTPushPreview.storeGroupPresence(hashes, forFriendPublicKey: contact)
+        XCTAssertEqual(OCTPushPreview.groupPresenceHashes(forFriendPublicKey: contact), hashes)
+        OCTPushPreview.forgetFriendPublicKey(contact)
+        XCTAssertEqual(OCTPushPreview.groupWakeHashes(forFriendPublicKey: contact), [])
+        XCTAssertEqual(OCTPushPreview.groupPresenceHashes(forFriendPublicKey: contact), [])
+        XCTAssertEqual(OCTPushPreview.groupWakeHashes(forFriendPublicKey: "4D4D"), [])
+    }
+
+    func testADeletedProfileTakesTheWakeSetsToo() {
+        OCTPushPreview.resetAll()
+        defer { OCTPushPreview.resetAll() }
+        let contact = String(repeating: "5E", count: 32)
+        OCTPushPreview.storeGroupWake(["9f033743ff83e9574563245fe61fac74"], forFriendPublicKey: contact)
+        OCTPushPreview.storeGroupPresence(["9f033743ff83e9574563245fe61fac74"], forFriendPublicKey: contact)
+        OCTPushPreview.resetAll()
+        XCTAssertEqual(OCTPushPreview.groupWakeHashes(forFriendPublicKey: contact), [])
+        XCTAssertEqual(OCTPushPreview.groupPresenceHashes(forFriendPublicKey: contact), [])
+    }
+
+    /// The app's own alert for a group message that came over Tox is skipped when a delivered notification carries
+    /// its event key in `khq_ev` (showLocalNotificationObject): the key the push extension copied from the wake.
+    func testALiveGroupMessageNamesTheEventItsWakeNamed() throws {
+        let eventKey = "gt:0000ABCD:" + groupPeerKey
+        let live = try groupEntry(messageId: 0x0000ABCD)
+        XCTAssertEqual(NotificationCoordinator.groupEventKey(of: live), eventKey)
+
+        let fields: [String: Any] = ["k": "text", "b": "Salam", "n": "Isa", "g": "Book club", "gid": groupChatId,
+                                     "ts": NSNumber(value: Int64(sentAt)), "h": eventKey]
+        guard let plaintext = OCTPushPreview.plaintext(withFields: fields),
+              let groupSealed = OCTPushPreview.sealPlaintext(plaintext, key: contactKey, nonce: nil) else {
+            return XCTFail("no group preview")
+        }
+        let content = UNMutableNotificationContent()
+        XCTAssertTrue(PushPreviewPresenter.apply(to: content,
+                                                 userInfo: ["khq_pv": groupSealed, "sender_pubkey": publicKey],
+                                                 masterKey: masterKey,
+                                                 allowedSenders: data(publicKey),
+                                                 showsContent: true,
+                                                 language: "en",
+                                                 now: Date(timeIntervalSince1970: sentAt + 60)))
+        XCTAssertEqual(content.title, "Book club")
+        XCTAssertEqual(content.body, "Isa: Salam")
+        XCTAssertEqual(content.userInfo["khq_gid"] as? String, groupChatId)
+        XCTAssertEqual(content.userInfo["khq_ev"] as? String, NotificationCoordinator.groupEventKey(of: live))
+
+        XCTAssertEqual(NotificationCoordinator.groupEventKey(of: try groupEntry(messageId: Int32(bitPattern: 0xFFFFFFFE))),
+                       "gt:FFFFFFFE:" + groupPeerKey)
+
+        let file = try appClass("OCTMessageFile", as: OCTMessageFile.Type.self).init()
+        file.groupMsgIdHashHex = String(repeating: "ab", count: 32)
+        let liveFile = try appClass("OCTMessageAbstract", as: OCTMessageAbstract.Type.self).init()
+        liveFile.groupSenderPeerId = 5
+        liveFile.messageFile = file
+        XCTAssertEqual(NotificationCoordinator.groupEventKey(of: liveFile), "gf:" + String(repeating: "AB", count: 32))
+
+        // No wake names these.
+        let synced = try groupEntry(messageId: 0x0000ABCD)
+        synced.groupHistorySync = true
+        XCTAssertNil(NotificationCoordinator.groupEventKey(of: synced))
+        let privateMessage = try groupEntry(messageId: 0x0000ABCD)
+        privateMessage.groupPrivateMessage = true
+        XCTAssertNil(NotificationCoordinator.groupEventKey(of: privateMessage))
+        let noAuthor = try groupEntry(messageId: 0x0000ABCD)
+        noAuthor.groupPrivatePeerPubkey = nil
+        XCTAssertNil(NotificationCoordinator.groupEventKey(of: noAuthor))
+    }
+
+    /// A live group text as the receive path stores it: the author's key frozen, in lower case, on the row.
+    private func groupEntry(messageId: Int32) throws -> OCTMessageAbstract {
+        let text = try appClass("OCTMessageText", as: OCTMessageText.Type.self).init()
+        text.text = "Salam"
+        text.messageId = messageId
+        let message = try appClass("OCTMessageAbstract", as: OCTMessageAbstract.Type.self).init()
+        message.groupSenderPeerId = 5
+        message.groupPrivatePeerPubkey = groupPeerKey.lowercased()
+        message.messageText = text
+        return message
+    }
+
+    /// The app's class: objcTox is in the app and in this bundle.
+    private func appClass<T>(_ name: String, as type: T.Type) throws -> T {
+        let cls: AnyClass = try XCTUnwrap(NSClassFromString(name), "no class \(name)")
+        return unsafeBitCast(cls, to: type)
+    }
+
     // MARK: What the notification says
 
     func testTheExtensionShowsTheTextUnderTheSendersName() {

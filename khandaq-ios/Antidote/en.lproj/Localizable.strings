@@ -1167,6 +1167,8 @@
 "air_voice_listen" = "Listen";
 "air_voice_pause" = "Pause";
 "air_voice_spoken" = "Voice message";
+"air_voice_speed" = "Playback speed";
+"air_voice_speed_format" = "%@x";
 "air_tray_file_format" = "%1$@, %2$@";
 
 /* Redesign stage 3: calls, their screens and their entries in the transcript (E9) */

@@ -1156,6 +1156,8 @@
 "air_voice_listen" = "收听";
 "air_voice_pause" = "暂停";
 "air_voice_spoken" = "语音消息";
+"air_voice_speed" = "播放速度";
+"air_voice_speed_format" = "%@x";
 "air_tray_file_format" = "%1$@，%2$@";
 
 /* Redesign stage 3: calls, their screens and their entries in the transcript (E9) */

@@ -1169,6 +1169,8 @@
 "air_voice_listen" = "Слушать";
 "air_voice_pause" = "Пауза";
 "air_voice_spoken" = "Голосовое сообщение";
+"air_voice_speed" = "Скорость воспроизведения";
+"air_voice_speed_format" = "%@x";
 "air_tray_file_format" = "%1$@, %2$@";
 
 /* Redesign stage 3: calls, their screens and their entries in the transcript (E9) */

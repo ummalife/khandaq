@@ -17,6 +17,36 @@ struct ChatVoiceMessagePlayerState {
     let duration: TimeInterval
 }
 
+/// KHANDAQ (ideas 1): how fast voice notes play. A tap on the speed of the note that plays goes from 1x to
+/// 1.5x, 2x and back to 1x; the choice is the app's, kept for every note after it (UserDefaultsManager).
+enum VoicePlaybackSpeed {
+    static let steps: [Float] = [1, 1.5, 2]
+
+    /// The speed after `speed`; a value that is not a step goes back to the first.
+    static func next(after speed: Float) -> Float {
+        guard let index = steps.firstIndex(of: speed) else {
+            return steps[0]
+        }
+        return steps[(index + 1) % steps.count]
+    }
+
+    /// `speed` when it is a step, else the first: a stored value is read back through it.
+    static func valid(_ speed: Float) -> Float {
+        return steps.contains(speed) ? speed : steps[0]
+    }
+
+    /// "1.5x", the number in the digits of the app's language, as a file entry writes its size.
+    static func text(for speed: Float, locale: Locale = AppLanguage.locale) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = locale
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 1
+        let number = formatter.string(from: NSNumber(value: speed)) ?? String(speed)
+        return String(localized: "air_voice_speed_format", number)
+    }
+}
+
 final class ChatVoiceMessagePlayer: NSObject, AVAudioPlayerDelegate {
     static let shared = ChatVoiceMessagePlayer()
 
@@ -33,6 +63,37 @@ final class ChatVoiceMessagePlayer: NSObject, AVAudioPlayerDelegate {
 
     private override init() {
         super.init()
+    }
+
+    /// KHANDAQ (ideas 1): the speed every note plays at, the app's one choice (VoicePlaybackSpeed).
+    var speed: Float {
+        return VoicePlaybackSpeed.valid(UserDefaultsManager().voicePlaybackSpeed)
+    }
+
+    /// KHANDAQ (ideas 1): the next speed, kept for the app and applied at once to the note that plays; its
+    /// bubble hears of it as of any change of the player.
+    func cycleSpeed() {
+        let next = VoicePlaybackSpeed.next(after: speed)
+        UserDefaultsManager().voicePlaybackSpeed = next
+        guard let messageId = activeMessageId, let player = player else {
+            return
+        }
+        player.rate = next
+        postState(for: messageId, player: player)
+    }
+
+    /// The speed the note with `messageId` shows: while it plays, or waits paused part of the way through.
+    /// Nil on every other note, and once it has played to the end.
+    func speedShown(for messageId: String) -> Float? {
+        guard activeMessageId == messageId, let player = player, player.isPlaying || player.currentTime > 0 else {
+            return nil
+        }
+        return speed
+    }
+
+    /// The rate the note that plays goes at; nil while none does. Read by the tests.
+    var activeRate: Float? {
+        return player?.rate
     }
 
     func state(for messageId: String) -> ChatVoiceMessagePlayerState? {
@@ -100,7 +161,10 @@ final class ChatVoiceMessagePlayer: NSObject, AVAudioPlayerDelegate {
         }
 
         audioPlayer.delegate = self
+        // KHANDAQ (ideas 1): a player takes a new rate only when told so before it is prepared.
+        audioPlayer.enableRate = true
         audioPlayer.prepareToPlay()
+        audioPlayer.rate = speed
         // UI tests play the notes of the demo world without a sound: the walks run on a Mac someone uses.
         if ProcessInfo.processInfo.arguments.contains("UI_TESTING") {
             audioPlayer.volume = 0

@@ -5477,8 +5477,10 @@ public class GroupMessageListActivity extends AppCompatActivity
             pending_camera_capture_uri = null;
             if (captured != null)
             {
-                MediaSendPreviewHelper.dispatchAttachments(this, java.util.Collections.singletonList(captured),
-                        MediaSendPreviewHelper.TARGET_GROUP, -1, group_id, true);
+                // KHANDAQ (testers' ideas, 0.2.67): a shot opens the media preview, as a gallery pick does,
+                // instead of going the moment the camera closes.
+                prepareGroupMediaSendContext();
+                sendPickedMediaToGroup(java.util.Collections.singletonList(captured));
             }
         }
         else if (requestCode == MEDIAPICK_ID_001 && resultCode == Activity.RESULT_OK)
@@ -5524,7 +5526,11 @@ public class GroupMessageListActivity extends AppCompatActivity
                     return;
                 }
 
-                add_attachment_ngc(this, data, data, group_id, true);
+                // KHANDAQ (testers' ideas, 0.2.67): a document is asked about first, with its name and size.
+                AirFileSendQuestion.ask(this, data.getData(), () -> {
+                    prepareGroupMediaSendContext();
+                    add_attachment_ngc(this, data, data, group_id, true);
+                });
             }
         }
         else if (requestCode == MediaSendPreviewHelper.REQUEST_PREVIEW && resultCode == Activity.RESULT_OK)

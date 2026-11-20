@@ -2803,14 +2803,15 @@ public class MessageListActivity extends AppCompatActivity
 
         // KHANDAQ (#17): a captured photo/video lands at the URI we passed to the camera (data is null
         // for capture intents) — send it through the same media path as a gallery pick.
+        // KHANDAQ (testers' ideas, 0.2.67): through the same preview too, with its caption and Send: a shot
+        // went the moment the camera closed, so a wrong one could not be held back.
         if ((requestCode == CAMERA_PHOTO_ID || requestCode == CAMERA_VIDEO_ID) && resultCode == Activity.RESULT_OK)
         {
             final Uri captured = pending_camera_capture_uri;
             pending_camera_capture_uri = null;
             if (captured != null)
             {
-                MediaSendPreviewHelper.dispatchAttachments(this, java.util.Collections.singletonList(captured),
-                        MediaSendPreviewHelper.TARGET_FRIEND, friendnum, null, true);
+                sendPickedMediaToPreview(java.util.Collections.singletonList(captured));
             }
             return;
         }
@@ -2879,7 +2880,11 @@ public class MessageListActivity extends AppCompatActivity
                     return;
                 }
 
-                add_attachment(this, data, data, -1, true);
+                // KHANDAQ (testers' ideas, 0.2.67): a document is asked about first, with its name and size.
+                AirFileSendQuestion.ask(this, data.getData(), () -> {
+                    prepareFriendMediaSendContext();
+                    add_attachment(this, data, data, -1, true);
+                });
             }
         }
         else if (requestCode == MediaSendPreviewHelper.REQUEST_PREVIEW && resultCode == Activity.RESULT_OK)

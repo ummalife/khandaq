@@ -1069,4 +1069,24 @@
     <string name="plaintext_export_typed_confirm_word">导出</string>
     <!-- KHANDAQ (0.2.58): what a tap on the author over a member's message in a group does, read by TalkBack -->
     <string name="group_msg_author_hint">打开该成员的个人资料</string>
+    <!-- KHANDAQ (testers' ideas, 0.2.67): the call and group video notifications, the crash screen and the group service lines that were hard-coded in English, some with "Tox" in them. -->
+    <string name="notification_channel_call">进行中的通话</string>
+    <string name="notification_channel_call_desc">通话期间显示</string>
+    <string name="notification_call_title">通话</string>
+    <string name="notification_call_text">通话中</string>
+    <string name="notification_channel_group_video">群组视频</string>
+    <string name="notification_channel_group_video_desc">群组视频期间显示</string>
+    <string name="notification_group_video_text">群组视频进行中</string>
+    <string name="notification_media_stop">停止</string>
+    <string name="crash_title">Khandaq 崩溃了</string>
+    <string name="crash_restart">轻点任意位置即可重新启动 Khandaq</string>
+    <string name="crash_send_email">通过电子邮件发送崩溃报告</string>
+    <string name="crash_send_later">重新启动后，可以在“设置”的“关于”中发送崩溃报告。</string>
+    <string name="group_sys_you_created_open">你创建了群组（持有群组密钥即可加入）</string>
+    <string name="group_sys_you_created_invite_only">你创建了群组（仅限邀请）</string>
+    <string name="group_sys_privacy_open">现在持有群组密钥即可加入本群组</string>
+    <string name="group_sys_privacy_invite_only">本群组现在仅限邀请加入</string>
+    <string name="group_sys_peer_now_moderator">%1$s现在是管理员</string>
+    <string name="group_sys_peer_now_member">%1$s现在是成员</string>
+    <string name="group_sys_peer_now_observer">%1$s现在是旁观者</string>
 </resources>

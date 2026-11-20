@@ -1184,4 +1184,24 @@
     <string name="chat_edit_blocked_too_old">Messages can be edited for 48 hours after sending</string>
     <!-- KHANDAQ (0.2.58): what a tap on the author over a member's message in a group does, read by TalkBack -->
     <string name="group_msg_author_hint">Opens the member\'s profile</string>
+    <!-- KHANDAQ (testers' ideas, 0.2.67): the call and group video notifications, the crash screen and the group service lines that were hard-coded in English, some with "Tox" in them. -->
+    <string name="notification_channel_call">Ongoing call</string>
+    <string name="notification_channel_call_desc">Shows while you are in a call</string>
+    <string name="notification_call_title">Call</string>
+    <string name="notification_call_text">Call in progress</string>
+    <string name="notification_channel_group_video">Group video</string>
+    <string name="notification_channel_group_video_desc">Shows while you are in a group video</string>
+    <string name="notification_group_video_text">Group video in progress</string>
+    <string name="notification_media_stop">Stop</string>
+    <string name="crash_title">Khandaq crashed</string>
+    <string name="crash_restart">Tap anywhere to restart Khandaq</string>
+    <string name="crash_send_email">Send the crash report by email</string>
+    <string name="crash_send_later">After the restart you can send the crash report in Settings, About.</string>
+    <string name="group_sys_you_created_open">You created the group (open to anyone with its key)</string>
+    <string name="group_sys_you_created_invite_only">You created the group (by invitation only)</string>
+    <string name="group_sys_privacy_open">The group is now open to anyone with its key</string>
+    <string name="group_sys_privacy_invite_only">The group is now by invitation only</string>
+    <string name="group_sys_peer_now_moderator">%1$s is now a moderator</string>
+    <string name="group_sys_peer_now_member">%1$s is now a member</string>
+    <string name="group_sys_peer_now_observer">%1$s is now an observer</string>
 </resources>

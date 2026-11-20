@@ -333,8 +333,7 @@ public final class AirNewGroupActivity extends AirScreenActivity
         final String[] failure = new String[1];
         final String created = HelperGroup.create_new_group_id(
                 privacy, name, 0, inviteOnly ? R.string.add_private_group_failed : R.string.add_public_group_failed,
-                inviteOnly ? "You created the Group (as Private [invite only] Group)"
-                           : "You created the Group (as Public Group)", null, text -> failure[0] = text);
+                HelperGroup.group_created_line(inviteOnly), null, text -> failure[0] = text);
         if (created == null)
         {
             updateButton();

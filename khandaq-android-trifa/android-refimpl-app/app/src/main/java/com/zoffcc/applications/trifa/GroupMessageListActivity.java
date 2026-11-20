@@ -665,12 +665,15 @@ public class GroupMessageListActivity extends AppCompatActivity
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)
         {
-            String channelName = "Tox NGC Group Audio Play";
+            // KHANDAQ (testers' ideas, 0.2.67): the channel is named in the four languages and without "Tox"; its
+            // description said its id.
+            String channelName = getString(R.string.notification_channel_group_video);
             int importance = NotificationManager.IMPORTANCE_DEFAULT;
             ngc_channelId = "trifa_ngc_audio_play";
             ngc_notification_channel_group_audio_play_service = new NotificationChannel(ngc_channelId, channelName,
                                                                                         importance);
-            ngc_notification_channel_group_audio_play_service.setDescription(ngc_channelId);
+            ngc_notification_channel_group_audio_play_service.setDescription(
+                    getString(R.string.notification_channel_group_video_desc));
             ngc_notification_channel_group_audio_play_service.setSound(null, null);
             ngc_notification_channel_group_audio_play_service.enableVibration(false);
             ngc_nmn3.createNotificationChannel(ngc_notification_channel_group_audio_play_service);

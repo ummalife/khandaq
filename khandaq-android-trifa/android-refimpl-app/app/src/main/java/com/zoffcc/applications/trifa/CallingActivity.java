@@ -2584,11 +2584,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         NotificationManager nmn3 = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)
         {
-            String channelName = "Tox Call";
+            // KHANDAQ (testers' ideas, 0.2.67): the channel is named in the four languages and without "Tox"; its
+            // description said its id.
+            String channelName = getString(R.string.notification_channel_call);
             int importance = NotificationManager.IMPORTANCE_DEFAULT;
             channelId = "trifa_call_audio_play";
             notification_channel_call_audio_play_service = new NotificationChannel(channelId, channelName, importance);
-            notification_channel_call_audio_play_service.setDescription(channelId);
+            notification_channel_call_audio_play_service.setDescription(getString(R.string.notification_channel_call_desc));
             notification_channel_call_audio_play_service.setSound(null, null);
             notification_channel_call_audio_play_service.enableVibration(false);
             nmn3.createNotificationChannel(notification_channel_call_audio_play_service);

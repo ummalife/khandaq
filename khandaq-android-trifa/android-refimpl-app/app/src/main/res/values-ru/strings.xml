@@ -1099,4 +1099,24 @@
     <string name="chat_edit_blocked_too_old">Сообщение можно изменить в течение 48 часов после отправки</string>
     <!-- KHANDAQ (0.2.58): what a tap on the author over a member's message in a group does, read by TalkBack -->
     <string name="group_msg_author_hint">Открывает профиль участника</string>
+    <!-- KHANDAQ (testers' ideas, 0.2.67): the call and group video notifications, the crash screen and the group service lines that were hard-coded in English, some with "Tox" in them. -->
+    <string name="notification_channel_call">Текущий звонок</string>
+    <string name="notification_channel_call_desc">Показывается, пока идёт звонок</string>
+    <string name="notification_call_title">Звонок</string>
+    <string name="notification_call_text">Идёт звонок</string>
+    <string name="notification_channel_group_video">Групповое видео</string>
+    <string name="notification_channel_group_video_desc">Показывается, пока идёт групповое видео</string>
+    <string name="notification_group_video_text">Идёт групповое видео</string>
+    <string name="notification_media_stop">Остановить</string>
+    <string name="crash_title">В Khandaq произошёл сбой</string>
+    <string name="crash_restart">Нажмите в любом месте, чтобы перезапустить Khandaq</string>
+    <string name="crash_send_email">Отправить отчёт о сбое по почте</string>
+    <string name="crash_send_later">После перезапуска отчёт о сбое можно отправить: «Настройки», «О приложении».</string>
+    <string name="group_sys_you_created_open">Вы создали группу (вход по ключу группы)</string>
+    <string name="group_sys_you_created_invite_only">Вы создали группу (только по приглашению)</string>
+    <string name="group_sys_privacy_open">Теперь в группу можно войти по её ключу</string>
+    <string name="group_sys_privacy_invite_only">Теперь в группу можно войти только по приглашению</string>
+    <string name="group_sys_peer_now_moderator">%1$s теперь модератор</string>
+    <string name="group_sys_peer_now_member">%1$s теперь участник</string>
+    <string name="group_sys_peer_now_observer">%1$s теперь наблюдатель</string>
 </resources>

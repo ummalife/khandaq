@@ -62,9 +62,11 @@
                         android:textAppearance="@style/TextAppearance.KQ.Air.LabelStrong"
                         android:textColor="@color/kq_ink" />
 
-                    <!-- The state of our node in words, a target of its own a finger high: a tap opens the Network
-                         screen (E4); the tile and the name open You. TalkBack reaches it as an action of the
-                         "you" block. -->
+                    <!-- The state of our node in words, a target of its own: a tap opens the Network screen (E4);
+                         the tile and the name open You. TalkBack reaches it as an action of the "you" block.
+                         A small control, not a finger high: centred in 48dp, the words sat a finger below the
+                         name and the column outgrew the tile (a tester on Android 16, 0.2.65); iOS keeps them
+                         2pt apart. -->
                     <LinearLayout
                         android:id="@+id/air_net_row"
                         android:layout_width="wrap_content"
@@ -72,7 +74,7 @@
                         android:background="@drawable/air_bg_icon_button"
                         android:clickable="true"
                         android:gravity="center_vertical"
-                        android:minHeight="@dimen/kq_size_target_android"
+                        android:minHeight="@dimen/kq_size_control_small"
                         android:orientation="horizontal"
                         android:paddingEnd="@dimen/kq_space_8">
 

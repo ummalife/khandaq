@@ -78,6 +78,8 @@ public:
  * for the gap, and a later message seen meanwhile takes its place. While the person is offline, or
  * when toxcore refuses the packet, the newest receipt owed is kept (ReadMarkStore, between launches
  * too) and goes when they come online. Groups, the saved messages and friend requests have none.
+ *
+ * KHANDAQ (beta ideas 2026-11-20): the person can turn them off (Settings, Privacy, setEnabled).
  */
 class SeenReceipts : public QObject
 {
@@ -99,6 +101,13 @@ public:
     void seen(const ToxPk& friendPk, const SeenAnchor& anchor);
     /** The person came online: the receipt owed them goes. */
     void friendOnline(const ToxPk& friendPk);
+    /**
+     * Send read receipts, in Settings, Privacy. Turned off, no receipt goes and nothing read
+     * meanwhile is owed one later; a receipt owed from before waits until they are turned on
+     * again. The receipts of others show either way.
+     */
+    void setEnabled(bool on);
+    bool isEnabled() const;
 
 private:
     void flush(const ToxPk& friendPk);
@@ -107,6 +116,7 @@ private:
     Send send;
     IsOnline isOnline;
     int gapMs;
+    bool enabled = true;
     QElapsedTimer clock;
     /** When the last receipt went to each person (by the key's bytes), by clock. */
     QHash<QByteArray, qint64> lastSent;

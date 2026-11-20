@@ -1412,6 +1412,15 @@ void AirSettingsPage::buildPrivacy()
         first, words(Text::SettingsTyping), nullptr,
         [this] { return settings.getTypingNotification(); },
         [this](bool on) { settings.setTypingNotification(on); });
+    // KHANDAQ (beta ideas 2026-11-20): read receipts in conversations between two people. Saved at
+    // once: a choice about privacy is not left to the next save.
+    switchRow(
+        first, words(Text::SettingsReadReceipts), words(Text::SettingsReadReceiptsDetail),
+        [this] { return settings.getSendReadReceipts(); },
+        [this](bool on) {
+            settings.setSendReadReceipts(on);
+            settings.savePersonal();
+        });
     switchRow(
         first, words(Text::SettingsHistory), words(Text::SettingsHistoryDetail),
         [this] { return settings.getEnableLogging(); },

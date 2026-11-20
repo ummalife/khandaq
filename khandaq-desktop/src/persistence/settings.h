@@ -113,6 +113,8 @@ class Settings : public QObject,
     // Privacy
     Q_PROPERTY(bool typingNotification READ getTypingNotification WRITE setTypingNotification NOTIFY
                    typingNotificationChanged FINAL)
+    Q_PROPERTY(bool sendReadReceipts READ getSendReadReceipts WRITE setSendReadReceipts NOTIFY
+                   sendReadReceiptsChanged FINAL)
     Q_PROPERTY(QStringList blackList READ getBlackList WRITE setBlackList NOTIFY blackListChanged FINAL)
 
     // Audio
@@ -249,6 +251,7 @@ signals:
 
     // Privacy
     void typingNotificationChanged(bool enabled);
+    void sendReadReceiptsChanged(bool enabled);
     void dbSyncTypeChanged(Db::syncType type);
 
 public:
@@ -522,6 +525,12 @@ public:
     // Privacy
     bool getTypingNotification() const;
     void setTypingNotification(bool enabled);
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): whether the read receipts of conversations between two
+     * people go to the other person (Air::SeenReceipts). On unless the person turns them off.
+     */
+    bool getSendReadReceipts() const;
+    void setSendReadReceipts(bool enabled);
 
     QStringList getBlackList() const override;
     void setBlackList(const QStringList& blist) override;
@@ -728,6 +737,7 @@ private:
 
     // Privacy
     bool typingNotification;
+    bool sendReadReceipts = true;
     Db::syncType dbSyncType;
     QStringList blackList;
 

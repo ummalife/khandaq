@@ -3189,6 +3189,16 @@
         <translation>Показывать, что я печатаю</translation>
     </message>
     <message>
+        <source>Send read receipts</source>
+        <comment>Settings, Privacy: switch; the second check of a message turns teal once it is read</comment>
+        <translation>Отправлять отчёты о прочтении</translation>
+    </message>
+    <message>
+        <source>Turned off, others do not see that you have read their messages.</source>
+        <comment>Settings, Privacy: under Send read receipts</comment>
+        <translation>Если выключить, собеседники не увидят, что вы прочитали их сообщения.</translation>
+    </message>
+    <message>
         <source>Keep chat history</source>
         <comment>Settings, Privacy: switch</comment>
         <translation>Хранить историю чатов</translation>

@@ -124,6 +124,9 @@ private slots:
     void gapIsPerPerson();
     void pendingReceiptSurvivesRestart();
     void removedContactForgetsReceipts();
+    void turnedOffSendsAndOwesNothing();
+    void receiptOwedBeforeWaitsWhileTurnedOff();
+    void receiptWaitingForTheGapStopsWhenTurnedOff();
 };
 
 void TestAirSeenReceipts::readingNeedsEveryFact()
@@ -372,6 +375,71 @@ void TestAirSeenReceipts::removedContactForgetsReceipts()
     wire.online = true;
     receipts.friendOnline(person('a'));
     QVERIFY(wire.sent.isEmpty());
+}
+
+void TestAirSeenReceipts::turnedOffSendsAndOwesNothing()
+{
+    LocalReadMarks store;
+    Wire wire;
+    SeenReceipts receipts(store, wire.sender(), wire.presence(), 0);
+    QVERIFY(receipts.isEnabled());
+
+    receipts.setEnabled(false);
+    QVERIFY(!receipts.isEnabled());
+    receipts.seen(person('a'), textAnchor('\x11', 1700000000000));
+    receipts.friendOnline(person('a'));
+    QVERIFY(wire.sent.isEmpty());
+    // What is read while they are off is not even noted: nothing of it is told later.
+    QVERIFY(!store.isReadPending(person('a')));
+    QVERIFY(store.readAnchor(person('a')).isEmpty());
+
+    receipts.setEnabled(true);
+    receipts.friendOnline(person('a'));
+    QVERIFY(wire.sent.isEmpty());
+
+    // On again, a message read from now on is told as before.
+    receipts.seen(person('a'), textAnchor('\x12', 1700000001000));
+    QCOMPARE(wire.sent.size(), 1);
+    QCOMPARE(wire.sent[0].packet.mid(5, 32), QByteArray(32, '\x12'));
+}
+
+void TestAirSeenReceipts::receiptOwedBeforeWaitsWhileTurnedOff()
+{
+    LocalReadMarks store;
+    Wire wire;
+    wire.online = false;
+    SeenReceipts receipts(store, wire.sender(), wire.presence(), 0);
+    receipts.seen(person('a'), textAnchor('\x11', 1700000000000));
+    QVERIFY(store.isReadPending(person('a')));
+
+    receipts.setEnabled(false);
+    wire.online = true;
+    receipts.friendOnline(person('a'));
+    QVERIFY(wire.sent.isEmpty());
+    QVERIFY(store.isReadPending(person('a')));
+
+    receipts.setEnabled(true);
+    receipts.friendOnline(person('a'));
+    QCOMPARE(wire.sent.size(), 1);
+    QCOMPARE(wire.sent[0].packet.mid(5, 32), QByteArray(32, '\x11'));
+    QVERIFY(!store.isReadPending(person('a')));
+}
+
+void TestAirSeenReceipts::receiptWaitingForTheGapStopsWhenTurnedOff()
+{
+    LocalReadMarks store;
+    Wire wire;
+    const int gapMs = 100;
+    SeenReceipts receipts(store, wire.sender(), wire.presence(), gapMs);
+
+    receipts.seen(person('a'), textAnchor('\x11', 1700000000000));
+    receipts.seen(person('a'), textAnchor('\x12', 1700000001000));
+    QCOMPARE(wire.sent.size(), 1);
+
+    receipts.setEnabled(false);
+    QTest::qWait(3 * gapMs);
+    QCOMPARE(wire.sent.size(), 1);
+    QVERIFY(store.isReadPending(person('a')));
 }
 
 QTEST_GUILESS_MAIN(TestAirSeenReceipts)

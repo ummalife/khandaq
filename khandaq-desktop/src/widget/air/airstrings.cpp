@@ -740,6 +740,8 @@ const Source sources[] = {
     {Text::SettingsMentionsOnly, QT_TRANSLATE_NOOP3("Air", "Only when someone mentions you", "Settings, Notifications: when a group message notifies")},
     {Text::SettingsMentionsOnlyDetail, QT_TRANSLATE_NOOP3("Air", "Other group messages are counted without a sound or a notification.", "Settings, Notifications: under Only when someone mentions you")},
     {Text::SettingsTyping, QT_TRANSLATE_NOOP3("Air", "Show that I'm typing", "Settings, Privacy: switch")},
+    {Text::SettingsReadReceipts, QT_TRANSLATE_NOOP3("Air", "Send read receipts", "Settings, Privacy: switch; the second check of a message turns teal once it is read")},
+    {Text::SettingsReadReceiptsDetail, QT_TRANSLATE_NOOP3("Air", "Turned off, others do not see that you have read their messages.", "Settings, Privacy: under Send read receipts")},
     {Text::SettingsHistory, QT_TRANSLATE_NOOP3("Air", "Keep chat history", "Settings, Privacy: switch")},
     {Text::SettingsHistoryDetail, QT_TRANSLATE_NOOP3("Air", "Turned off, new messages are not kept on this device. Messages waiting to be sent are kept either way.", "Settings, Privacy: under Keep chat history")},
     {Text::SettingsHistoryEraseTitle, QT_TRANSLATE_NOOP3("Air", "Erase the history kept so far?", "Settings, Privacy: question once Keep chat history is turned off")},

@@ -3249,6 +3249,16 @@
         <translation>إظهار أنني أكتب</translation>
     </message>
     <message>
+        <source>Send read receipts</source>
+        <comment>Settings, Privacy: switch; the second check of a message turns teal once it is read</comment>
+        <translation>إرسال إشعارات القراءة</translation>
+    </message>
+    <message>
+        <source>Turned off, others do not see that you have read their messages.</source>
+        <comment>Settings, Privacy: under Send read receipts</comment>
+        <translation>عند الإيقاف لا يرى الآخرون أنك قرأت رسائلهم.</translation>
+    </message>
+    <message>
         <source>Keep chat history</source>
         <comment>Settings, Privacy: switch</comment>
         <translation>حفظ سجل المحادثات</translation>

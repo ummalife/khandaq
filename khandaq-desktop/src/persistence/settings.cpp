@@ -562,6 +562,7 @@ void Settings::loadPersonal(const Profile& profile, bool newProfile)
     ps.beginGroup("Privacy");
     {
         typingNotification = ps.value("typingNotification", true).toBool();
+        sendReadReceipts = ps.value("sendReadReceipts", true).toBool();
         enableLogging = ps.value("enableLogging", true).toBool();
         blackList = ps.value("blackList").toString().split('\n');
     }
@@ -947,6 +948,7 @@ void Settings::savePersonal(QString profileName, const ToxEncrypt* passkey)
     ps.beginGroup("Privacy");
     {
         ps.setValue("typingNotification", typingNotification);
+        ps.setValue("sendReadReceipts", sendReadReceipts);
         ps.setValue("enableLogging", enableLogging);
         ps.setValue("blackList", blackList.join('\n'));
     }
@@ -1841,6 +1843,19 @@ void Settings::setTypingNotification(bool enabled)
 {
     if (setVal(typingNotification, enabled)) {
         emit typingNotificationChanged(enabled);
+    }
+}
+
+bool Settings::getSendReadReceipts() const
+{
+    QMutexLocker locker{&bigLock};
+    return sendReadReceipts;
+}
+
+void Settings::setSendReadReceipts(bool enabled)
+{
+    if (setVal(sendReadReceipts, enabled)) {
+        emit sendReadReceiptsChanged(enabled);
     }
 }
 

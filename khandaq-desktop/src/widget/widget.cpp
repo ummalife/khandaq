@@ -4584,6 +4584,10 @@ void Widget::setupAir()
             return f != nullptr && Status::isOnline(f->getStatus());
         },
         Air::SeenReceipts::defaultGapMs, this);
+    // KHANDAQ (beta ideas 2026-11-20): unless the person turned them off in Settings, Privacy.
+    seenReceipts->setEnabled(settings.getSendReadReceipts());
+    connect(&settings, &Settings::sendReadReceiptsChanged, seenReceipts,
+            &Air::SeenReceipts::setEnabled);
     connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
         if (state == Qt::ApplicationActive) {
             QTimer::singleShot(0, this, &Widget::reportSeenInFront);

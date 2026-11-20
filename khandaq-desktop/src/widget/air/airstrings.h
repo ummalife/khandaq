@@ -702,6 +702,8 @@ enum class Text
     SettingsMentionsOnly,
     SettingsMentionsOnlyDetail,
     SettingsTyping,
+    SettingsReadReceipts,
+    SettingsReadReceiptsDetail,
     SettingsHistory,
     SettingsHistoryDetail,
     SettingsHistoryEraseTitle,

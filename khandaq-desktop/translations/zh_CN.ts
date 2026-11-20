@@ -3149,6 +3149,16 @@
         <translation>显示我正在输入</translation>
     </message>
     <message>
+        <source>Send read receipts</source>
+        <comment>Settings, Privacy: switch; the second check of a message turns teal once it is read</comment>
+        <translation>发送已读回执</translation>
+    </message>
+    <message>
+        <source>Turned off, others do not see that you have read their messages.</source>
+        <comment>Settings, Privacy: under Send read receipts</comment>
+        <translation>关闭后，对方不会看到你已读他们的消息。</translation>
+    </message>
+    <message>
         <source>Keep chat history</source>
         <comment>Settings, Privacy: switch</comment>
         <translation>保存聊天记录</translation>

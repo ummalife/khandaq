@@ -3339,12 +3339,11 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
         qDebug() << "onGroupFileReceived: a file of Khandaq Community waits for Accept,"
                  << fileData.size() << "bytes;" << heldGroupFiles.count() << "held,"
                  << heldGroupFiles.bytes() << "bytes";
-        // As below: a synced row's sender is unauthenticated, so it alerts nobody and only counts,
-        // and a file whose BEGIN made its entry alerted then, not again for Accept.
-        if (!arrived) {
+        // As below: a synced row alerts nobody and counts nothing, and a file whose BEGIN made its
+        // entry alerted then, not again for Accept.
+        if (!arrived && !wasSynced) {
             newGroupMessageAlert(groupId, sender, groupFileWords(fileName),
-                                 Air::groupEntryNotifies(wasSynced, false,
-                                                         settings.getGroupAlwaysNotify()));
+                                 settings.getGroupAlwaysNotify());
         }
         return;
     }
@@ -3418,16 +3417,17 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     //
     // Live rows are unaffected: toxcore authenticates their sender.
     //
-    // KHANDAQ (group notify parity, 2026-11-20): a synced row still counts as unread on the row
-    // of the group, as a relayed text does; the count names nobody (Air::groupEntryNotifies). A
-    // file whose BEGIN made its entry alerted then (onGroupFileArrivalStarted), and not again.
+    // KHANDAQ (group notify parity, 2026-11-20): a file whose BEGIN made its entry alerted then
+    // (onGroupFileArrivalStarted), and not again. A synced file, unlike a relayed text, does not
+    // count as unread either: the ids of the files that came are kept in memory only
+    // (ngcFileMsgIdSeen), so after a restart the history sync can bring a small file of the last
+    // hours again, and each such copy would count once more.
     if (wasSynced) {
         qDebug() << "onGroupFileReceived: synced row, storing without a notification"
                  << "(attribution to" << sender.toString().left(8) << "is unauthenticated)";
-    }
-    if (!arrived) {
+    } else if (!arrived) {
         newGroupMessageAlert(groupId, sender, groupFileWords(fileName),
-                             Air::groupEntryNotifies(wasSynced, false, settings.getGroupAlwaysNotify()));
+                             settings.getGroupAlwaysNotify());
     }
 }
 

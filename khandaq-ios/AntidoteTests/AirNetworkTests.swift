@@ -215,6 +215,32 @@ class AirNetworkTests: XCTestCase {
         XCTAssertTrue(NotificationFreshness.isPastEntryGrace(becameActive: becameActive, now: becameActive.addingTimeInterval(3)))
     }
 
+    /// KHANDAQ (notification parity, 2026-11-20): Realm hands the rows written together over in one change, newest first.
+    /// The newest one the filter passes notifies, not the newest of all alone: a 1:1 message under a muted Community
+    /// one, a synced row, a notice or our own message. One at most, and never a row under one stored before.
+    func testAChangeNotifiesTheNewestInsertedRowTheFilterPasses() {
+        func pick(_ insertions: [Int], passing: Set<Int>) -> Int? {
+            return NotificationCoordinator.indexToNotify(insertions: insertions, notifies: { passing.contains($0) })
+        }
+
+        XCTAssertEqual(pick([0], passing: [0]), 0, "one new message, as before")
+        XCTAssertEqual(pick([0, 1], passing: [1]), 1, "the 1:1 message under a muted Community one")
+        XCTAssertEqual(pick([0, 1, 2], passing: [1, 2]), 1, "one band for the change, the newest")
+        XCTAssertEqual(pick([2, 0, 1], passing: [2]), 2, "in whatever order the change lists them")
+        XCTAssertNil(pick([0, 1], passing: []), "nothing in it notifies")
+        XCTAssertNil(pick([], passing: [0]))
+        XCTAssertNil(pick([1, 2], passing: [1, 2]), "under the newest row, stored before: a synced row with its old date")
+        XCTAssertNil(pick([0, 2], passing: [2]), "row 1 was stored before")
+
+        var asked: [Int] = []
+        let picked = NotificationCoordinator.indexToNotify(insertions: [0, 1, 2, 3], notifies: { row in
+            asked.append(row)
+            return row >= 1
+        })
+        XCTAssertEqual(picked, 1)
+        XCTAssertEqual(asked, [0, 1], "the rows under the one that notifies are not even looked at")
+    }
+
     func testAnInvitationIsANotificationOfItsOwnKind() {
         let invitation = NotificationAction.openGroupInvite(inviteIdentifier: "F00D")
         // A system notification keeps its action in userInfo; a tap on it later opens Requests.

@@ -313,6 +313,64 @@ final class PushPreviewTests: XCTestCase {
             XCTAssertTrue(s.namedFile.contains("{b}"), language)
         }
     }
+
+    // MARK: The wake banners a local notification takes the place of
+
+    /// KHANDAQ (notification parity, 2026-11-20): every local notification took away every generic wake banner, so a
+    /// Community message removed the only trace of a 1:1 message that had not come in yet. A local notification now
+    /// takes the place of the generic banners of its own conversation only, and a banner that names nobody stays.
+    func testALocalNotificationReplacesTheGenericBannersOfItsOwnConversationOnly() {
+        let other = String(repeating: "22", count: 32)
+        let group = String(repeating: "C3", count: 32)
+        func banner(title: String = "Khandaq", body: String = "New message", _ userInfo: [AnyHashable: Any]) -> UNMutableNotificationContent {
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.userInfo = userInfo
+            return content
+        }
+
+        // The relay's wake, as the extension shows it when no preview opens.
+        let wake = banner(["wake": "1", "sender_pubkey": publicKey])
+        XCTAssertTrue(WakeBanners.isReplaced(wake, byNotificationAbout: publicKey), "the contact's own message")
+        XCTAssertTrue(WakeBanners.isReplaced(wake, byNotificationAbout: publicKey.lowercased()), "in either case")
+        XCTAssertFalse(WakeBanners.isReplaced(wake, byNotificationAbout: group), "a Community message leaves it")
+        XCTAssertFalse(WakeBanners.isReplaced(wake, byNotificationAbout: other), "and so does another contact's")
+        XCTAssertFalse(WakeBanners.isReplaced(wake, byNotificationAbout: nil))
+        XCTAssertTrue(WakeBanners.isReplaced(banner(body: "New activity", ["sender_pubkey": publicKey]), byNotificationAbout: publicKey))
+        XCTAssertTrue(WakeBanners.isReplaced(banner(["from": publicKey.lowercased()]), byNotificationAbout: publicKey),
+                      "the legacy FCM API names the sender in from")
+
+        // Our own wake (sendOwnPush) names nobody.
+        let own = banner(["wake": "1"])
+        XCTAssertNil(WakeBanners.owner(of: own))
+        XCTAssertFalse(WakeBanners.isReplaced(own, byNotificationAbout: publicKey))
+        XCTAssertFalse(WakeBanners.isReplaced(own, byNotificationAbout: group))
+
+        // A preview that opened with the previews off says "New message" under the sender's name, and is the
+        // contact's.
+        let opened = UNMutableNotificationContent()
+        opened.userInfo = ["khq_pv": sealed, "sender_pubkey": publicKey.lowercased()]
+        XCTAssertTrue(PushPreviewPresenter.apply(to: opened,
+                                                 userInfo: opened.userInfo,
+                                                 masterKey: masterKey,
+                                                 allowedSenders: data(publicKey),
+                                                 showsContent: false,
+                                                 language: "en",
+                                                 now: Date(timeIntervalSince1970: sentAt + 60)))
+        XCTAssertEqual(WakeBanners.owner(of: opened), publicKey)
+        XCTAssertTrue(WakeBanners.isReplaced(opened, byNotificationAbout: publicKey))
+        XCTAssertFalse(WakeBanners.isReplaced(opened, byNotificationAbout: group))
+
+        // One about a group is the group's.
+        let inGroup = banner(title: "Book club", ["sender_pubkey": publicKey, "khq_gid": group])
+        XCTAssertTrue(WakeBanners.isReplaced(inGroup, byNotificationAbout: group))
+        XCTAssertFalse(WakeBanners.isReplaced(inGroup, byNotificationAbout: publicKey))
+
+        // A banner that says what came is never taken away.
+        XCTAssertFalse(WakeBanners.isReplaced(banner(title: "Isa", body: "See you at six", ["sender_pubkey": publicKey]),
+                                              byNotificationAbout: publicKey))
+    }
 }
 
 private func data(_ hex: String) -> Data {

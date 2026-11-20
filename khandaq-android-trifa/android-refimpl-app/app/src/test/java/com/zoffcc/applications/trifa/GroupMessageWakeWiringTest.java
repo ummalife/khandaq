@@ -3,6 +3,7 @@ package com.zoffcc.applications.trifa;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -51,7 +52,7 @@ public class GroupMessageWakeWiringTest
     }
 
     @Test
-    public void a_group_file_wakes_at_its_first_offer_only() throws Exception
+    public void a_group_file_wakes_at_its_first_offer_or_as_it_begins_to_wait() throws Exception
     {
         final String ngc = code("NgcGroupFileTransfer.java");
         final String send = body(ngc, "private static void sendChunkedFrom(");
@@ -64,7 +65,17 @@ public class GroupMessageWakeWiringTest
         assertTrue("only once the BEGIN went, and not for a resume or a member's request", first > unsent);
         assertTrue(wake > first);
         assertTrue(wake < send.indexOf("send.chunk("));
-        assertEquals(1, count(ngc, "PushPreviewSender.wakeForGroupFile("));
+        assertEquals(2, count(ngc, "PushPreviewSender.wakeForGroupFile("));
+
+        // A file of ours with nobody to go to (a small group whose members are away) wakes as it begins to wait, as a
+        // text that waits; a file of an earlier run that comes back waiting (loadPendingSends) does not.
+        final String waits = body(ngc, "static void waitForMember(");
+        final int waiting = waits.indexOf("WAITS.add(g.group_identifier, g.msg_id_hash);");
+        assertTrue(waiting > 0);
+        assertTrue(waits.indexOf("PushPreviewSender.wakeForGroupFile(g, groupNumber);") > waiting);
+        final String load = body(ngc, "private static void loadPendingSends(");
+        assertFalse(load.contains("waitForMember("));
+        assertFalse(load.contains("wakeForGroupFile("));
 
         // A small file is offered whole, in one packet to the group.
         final String image = body(code("HelperGroup.java"), "static void send_group_image(");

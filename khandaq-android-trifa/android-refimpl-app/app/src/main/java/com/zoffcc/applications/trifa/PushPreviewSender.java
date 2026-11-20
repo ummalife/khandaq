@@ -329,8 +329,9 @@ final class PushPreviewSender
 
     /**
      * KHANDAQ (0.2.69, group message wakes): a file of ours was offered to a group: its BEGIN went to a member
-     * (NgcGroupFileTransfer.sendChunkedFrom) or its one packet to the group (HelperGroup.send_group_image). Only the
-     * first offer wakes: the same file offered again in this run (sent again, or resumed after a wait) wakes nobody.
+     * (NgcGroupFileTransfer.sendChunkedFrom) or its one packet to the group (HelperGroup.send_group_image); or it has
+     * nobody to go to and waits (NgcGroupFileTransfer.waitForMember). Only the first of these wakes: the same file
+     * offered again in this run (sent again, or resumed after a wait) wakes nobody.
      */
     static void wakeForGroupFile(final GroupMessage g, final long groupNumber)
     {

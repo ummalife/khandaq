@@ -30,6 +30,7 @@
 #include "src/widget/translator.h"
 #include "src/nexus.h"
 #include "src/platform/apprestart.h"
+#include "src/platform/fileopenrouter.h"
 #include "src/platform/interfacescale.h"
 #include "src/widget/widget.h"
 #include "src/video/camerasource.h"
@@ -178,6 +179,13 @@ void AppManager::preConstructionInitialization(const char* argv0)
 
 int AppManager::run()
 {
+#if defined(Q_OS_MACOS)
+    // KHANDAQ (beta ideas 2026-11-20): macOS hands a tox: link or a profile file to the app as an
+    // event, never as an argument, also the one it launches the app with: the router takes them
+    // from the first turn of the loop on and keeps them until a window can take them.
+    openRouter.reset(new FileOpenRouter());
+    qapp->installEventFilter(openRouter.get());
+#endif
 #if defined(Q_OS_UNIX)
     // PosixSignalNotifier is used only for terminating signals,
     // so it's connected directly to quit() without any filtering.
@@ -388,6 +396,14 @@ int AppManager::run()
     //  cannot be integrated into a central model object yet
     cameraSource = std::unique_ptr<CameraSource>(new CameraSource{*settings});
     nexus = std::unique_ptr<Nexus>(new Nexus{*settings, *messageBoxManager, *cameraSource, *ipc});
+    if (openRouter) {
+        openRouter->setTaker([this](const FileOpenRouter::Request& request) {
+            return nexus && nexus->takeOpenRequest(request.profileFile, request.target);
+        });
+        // Queued: what waited goes once the window that came up is shown and in front.
+        connect(nexus.get(), &Nexus::openRequestsReady, openRouter.get(), &FileOpenRouter::deliver,
+                Qt::QueuedConnection);
+    }
     // Autologin
     // TODO (kriby): Shift responsibility of linking views to model objects from nexus
     // Further: generate view instances separately (loginScreen, mainGUI, audio)

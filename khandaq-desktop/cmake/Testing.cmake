@@ -122,6 +122,8 @@ auto_test(widget removechatdialog "" "mock_library")
 auto_test(widget chattextedit "" "")
 
 auto_test(platform interfacescale "" "")
+# KHANDAQ (beta ideas 2026-11-20): the tox: links and profile files macOS asks the app to open.
+auto_test(platform fileopenrouter "" "")
 if (UNIX)
   auto_test(platform posixsignalnotifier "" "")
 endif()

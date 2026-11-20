@@ -68,6 +68,13 @@ public:
     void registerIpcHandlers();
     bool handleToxSave(const QString& path);
     bool handleToxUri(const QString& uri);
+    /**
+     * KHANDAQ (beta ideas 2026-11-20): a tox: link or a profile file macOS asked the app to open
+     * (FileOpenRouter). The main window takes either as it takes one given at start; while the
+     * start window is up, it moves a profile file in. False while neither can take it yet: it
+     * waits for openRequestsReady.
+     */
+    bool takeOpenRequest(bool profileFile, const QString& target);
 
 #ifdef Q_OS_MAC
 public:
@@ -101,6 +108,8 @@ signals:
     void profileCreated(const QString& id);
     void profileLoadFailed(const Air::OpenFailure& failure);
     void saveGlobal();
+    /** KHANDAQ (beta ideas 2026-11-20): the start window or the main window came up. */
+    void openRequestsReady();
 
 public slots:
     void onCreateNewProfile(const QString& fileName, const QString& selfName, const QString& pass,
@@ -133,4 +142,8 @@ private:
     QString pendingImport;
     /** The start window is up: the main window made meanwhile waits behind it (Widget::holdForStart). */
     bool holdWindow = false;
+    /** KHANDAQ (beta ideas 2026-11-20): the start window while it is up. */
+    LoginScreen* startWindow = nullptr;
+    /** The main window is made and its core started: it takes links and files. */
+    bool windowReady = false;
 };

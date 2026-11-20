@@ -730,6 +730,12 @@ if(APPLE)
     src/platform/mediaaccess_osx.mm)
 endif()
 
+# KHANDAQ (beta ideas 2026-11-20): a tox: link or a profile file macOS asks the app to open comes
+# as an event, not as an argument; AppManager sets the router on macOS only.
+set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}
+  src/platform/fileopenrouter.cpp
+  src/platform/fileopenrouter.h)
+
 # Tox keeps its connections while the window is hidden or covered: macOS puts no App Nap on it.
 if(APPLE)
   set(${PROJECT_NAME}_SOURCES ${${PROJECT_NAME}_SOURCES}

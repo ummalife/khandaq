@@ -70,8 +70,12 @@ public:
 
     /** The profile set to open at start did not: its sign-in says why under the field. */
     void showFailure(const QString& profileName, const Air::OpenFailure& failure);
-    /** Starts moving in the profile file at path: from Settings, or a file opened with the app. */
-    void moveIn(const QString& path);
+    /**
+     * Starts moving in the profile file at path: from Settings, or a file opened with the app.
+     * KHANDAQ (beta ideas 2026-11-20): false, and nothing changes, while the window grows into the
+     * main window or a page is busy.
+     */
+    bool moveIn(const QString& path);
     /** Files of a profile deleted from You that stayed on disk, named over the window once it shows. */
     void tellLeftovers(const QStringList& files);
     /**

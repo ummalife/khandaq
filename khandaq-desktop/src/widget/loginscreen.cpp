@@ -1202,10 +1202,10 @@ void LoginScreen::chooseFile()
     }
 }
 
-void LoginScreen::moveIn(const QString& path)
+bool LoginScreen::moveIn(const QString& path)
 {
     if (growing || busyPage) {
-        return;
+        return false;
     }
     importPath = path;
     importPassword.clear();
@@ -1232,6 +1232,7 @@ void LoginScreen::moveIn(const QString& path)
         leave(history.takeLast());
     }
     go(next);
+    return true;
 }
 
 void LoginScreen::readImport()

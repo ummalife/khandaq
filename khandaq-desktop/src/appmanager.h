@@ -29,6 +29,7 @@ class IPC;
 class QApplication;
 class Nexus;
 class CameraSource;
+class FileOpenRouter;
 
 class AppManager : public QObject
 {
@@ -49,4 +50,6 @@ private:
     std::unique_ptr<IPC> ipc;
     std::unique_ptr<CameraSource> cameraSource;
     std::unique_ptr<Nexus> nexus;
+    /** KHANDAQ (beta ideas 2026-11-20): on macOS, the links and files the system asks to open. */
+    std::unique_ptr<FileOpenRouter> openRouter;
 };

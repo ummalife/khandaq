@@ -1,0 +1,4 @@
+{
+  "en-US": "• Fixed: when a group caught up on the messages you missed, every one of them, however old, came with a notification. Now only new ones do.\n• The All folder has its own button, first in the row, so the sideways swipe on the chat list goes between folders you can see.",
+  "ru-RU": "• Исправлено: когда группа догружала пропущенные сообщения, уведомление приходило на каждое, даже старое. Теперь уведомляют только новые.\n• У папки «Все» появилась своя кнопка, первой в ряду: свайп по списку чатов переключает папки, которые видно."
+}

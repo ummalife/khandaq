@@ -1,0 +1,50 @@
+{
+  "version": "0.2.65",
+  "date": "2026-11-20",
+  "title": "Old group messages arrive quietly; the All folder shows; a flick leaves the chat",
+  "summary": "When a group catches up on the messages you missed, Android no longer notifies of each of them: a message from the group's history notifies only if it was sent in the last 45 seconds. The chat list shows All as its first folder, on iPhone and Android, so the sideways swipe goes between folders you can see. On iPhone a quick flick to the right across the messages leaves a chat or a group, the menu of a pinned message offers Unpin, and holding a chat in the list offers Delete.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "Android: no notifications for old group messages",
+      "description": "When a group caught up on the messages its members had exchanged while you were away, Android notified of every one of them, however old: a tester got notifications for messages from hours before. A message that comes from the group's history now goes into the chat without a notification when it was sent more than 45 seconds ago; one sent just now still notifies, as a message that arrives live does. iPhone and the desktop never notified of history.",
+      "platforms": [
+        "android"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "The All folder is visible",
+      "description": "The chat list had a folder for all chats with no button of its own: the sideways swipe and a second tap on a folder led to it, and it looked as if the folders changed by themselves. All now stands first among the folders, on iPhone and Android, and the swipe goes from one to the next.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "iPhone: a flick leaves the chat",
+      "description": "Besides the swipe from the edge of the screen, a quick flick to the right anywhere on the messages now leaves a chat or a group, as in Telegram; in a right-to-left language it is a flick to the left. A slow short drag leaves the chat where it is, and a swipe the other way still answers a message.",
+      "platforms": [
+        "ios"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "iPhone: Unpin in the menu of a pinned message",
+      "description": "Holding a pinned message offered Pin again. It now offers Unpin, in a chat and in a group, as the cross on the pinned strip does.",
+      "platforms": [
+        "ios"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "iPhone: Delete in the menu of a chat",
+      "description": "Holding a chat in the list now offers Delete, with the same confirmation as before: the sideways swipe on the list goes between folders, so it does not delete.",
+      "platforms": [
+        "ios"
+      ]
+    }
+  ]
+}

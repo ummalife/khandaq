@@ -68,4 +68,37 @@ enum VoiceMessageHelper {
 
         return player.duration
     }
+
+    /// KHANDAQ (tester 8263): the formats an audio file plays in its entry in, with the player of the voice
+    /// notes (AVAudioPlayer reads them on every iOS the app runs on). Another one (.ogg, .opus, .amr...)
+    /// stays a file that opens in QuickLook, which says what it is and can hand it to another app.
+    static let inlineAudioExtensions: Set<String> = ["mp3", "m4a", "m4b", "aac", "wav", "aif", "aiff", "aifc", "caf", "flac"]
+
+    /// KHANDAQ (tester 8263): a file of music or speech that plays in its entry, as a voice note does, at its
+    /// own speed; it had opened in QuickLook, the screen of the system. A voice note is not one.
+    static func isInlineAudioFile(fileName: String?, filePath: String?) -> Bool {
+        guard !isVoiceMessage(fileName: fileName, filePath: filePath) else {
+            return false
+        }
+        var ext = ((fileName ?? "") as NSString).pathExtension
+        if ext.isEmpty {
+            ext = ((filePath ?? "") as NSString).pathExtension
+        }
+        return inlineAudioExtensions.contains(ext.lowercased())
+    }
+
+    private static let durationCache = NSCache<NSString, NSNumber>()
+
+    /// The length of the audio file at `path`, read once: an entry is set up again on every reload, and a
+    /// file of music is larger than a voice note. A file that is not read (yet) is not remembered.
+    static func cachedAudioDuration(at path: String) -> TimeInterval {
+        if let known = durationCache.object(forKey: path as NSString) {
+            return known.doubleValue
+        }
+        let duration = audioDuration(at: path)
+        if duration > 0 {
+            durationCache.setObject(NSNumber(value: duration), forKey: path as NSString)
+        }
+        return duration
+    }
 }

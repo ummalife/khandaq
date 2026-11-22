@@ -67,6 +67,40 @@ class MediaScreensSnapshotTest: SnapshotBaseTest {
         XCTAssertEqual(close?.isHidden, false)
     }
 
+    /// KHANDAQ (tester 8263): the gallery hands the file shown to the share sheet (Save Video or Image, Save to
+    /// Files, another app), as QuickLook does for the other files.
+    func testTheGallerySharesTheFileShown() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("media-screens-share-\(UUID().uuidString).png")
+        try XCTUnwrap(UIImagePNGRepresentation(MediaScreensSnapshotTest.photo())).write(to: url)
+        defer {
+            try? FileManager.default.removeItem(at: url)
+        }
+        let item = GalleryItem(url: url, isVideo: false, senderName: "Amina", date: Date(timeIntervalSince1970: 1_790_000_000))
+        let controller = MediaGalleryViewController(items: [item], startIndex: 0)
+        host(controller)
+
+        let share = try XCTUnwrap(controller.view.buttons.first { $0.accessibilityIdentifier == "media.gallery.share" })
+        XCTAssertEqual(share.accessibilityLabel, String(localized: "air_first_share"))
+        XCTAssertFalse(share.isHidden)
+        XCTAssertEqual(share.allTargets.count, 1, "Share does nothing")
+        XCTAssertNotNil(controller.makeShareSheet(), "no share sheet for the photo shown")
+
+        // A file that is not on this device (any more) has nothing to share.
+        try FileManager.default.removeItem(at: url)
+        XCTAssertNil(controller.makeShareSheet())
+    }
+
+    /// KHANDAQ (tester 8263): a picked video keeps its extension, so Saved Messages shows and opens it as a
+    /// video: the picker suggests "Clip", and the video was kept as a file of data under that name.
+    func testAPickedVideoIsNamedWithItsExtension() {
+        let staged = URL(fileURLWithPath: "/tmp/9F1C7E.mp4")
+        XCTAssertEqual(PickedMediaLoader.videoFileName(suggested: "Clip-QA", staged: staged), "Clip-QA.mp4")
+        XCTAssertEqual(PickedMediaLoader.videoFileName(suggested: "Clip-QA.MP4", staged: staged), "Clip-QA.MP4")
+        XCTAssertEqual(PickedMediaLoader.videoFileName(suggested: "Trip.2024", staged: staged), "Trip.2024.mp4")
+        XCTAssertNil(PickedMediaLoader.videoFileName(suggested: nil, staged: staged))
+        XCTAssertNil(PickedMediaLoader.videoFileName(suggested: "", staged: staged))
+    }
+
     /// KHANDAQ (tester 8264): the pencil by the caption, where the smiley only opened the keyboard, offers
     /// crop and markup at once; a video has nothing to edit.
     func testThePencilByTheCaptionOffersCropAndMarkupForAPhotoOnly() throws {

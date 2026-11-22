@@ -556,6 +556,21 @@ enum PickedMediaLoader {
     /// The types a chat loads as a video (ChatInputViewManager.movieTypeIdentifiers).
     static let movieTypes = [kUTTypeMovie as String, kUTTypeMPEG4 as String, kUTTypeVideo as String]
 
+    /// KHANDAQ (tester 8263): the name a picked video goes by. The picker suggests it without its extension
+    /// ("Clip"), and Saved Messages keeps the video under that name: a file without one was shown as a file
+    /// of data, and QuickLook had nothing for it but its share button. The extension is the one of the copy,
+    /// which is the picker's.
+    static func videoFileName(suggested: String?, staged: URL) -> String? {
+        guard let suggested = suggested, !suggested.isEmpty else {
+            return nil
+        }
+        let ext = staged.pathExtension
+        guard !ext.isEmpty, (suggested as NSString).pathExtension.lowercased() != ext.lowercased() else {
+            return suggested
+        }
+        return suggested + "." + ext
+    }
+
     /// KHANDAQ (tester 8265): the photo library picker of a chat with a person, for its Gallery and for "Add"
     /// on the send preview alike: photos and videos, up to `selectionLimit` of them.
     static func libraryPicker(selectionLimit: Int, delegate: PHPickerViewControllerDelegate) -> PHPickerViewController {
@@ -608,7 +623,8 @@ enum PickedMediaLoader {
                     }
                     do {
                         let staged = try VideoSendPreprocessor.shared.stagePickerVideo(at: url)
-                        store(.video(staged, fileName: provider.suggestedName), at: index)
+                        store(.video(staged, fileName: videoFileName(suggested: provider.suggestedName, staged: staged)),
+                              at: index)
                     }
                     catch {
                         store(nil, at: index, error: error)

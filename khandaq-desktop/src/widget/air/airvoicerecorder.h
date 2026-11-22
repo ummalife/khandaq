@@ -43,6 +43,10 @@ class IAudioSource;
  * stay; its frames come on the audio thread and are kept as one channel until the note is finished
  * (Send) or cancelled. A note lasts up to longestMs, which keeps it under the size the phones fetch
  * by themselves: there the microphone closes and the note waits for finish() or cancel().
+ *
+ * KHANDAQ (beta feedback 2026-11-22): a note can be paused and go on. The microphone stays open
+ * meanwhile, so the note goes on at once, and what it hears is dropped: the note is one stretch of
+ * sound without the pause, and its time stops with it.
  */
 class AirVoiceRecorder : public QObject
 {
@@ -73,12 +77,27 @@ public:
     /** The length of the sound taken so far. */
     qint64 elapsedMs() const;
 
-    /** Ends the note and hands over its sound; empty when none was being recorded. */
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): pauses the note being recorded, or lets it go on. False
+     * when nothing changed: no note, or no microphone open for it (canPause), or already so.
+     */
+    bool setPaused(bool paused);
+    bool isPaused() const;
+    /**
+     * Whether the note being recorded has its microphone open, so that it can be paused: not once
+     * it is longestMs long, nor after the microphone went away (lost).
+     */
+    bool canPause() const;
+
+    /** Ends the note and hands over its sound, without its pauses; empty when none was recorded. */
     AirVoiceDecoder::Pcm finish();
     /** Ends the note and drops its sound. */
     void cancel();
 
-    /** Takes frames as the microphone gives them (interleaved, 16 bits); any thread. */
+    /**
+     * Takes frames as the microphone gives them (interleaved, 16 bits), except while the note is
+     * paused; any thread.
+     */
     void take(const int16_t* pcm, size_t frames, uint8_t channels, uint32_t rate);
 
 #ifdef KHANDAQ_SCREENSHOT_HOOK
@@ -107,7 +126,7 @@ private:
     /** The device of the microphone changed: the note goes on from the new one, as a call does. */
     void reopen(quint64 note);
     void tick();
-    /** Closes the microphone; the sound taken stays. */
+    /** Closes the microphone; the sound taken stays, and nothing is left to pause. */
     void closeMicrophone();
     void end();
 
@@ -123,6 +142,7 @@ private:
     std::vector<int16_t> samples;
     int sampleRate = 0;
     bool full = false;
+    bool paused = false;
 #ifdef KHANDAQ_SCREENSHOT_HOOK
     std::function<std::unique_ptr<IAudioSource>()> testMicrophone;
 #endif

@@ -287,20 +287,34 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
     {
         // One recorder for the app: every form listens and takes what is about its own note.
         AirVoiceRecorder* const recorder = &AirVoiceRecorder::instance();
+        // KHANDAQ (beta feedback 2026-11-22): the bar says what the recorder did, which is nothing
+        // without a microphone open for the note.
+        const auto showPause = [this, recorder] {
+            composer->setRecordingPaused(recorder->isPaused(), recorder->canPause());
+        };
+        connect(composer, &AirComposer::voicePauseRequested, this,
+                [this, recorder, showPause](bool paused) {
+                    if (recorder->isRecordingFor(this)) {
+                        recorder->setPaused(paused);
+                        showPause();
+                    }
+                });
         connect(recorder, &AirVoiceRecorder::elapsedChanged, this, [this, recorder](qint64 ms) {
             if (recorder->isRecordingFor(this)) {
                 composer->setRecordingTime(ms, static_cast<double>(ms)
                                                    / AirVoiceRecorder::longestMs);
             }
         });
-        connect(recorder, &AirVoiceRecorder::limitReached, this, [this, recorder] {
+        connect(recorder, &AirVoiceRecorder::limitReached, this, [this, recorder, showPause] {
             if (recorder->isRecordingFor(this)) {
                 composer->setRecordingTime(AirVoiceRecorder::longestMs, 1.0);
+                showPause();
                 sendVoiceNote(true);
             }
         });
-        connect(recorder, &AirVoiceRecorder::lost, this, [this, recorder] {
+        connect(recorder, &AirVoiceRecorder::lost, this, [this, recorder, showPause] {
             if (recorder->isRecordingFor(this)) {
+                showPause();
                 AirToast::post(this, AirStrings::text(AirStrings::Text::VoiceNoMicrophone));
             }
         });

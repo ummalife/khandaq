@@ -26,6 +26,7 @@
 
 class AirButton;
 class AirIconButton;
+class AirPlayButton;
 class AirProgressBar;
 class QLabel;
 class QTextEdit;
@@ -56,11 +57,19 @@ public:
      * A voice note being recorded (kq-progress): in place of the field the microphone, "Recording a
      * voice message", its time and how much of the longest note it takes; the cross in place of the
      * paperclip cancels it (Esc too), Send sends it (Enter too). False brings the field back.
+     * KHANDAQ (beta feedback 2026-11-22): where the microphone was, a voice note's round button
+     * pauses it (two bars) and lets it go on (the triangle); a new note starts unpaused.
      */
     void setRecording(bool recording);
     bool isRecording() const;
     /** The time of the note being recorded, and its share of the longest note (0 to 1). */
     void setRecordingTime(qint64 ms, double share);
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): whether the note being recorded is paused, which the bar
+     * says ("Recording paused") and the button offers to undo; pausable false disables the button
+     * (no microphone open for the note).
+     */
+    void setRecordingPaused(bool paused, bool pausable = true);
     /** An empty text hides the line; the change cross-fades without moving anything. */
     void setHint(const QString& text, Air::ComposeHint::Dot dot);
     /** "120 bytes left"; empty hides it. */
@@ -94,6 +103,11 @@ signals:
     void voiceCancelRequested();
     /** Send or Enter while a note is recorded. */
     void voiceSendRequested();
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): the pause button while a note is recorded: true to pause
+     * it, false to let it go on. The bar changes once setRecordingPaused says so.
+     */
+    void voicePauseRequested(bool paused);
     /** The button of the read-only bar. */
     void readOnlyActionRequested();
 
@@ -114,6 +128,8 @@ private:
     AirIconButton* emoji = nullptr;
     AirIconButton* voice = nullptr;
     AirIconButton* cancelVoice = nullptr;
+    AirPlayButton* pauseVoice = nullptr;
+    bool recordingPaused = false;
     bool attachShown = true;
     bool emojiShown = true;
     bool voiceShown = true;

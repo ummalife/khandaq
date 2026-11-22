@@ -978,6 +978,21 @@
         <translation>جارٍ تسجيل رسالة صوتية</translation>
     </message>
     <message>
+        <source>Recording paused</source>
+        <comment>in place of the message field while the recording of a voice message is paused</comment>
+        <translation>التسجيل متوقف مؤقتًا</translation>
+    </message>
+    <message>
+        <source>Pause recording</source>
+        <comment>button while a voice message is recorded: what the microphone hears is not taken until it goes on</comment>
+        <translation>إيقاف التسجيل مؤقتًا</translation>
+    </message>
+    <message>
+        <source>Resume recording</source>
+        <comment>the same button while the recording of a voice message is paused: it goes on</comment>
+        <translation>استئناف التسجيل</translation>
+    </message>
+    <message>
         <source>Too short: a voice message lasts at least a second</source>
         <comment>toast when a voice message was shorter than a second</comment>
         <translation>قصيرة جدًا: تستمر الرسالة الصوتية ثانية على الأقل</translation>

@@ -161,6 +161,7 @@ private slots:
     void composerOffersTheEmojiAtTheEndOfTheField();
     void composerSendSaysSaveWhileANoteIsEdited();
     void composerRecordsAVoiceNoteInPlaceOfTheField();
+    void composerPausesAVoiceNoteAndLetsItGoOn();
     void dossierSaysTheRoleAndListsTheMembers();
     void dossierSetsYourNameInTheGroup();
     void memberMenuIsTheSameFromTheRowAndFromTheirName();
@@ -655,6 +656,86 @@ void TestAirGroupViews::composerRecordsAVoiceNoteInPlaceOfTheField()
     QVERIFY(!attach->isVisible());
     QVERIFY(!voice->isVisible());
     QVERIFY(emoji->isVisible());
+}
+
+/**
+ * KHANDAQ (beta feedback 2026-11-22): while a note is recorded, a voice note's round button stands
+ * where the microphone was: two bars to pause, the triangle to go on, named for each, and the bar
+ * says that the recording is paused. A new note starts unpaused.
+ */
+void TestAirGroupViews::composerPausesAVoiceNoteAndLetsItGoOn()
+{
+    QWidget host;
+    host.resize(700, 300);
+    auto* const field = new QTextEdit();
+    auto* const composer = new AirComposer(field, &host);
+    composer->setGeometry(0, 0, 700, 300);
+    host.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&host));
+    auto* const pause = part<AirPlayButton>(composer, "composerVoicePause");
+    auto* const send = part<QAbstractButton>(composer, "composerSend");
+    auto* const recording = part<QWidget>(composer, "composerRecording");
+    QVERIFY(!pause->isVisible());
+
+    composer->setRecording(true);
+    QVERIFY(pause->isVisible());
+    QVERIFY(pause->isEnabled());
+    QVERIFY(pause->isPlaying());
+    QCOMPARE(pause->accessibleName(), AirStrings::text(Text::ComposeVoicePause));
+    QCOMPARE(pause->toolTip(), AirStrings::text(Text::ComposeVoicePause));
+    const QRect barBox(recording->mapTo(composer, QPoint()), recording->size());
+    const QRect pauseBox(pause->mapTo(composer, QPoint()), pause->size());
+    const QRect sendBox(send->mapTo(composer, QPoint()), send->size());
+    QVERIFY(barBox.right() < pauseBox.left());
+    QVERIFY(pauseBox.right() < sendBox.left());
+    // Tab: the cross, the pause, Send.
+    host.activateWindow();
+    QVERIFY(QTest::qWaitForWindowActive(&host));
+    auto* const cancel = part<QAbstractButton>(composer, "composerVoiceCancel");
+    cancel->setFocus();
+    QTest::keyClick(cancel, Qt::Key_Tab);
+    QCOMPARE(QApplication::focusWidget(), static_cast<QWidget*>(pause));
+    QTest::keyClick(pause, Qt::Key_Tab);
+    QCOMPARE(QApplication::focusWidget(), static_cast<QWidget*>(send));
+
+    // The button asks; the form pauses the note and says so.
+    QSignalSpy asks(composer, &AirComposer::voicePauseRequested);
+    pause->click();
+    QCOMPARE(asks.count(), 1);
+    QCOMPARE(asks.last().at(0).toBool(), true);
+    QVERIFY(pause->isPlaying());
+    composer->setRecordingPaused(true);
+    QVERIFY(!pause->isPlaying());
+    QCOMPARE(pause->accessibleName(), AirStrings::text(Text::ComposeVoiceResume));
+    QCOMPARE(pause->toolTip(), AirStrings::text(Text::ComposeVoiceResume));
+    composer->setRecordingTime(12000, 0.04);
+    QVERIFY(recording->accessibleName().startsWith(AirStrings::text(Text::ComposeRecordingPaused)));
+    QVERIFY(recording->accessibleName().endsWith(QStringLiteral("0:12")));
+    QTest::keyClick(pause, Qt::Key_Space);
+    QCOMPARE(asks.count(), 2);
+    QCOMPARE(asks.last().at(0).toBool(), false);
+    composer->setRecordingPaused(false);
+    QCOMPARE(pause->accessibleName(), AirStrings::text(Text::ComposeVoicePause));
+    QVERIFY(recording->accessibleName().startsWith(AirStrings::text(Text::ComposeRecording)));
+    QVERIFY(!recording->accessibleName().startsWith(
+        AirStrings::text(Text::ComposeRecordingPaused)));
+    // Enter on the pause sends the note, as from Send.
+    QSignalSpy notes(composer, &AirComposer::voiceSendRequested);
+    QTest::keyClick(pause, Qt::Key_Return);
+    QCOMPARE(notes.count(), 1);
+    QCOMPARE(asks.count(), 2);
+
+    // No microphone for the note: nothing to pause.
+    composer->setRecordingPaused(false, false);
+    QVERIFY(!pause->isEnabled());
+    composer->setRecordingPaused(true);
+    composer->setRecording(false);
+    QVERIFY(!pause->isVisible());
+    composer->setRecording(true);
+    QVERIFY(pause->isEnabled());
+    QVERIFY(pause->isPlaying());
+    QCOMPARE(pause->accessibleName(), AirStrings::text(Text::ComposeVoicePause));
+    composer->setRecording(false);
 }
 
 /** The dossier says your role in words and lists everyone, you included, by role. */

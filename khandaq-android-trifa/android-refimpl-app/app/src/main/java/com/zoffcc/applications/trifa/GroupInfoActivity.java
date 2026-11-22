@@ -1254,7 +1254,10 @@ public class GroupInfoActivity extends AirScreenActivity
 
     private static Outcome writeSelfName(final String groupId, final String name)
     {
-        return call(groupId, null, "self name", num -> MainActivity.tox_group_self_set_name(num, name), null);
+        // KHANDAQ (tester 21.11, 8257): kept as the group's own name (GroupOwnNames), so that the profile's saves and
+        // the joins of the group leave it as it is; the profile name makes the group follow the profile again.
+        return call(groupId, null, "self name", num -> MainActivity.tox_group_self_set_name(num, name),
+                    () -> HelperGroup.set_group_own_name(groupId, name));
     }
 
     private static Outcome writeTopic(final String groupId, final String topic)

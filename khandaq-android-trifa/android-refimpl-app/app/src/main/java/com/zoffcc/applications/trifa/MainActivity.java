@@ -9484,8 +9484,13 @@ public class MainActivity extends AppCompatActivity
         final ByteBuffer invite_data_buf_wrapped = ByteBuffer.allocateDirect((int) invite_data_length);
         invite_data_buf_wrapped.put(invite_data, 0, (int) invite_data_length);
         invite_data_buf_wrapped.rewind();
+        // KHANDAQ (tester 21.11, 8257): a group joined again keeps the name its settings gave you (GroupOwnNames).
+        final String invited_group_identifier = (invite_data.length >= GROUP_ID_LENGTH)
+                                                ? bytes_to_hex(Arrays.copyOfRange(invite_data, 0, GROUP_ID_LENGTH))
+                                                : null;
         long new_group_num = tox_group_invite_accept(friend_number, invite_data_buf_wrapped, invite_data_length,
-                                                     HelperGroup.get_group_peer_join_name(), null);
+                                                     HelperGroup.get_group_peer_join_name(invited_group_identifier),
+                                                     null);
 
         HelperGeneric.logI(TAG, "group_invite_cb:fn=" + friend_number + " got invited to group num=" + new_group_num);
         update_savedata_file_wrapper();

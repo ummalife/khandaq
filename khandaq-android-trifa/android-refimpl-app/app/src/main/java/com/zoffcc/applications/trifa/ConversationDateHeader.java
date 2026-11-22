@@ -35,8 +35,9 @@ public class ConversationDateHeader extends HeaderViewHolder
         {
             pendingHide = false;
         }
-        else
+        else if (this.tv.getText().length() > 0)
         {
+            // KHANDAQ: a chat without messages has no day to show; an empty pill floated over it while dragged.
             ViewUtil.animateIn(this.tv, animateIn);
         }
     }

@@ -409,6 +409,12 @@ final class VideoSendProgressOverlay {
 
     private init() {}
 
+    /// KHANDAQ (tester 8265): a banner is up (main queue). Loading more media for the send preview then goes
+    /// without one of its own, which would take the place of this one for good.
+    var isShown: Bool {
+        return bannerView != nil
+    }
+
     /// Puts the banner up in place of any other and returns its number for `update` and `hide`.
     @discardableResult
     func show(on viewController: UIViewController,
@@ -546,6 +552,26 @@ enum PickedMediaLoader {
 
     /// How long loading goes on before the banner comes up: a photo on the phone is there before that.
     static let bannerDelay: TimeInterval = 0.3
+
+    /// The types a chat loads as a video (ChatInputViewManager.movieTypeIdentifiers).
+    static let movieTypes = [kUTTypeMovie as String, kUTTypeMPEG4 as String, kUTTypeVideo as String]
+
+    /// KHANDAQ (tester 8265): the photo library picker of a chat with a person, for its Gallery and for "Add"
+    /// on the send preview alike: photos and videos, up to `selectionLimit` of them.
+    static func libraryPicker(selectionLimit: Int, delegate: PHPickerViewControllerDelegate) -> PHPickerViewController {
+        var configuration = PHPickerConfiguration()
+        configuration.filter = .any(of: [.images, .videos])
+        configuration.selectionLimit = selectionLimit
+        // KHANDAQ (large media): the file as it is in the library. With the default the system may
+        // transcode a video before handing it over, a long wait for a big one, while the app
+        // transcodes it anyway when it is large (VideoSendPreprocessor, to HEVC) and re-encodes
+        // every photo as JPEG.
+        configuration.preferredAssetRepresentationMode = .current
+
+        let picker = PHPickerViewController(configuration: configuration)
+        picker.delegate = delegate
+        return picker
+    }
 
     /// `completion` runs on the main queue once every item has answered, unless the person cancelled
     /// from the banner: the videos copied by then are removed and nothing is reported. `bannerHost` nil

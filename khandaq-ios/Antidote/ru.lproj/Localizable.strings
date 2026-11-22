@@ -438,6 +438,10 @@
 "media_send_button" = "Отправить";
 "media_send_caption_hint" = "Добавить подпись...";
 "media_send_counter_format" = "%1$d / %2$d";
+/* KHANDAQ (tester 8264/8265): the send preview: more items, and the pencil's menu for a photo */
+"media_send_add_more" = "Добавить фото или видео";
+"media_edit_crop" = "Обрезать и повернуть";
+"media_edit_markup" = "Рисунок и текст";
 /* Error */
 "error_wrong_password_title" = "Неверный пароль";
 /* Error */

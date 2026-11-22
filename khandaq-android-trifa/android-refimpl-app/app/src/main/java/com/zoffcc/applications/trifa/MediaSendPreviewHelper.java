@@ -56,13 +56,25 @@ public final class MediaSendPreviewHelper
      */
     public static Intent buildMediaPickerIntent(final Context context)
     {
+        return buildMediaPickerIntent(context, Integer.MAX_VALUE);
+    }
+
+    /**
+     * KHANDAQ (Khandaq Testers 8265): the same picker for at most {@code room} more items, for "Add" on the send
+     * screen. Integer.MAX_VALUE keeps the picker's own limit, as the chat opens it.
+     */
+    static Intent buildMediaPickerIntent(final Context context, final int room)
+    {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
         {
             final Intent intent = new Intent(android.provider.MediaStore.ACTION_PICK_IMAGES);
             try
             {
-                intent.putExtra(android.provider.MediaStore.EXTRA_PICK_IMAGES_MAX,
-                        android.provider.MediaStore.getPickImagesMaxLimit());
+                final int max = pickImagesMax(room, android.provider.MediaStore.getPickImagesMaxLimit());
+                if (max > 0)
+                {
+                    intent.putExtra(android.provider.MediaStore.EXTRA_PICK_IMAGES_MAX, max);
+                }
             }
             catch (Throwable ignored)
             {
@@ -73,9 +85,86 @@ public final class MediaSendPreviewHelper
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
         intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "video/*"});
-        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, room > 1);
         intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         return intent;
+    }
+
+    /**
+     * KHANDAQ (Khandaq Testers 8265): the photo picker's EXTRA_PICK_IMAGES_MAX for a room, or 0 to leave it out.
+     * The picker takes a limit above 1 and up to its own only, and cancels on any other, so a room of one picks
+     * a single item, which is what it does without the extra.
+     */
+    static int pickImagesMax(final int room, final int pickerLimit)
+    {
+        final int max = Math.min(room, pickerLimit);
+        return (max > 1) ? max : 0;
+    }
+
+    /**
+     * KHANDAQ (Khandaq Testers 8265): the photo picker's own limit, which bounds one send as it bounded the first
+     * pick; 0 where there is none (the document picker before Android 13).
+     */
+    static int sendItemLimit()
+    {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
+        {
+            try
+            {
+                return Math.max(0, android.provider.MediaStore.getPickImagesMaxLimit());
+            }
+            catch (Throwable ignored)
+            {
+            }
+        }
+        return 0;
+    }
+
+    /** KHANDAQ (Khandaq Testers 8265): how many more items a send of {@code selected} takes; a limit of 0 is none. */
+    static int addMoreRoom(final int selected, final int limit)
+    {
+        if (limit <= 0)
+        {
+            return Integer.MAX_VALUE;
+        }
+        return Math.max(0, limit - Math.max(0, selected));
+    }
+
+    /**
+     * KHANDAQ (Khandaq Testers 8265): what "Add" brings to a send: the picked items it does not hold yet (a picker
+     * may offer a chosen photo again), once each, in the order picked, as many as its room takes.
+     */
+    static <T> List<T> itemsToAdd(final List<T> current, final List<T> picked, final int room,
+                                  final java.util.function.Function<T, String> key)
+    {
+        final List<T> out = new ArrayList<>();
+        if ((picked == null) || (room <= 0))
+        {
+            return out;
+        }
+        final Set<String> seen = new LinkedHashSet<>();
+        if (current != null)
+        {
+            for (final T item : current)
+            {
+                if (item != null)
+                {
+                    seen.add(key.apply(item));
+                }
+            }
+        }
+        for (final T item : picked)
+        {
+            if (out.size() >= room)
+            {
+                break;
+            }
+            if ((item != null) && seen.add(key.apply(item)))
+            {
+                out.add(item);
+            }
+        }
+        return out;
     }
 
     /** KHANDAQ (Figma attachments grid): is the device media-read permission granted? */
@@ -354,6 +443,37 @@ public final class MediaSendPreviewHelper
             clip.addItem(new ClipData.Item(uris.get(i)));
         }
         intent.setClipData(clip);
+    }
+
+    /**
+     * KHANDAQ (Khandaq Testers 8265): the read grants of a send, handed back to the chat with the result. Items
+     * picked by "Add" came with grants the send screen holds, which end with it, before the chat has copied
+     * them, wherever the system keeps no lasting grant. Only content URIs travel in the clip: a photo cropped
+     * here is a file of this app and needs none, and a file URI in an intent's clip is refused.
+     */
+    static void grantContentUriReadPermissions(final Intent intent, final Context context, final List<Uri> uris)
+    {
+        if (uris == null)
+        {
+            return;
+        }
+        final List<Uri> content = new ArrayList<>(uris.size());
+        for (final Uri uri : uris)
+        {
+            if ((uri != null) && android.content.ContentResolver.SCHEME_CONTENT.equals(uri.getScheme()))
+            {
+                content.add(uri);
+            }
+        }
+        try
+        {
+            grantUriReadPermissions(intent, context, content);
+        }
+        catch (Exception e)
+        {
+            // The send goes on: a grant the system made lasting (persistUriPermissions) still holds.
+            Log.i(TAG, "grantContentUriReadPermissions:EE:" + e.getMessage());
+        }
     }
 
     /** The chat a caption of media sent from the preview goes to, by the same rules as its files; null for none. */

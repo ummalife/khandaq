@@ -995,6 +995,7 @@
     <string name="media_send_caption_hint">添加说明</string>
     <string name="media_send_edit_photo">编辑照片</string>
     <string name="media_send_edit_failed">无法编辑照片</string>
+    <string name="media_send_add_more">添加照片或视频</string>
     <string name="media_send_counter_format">%1$d / %2$d</string>
     <string name="media_label_video">视频</string>
     <string name="media_label_audio">音频</string>

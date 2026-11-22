@@ -10,6 +10,7 @@ import android.graphics.Color;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -32,17 +33,24 @@ import java.util.List;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.os.BundleCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
 
 public class MediaSendPreviewActivity extends AppCompatActivity
 {
+    private static final String TAG = "trifa.MediaSendPrev";
+    /** KHANDAQ (Khandaq Testers 8265): the chat's media picker, opened by the tile that adds more. */
+    private static final int REQUEST_ADD_MORE = 8011;
+    private static final String STATE_URIS = "media_send_preview_uris";
+
     private ArrayList<Uri> uris;
     private EmojiEditText captionField;
     private EmojiPopup emojiPopup;
     private TextView counterView;
     private ViewPager2 pager;
+    private RecyclerView thumbs;
     private ThumbnailAdapter thumbAdapter;
     // KHANDAQ (#7): crop/rotate editor before send.
     private PreviewAdapter previewAdapter;
@@ -76,7 +84,12 @@ public class MediaSendPreviewActivity extends AppCompatActivity
         setContentView(R.layout.activity_media_send_preview);
         ViewUtil.applyImeBottomInsets(this); // KHANDAQ (#1): keep the caption field above the keyboard on edge-to-edge
 
-        uris = getIntent().getParcelableArrayListExtra(MediaSendPreviewHelper.EXTRA_URI_LIST);
+        // KHANDAQ (Khandaq Testers 8265): what was added or cropped here outlives the activity being made anew,
+        // as it may be behind the picker.
+        final ArrayList<Uri> restored = (savedInstanceState == null) ? null
+                : BundleCompat.getParcelableArrayList(savedInstanceState, STATE_URIS, Uri.class);
+        uris = ((restored != null) && !restored.isEmpty()) ? restored
+                : getIntent().getParcelableArrayListExtra(MediaSendPreviewHelper.EXTRA_URI_LIST);
         if (uris == null || uris.isEmpty())
         {
             setResult(Activity.RESULT_CANCELED);
@@ -89,7 +102,7 @@ public class MediaSendPreviewActivity extends AppCompatActivity
         captionField = findViewById(R.id.media_preview_caption);
         counterView = findViewById(R.id.media_preview_counter);
         pager = findViewById(R.id.media_preview_pager);
-        final RecyclerView thumbs = findViewById(R.id.media_preview_thumbs);
+        thumbs = findViewById(R.id.media_preview_thumbs);
 
         previewAdapter = new PreviewAdapter(this, uris);
         pager.setAdapter(previewAdapter);
@@ -111,12 +124,15 @@ public class MediaSendPreviewActivity extends AppCompatActivity
         {
             counterView.setVisibility(View.VISIBLE);
             updateCounter(0);
-
-            thumbs.setVisibility(View.VISIBLE);
-            thumbs.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
-            thumbAdapter = new ThumbnailAdapter(this, uris, position -> pager.setCurrentItem(position, true));
-            thumbs.setAdapter(thumbAdapter);
         }
+
+        // KHANDAQ (Khandaq Testers 8265): the strip shows for one item too, as it ends in the tile that adds more.
+        thumbs.setVisibility(View.VISIBLE);
+        thumbs.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
+        thumbAdapter = new ThumbnailAdapter(this, uris, position -> pager.setCurrentItem(position, true),
+                                            this::openAddMore);
+        thumbAdapter.setAddShown(addMoreRoom() > 0);
+        thumbs.setAdapter(thumbAdapter);
 
         final ImageButton backButton = findViewById(R.id.media_preview_close);
         final ImageButton sendButton = findViewById(R.id.media_preview_send);
@@ -139,6 +155,8 @@ public class MediaSendPreviewActivity extends AppCompatActivity
         {
             final Intent result = new Intent();
             result.putParcelableArrayListExtra(MediaSendPreviewHelper.EXTRA_URI_LIST, uris);
+            // KHANDAQ (Khandaq Testers 8265): the chat reads what was added here once this screen is gone.
+            MediaSendPreviewHelper.grantContentUriReadPermissions(result, this, uris);
             final String caption = captionField.getText() == null ? "" : captionField.getText().toString().trim();
             if (!caption.isEmpty())
             {
@@ -167,6 +185,86 @@ public class MediaSendPreviewActivity extends AppCompatActivity
             captionField.requestFocus();
             emojiPopup.toggle();
         });
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull final Bundle outState)
+    {
+        super.onSaveInstanceState(outState);
+        if (uris != null)
+        {
+            outState.putParcelableArrayList(STATE_URIS, uris);
+        }
+    }
+
+    /** KHANDAQ (Khandaq Testers 8265): how many more items this send takes. */
+    private int addMoreRoom()
+    {
+        return MediaSendPreviewHelper.addMoreRoom((uris == null) ? 0 : uris.size(),
+                                                  MediaSendPreviewHelper.sendItemLimit());
+    }
+
+    /**
+     * KHANDAQ (Khandaq Testers 8265): the tile at the end of the strip opens the chat's own media picker, for as
+     * many more items as the send takes.
+     */
+    private void openAddMore()
+    {
+        final int room = addMoreRoom();
+        if (room <= 0)
+        {
+            thumbAdapter.setAddShown(false);
+            return;
+        }
+        if (emojiPopup != null && emojiPopup.isShowing())
+        {
+            emojiPopup.dismiss();
+        }
+        try
+        {
+            startActivityForResult(MediaSendPreviewHelper.buildMediaPickerIntent(this, room), REQUEST_ADD_MORE);
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "openAddMore:EE:" + e.getMessage());
+        }
+    }
+
+    /**
+     * KHANDAQ (Khandaq Testers 8265): the items picked go after those already here, and the first of them shows.
+     * What is no photo or video, is here already, or is past the limit of a send is left out; the size of the
+     * files is checked when they are sent, as for the first pick.
+     */
+    private void addPicked(final Intent data)
+    {
+        final List<Uri> picked = MediaSendPreviewHelper.collectUris(data);
+        if (picked.isEmpty() || (uris == null))
+        {
+            return;
+        }
+        MediaSendPreviewHelper.persistUriPermissions(this, picked);
+        final List<Uri> media = new ArrayList<>(picked.size());
+        for (final Uri uri : picked)
+        {
+            if (MediaSendPreviewHelper.isPreviewableMedia(this, uri))
+            {
+                media.add(uri);
+            }
+        }
+        final List<Uri> added = MediaSendPreviewHelper.itemsToAdd(uris, media, addMoreRoom(), Uri::toString);
+        if (added.isEmpty())
+        {
+            return;
+        }
+        final int first = uris.size();
+        uris.addAll(added);
+        previewAdapter.notifyItemRangeInserted(first, added.size());
+        thumbAdapter.notifyItemRangeInserted(first, added.size());
+        thumbAdapter.setAddShown(addMoreRoom() > 0);
+        counterView.setVisibility(View.VISIBLE);
+        pager.setCurrentItem(first, true);
+        updateCounter(first);
+        thumbs.scrollToPosition(first);
     }
 
     // KHANDAQ (#7): show the edit (crop/rotate) button only for image pages, never for video.
@@ -257,6 +355,14 @@ public class MediaSendPreviewActivity extends AppCompatActivity
     protected void onActivityResult(int requestCode, int resultCode, Intent data)
     {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_ADD_MORE)
+        {
+            if (resultCode == Activity.RESULT_OK)
+            {
+                addPicked(data);
+            }
+            return;
+        }
         if (requestCode != com.yalantis.ucrop.UCrop.REQUEST_CROP)
         {
             return;
@@ -295,18 +401,50 @@ public class MediaSendPreviewActivity extends AppCompatActivity
         void onThumbClick(int position);
     }
 
-    private static final class ThumbnailAdapter extends RecyclerView.Adapter<ThumbnailAdapter.Holder>
+    private static final class ThumbnailAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
     {
+        private static final int TYPE_THUMB = 0;
+        /** KHANDAQ (Khandaq Testers 8265): the tile at the end, which adds more items. */
+        private static final int TYPE_ADD = 1;
+
         private final Context context;
         private final List<Uri> items;
         private final ThumbClickListener listener;
+        private final Runnable onAdd;
         private int selected;
+        private boolean addShown;
 
-        ThumbnailAdapter(final Context context, final List<Uri> items, final ThumbClickListener listener)
+        ThumbnailAdapter(final Context context, final List<Uri> items, final ThumbClickListener listener,
+                         final Runnable onAdd)
         {
             this.context = context;
             this.items = items;
             this.listener = listener;
+            this.onAdd = onAdd;
+        }
+
+        /** The tile that adds more, after the items; gone once the send takes no more. */
+        void setAddShown(final boolean shown)
+        {
+            if (shown == addShown)
+            {
+                return;
+            }
+            addShown = shown;
+            if (shown)
+            {
+                notifyItemInserted(items.size());
+            }
+            else
+            {
+                notifyItemRemoved(items.size());
+            }
+        }
+
+        @Override
+        public int getItemViewType(final int position)
+        {
+            return (position >= items.size()) ? TYPE_ADD : TYPE_THUMB;
         }
 
         void setSelected(final int position)
@@ -319,16 +457,34 @@ public class MediaSendPreviewActivity extends AppCompatActivity
 
         @NonNull
         @Override
-        public Holder onCreateViewHolder(@NonNull ViewGroup parent, int viewType)
+        public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType)
         {
+            if (viewType == TYPE_ADD)
+            {
+                final View tile = LayoutInflater.from(parent.getContext()).inflate(
+                        R.layout.item_media_send_preview_add, parent, false);
+                tile.setOnClickListener(v ->
+                {
+                    if (onAdd != null)
+                    {
+                        onAdd.run();
+                    }
+                });
+                return new AddHolder(tile);
+            }
             final View view = LayoutInflater.from(parent.getContext()).inflate(
                     R.layout.item_media_send_preview_thumb, parent, false);
             return new Holder(view);
         }
 
         @Override
-        public void onBindViewHolder(@NonNull Holder holder, int position)
+        public void onBindViewHolder(@NonNull RecyclerView.ViewHolder viewHolder, int position)
         {
+            if (!(viewHolder instanceof Holder))
+            {
+                return;
+            }
+            final Holder holder = (Holder) viewHolder;
             final Uri uri = items.get(position);
             final boolean isVideo = MediaSendPreviewHelper.isVideoUri(context, uri);
             holder.videoIcon.setVisibility(isVideo ? View.VISIBLE : View.GONE);
@@ -354,7 +510,15 @@ public class MediaSendPreviewActivity extends AppCompatActivity
         @Override
         public int getItemCount()
         {
-            return items.size();
+            return items.size() + (addShown ? 1 : 0);
+        }
+
+        static final class AddHolder extends RecyclerView.ViewHolder
+        {
+            AddHolder(final View itemView)
+            {
+                super(itemView);
+            }
         }
 
         static final class Holder extends RecyclerView.ViewHolder

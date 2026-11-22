@@ -798,6 +798,74 @@ class VoiceHoldGateTests: XCTestCase {
     }
 }
 
+/// Tester 8249: the timer of a locked recording stood still while a finger dragged or held the chat, and
+/// a recording could not be paused.
+class VoiceRecordingClockTests: XCTestCase {
+    func testTheTimeRunsFromTheStart() {
+        var clock = VoiceRecordingClock()
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        XCTAssertNil(clock.elapsed(at: start), "a clock that never started showed a time")
+        clock.start(at: start)
+        XCTAssertTrue(clock.isRunning)
+        XCTAssertEqual(clock.elapsed(at: start.addingTimeInterval(7.5)) ?? -1, 7.5, accuracy: 0.001)
+    }
+
+    func testAPausedStretchIsLeftOut() {
+        var clock = VoiceRecordingClock()
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        clock.start(at: start)
+        clock.pause(at: start.addingTimeInterval(4))
+        XCTAssertFalse(clock.isRunning)
+        XCTAssertEqual(clock.elapsed(at: start.addingTimeInterval(30)) ?? -1, 4, accuracy: 0.001,
+                       "the time went on while the recording was paused")
+        clock.resume(at: start.addingTimeInterval(30))
+        XCTAssertEqual(clock.elapsed(at: start.addingTimeInterval(33)) ?? -1, 7, accuracy: 0.001,
+                       "after the pause the time did not go on from where it stood")
+    }
+
+    func testRepeatedPausesAndResumesAddUp() {
+        var clock = VoiceRecordingClock()
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        clock.start(at: start)
+        clock.pause(at: start.addingTimeInterval(2))
+        clock.pause(at: start.addingTimeInterval(5))
+        clock.resume(at: start.addingTimeInterval(10))
+        clock.resume(at: start.addingTimeInterval(11))
+        clock.pause(at: start.addingTimeInterval(13))
+        clock.resume(at: start.addingTimeInterval(20))
+        // Recorded: 0–2, 10–13 and 20–21; the second pause and the second resume change nothing.
+        XCTAssertEqual(clock.elapsed(at: start.addingTimeInterval(21)) ?? -1, 6, accuracy: 0.001)
+    }
+
+    func testANewRecordingStartsAtZero() {
+        var clock = VoiceRecordingClock()
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        clock.start(at: start)
+        clock.pause(at: start.addingTimeInterval(3))
+        clock.reset()
+        XCTAssertNil(clock.elapsed(at: start.addingTimeInterval(4)))
+        clock.start(at: start.addingTimeInterval(50))
+        XCTAssertEqual(clock.elapsed(at: start.addingTimeInterval(51)) ?? -1, 1, accuracy: 0.001)
+    }
+
+    func testTheRecordingTimerTicksWhileTheChatIsDragged() {
+        var ticks = 0
+        let timer = ChatInputView.scheduleRecordingTimer(interval: 0.05) { _ in
+            ticks += 1
+        }
+        defer {
+            timer.invalidate()
+        }
+        // While a finger drags a scroll view the main loop runs in the tracking mode. One run of the loop
+        // returns after the first source it serves, so run it until the timer ticks or the time is up.
+        let deadline = Date(timeIntervalSinceNow: 1.0)
+        while ticks == 0 && Date() < deadline {
+            _ = RunLoop.main.run(mode: RunLoopMode.UITrackingRunLoopMode, before: deadline)
+        }
+        XCTAssertGreaterThan(ticks, 0, "the timer stood still while the chat was dragged")
+    }
+}
+
 /// Stage 5: "Share" into Khandaq. The extension hands what is shared to the app through the app group's
 /// inbox, which exists only while both targets declare the group: without it every share failed.
 class ShareInboxTests: XCTestCase {

@@ -125,6 +125,8 @@
 "theme_toggle_accessibility" = "Toggle dark mode";
 "voice_recording_cancel" = "Cancel";
 "voice_recording_send" = "Send voice message";
+"voice_recording_pause" = "Pause recording";
+"voice_recording_resume" = "Resume recording";
 "voice_recording_slide_to_cancel" = "‹ slide to cancel";
 "voice_recording_slide_hint" = "‹ cancel   ⌃ lock";
 "voice_recording_release_to_cancel" = "Release to cancel";

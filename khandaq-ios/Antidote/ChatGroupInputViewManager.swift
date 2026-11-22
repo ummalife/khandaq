@@ -91,6 +91,15 @@ extension ChatGroupInputViewManager: ChatInputViewDelegate {
         }
     }
 
+    // KHANDAQ (tester 8249): pause and resume of a hands-free recording.
+    func chatInputViewVoiceRecordDidPause(_ view: ChatInputView) {
+        voiceRecorder.pauseRecording()
+    }
+
+    func chatInputViewVoiceRecordDidResume(_ view: ChatInputView) {
+        voiceRecorder.resumeRecording()
+    }
+
     func chatInputViewVoiceButtonTapped(_ view: ChatInputView) {
         UIAlertController.showWithTitle("",
                                         message: String(localized: "group_voice_hold_to_record"),

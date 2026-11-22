@@ -479,6 +479,8 @@
 "theme_toggle_accessibility" = "تبديل الوضع الداكن";
 "voice_recording_cancel" = "إلغاء";
 "voice_recording_send" = "إرسال رسالة صوتية";
+"voice_recording_pause" = "إيقاف التسجيل مؤقتًا";
+"voice_recording_resume" = "متابعة التسجيل";
 "voice_recording_slide_to_cancel" = "‹ اسحب للإلغاء";
 "voice_recording_slide_hint" = "‹ إلغاء   ⌃ قفل";
 "voice_recording_release_to_cancel" = "ارفع إصبعك للإلغاء";

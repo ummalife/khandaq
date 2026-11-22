@@ -36,4 +36,25 @@ enum ChatListSwipeNavigation {
         }
         return order[next]
     }
+
+    /**
+     KHANDAQ (tester 8250): whether a sideways swipe belongs to a row of the list instead of the filters.
+     Swiping a row to delete it or add it to Favourites also switched to the next filter. A row's actions
+     come out from its trailing edge, so a swipe toward the leading edge that starts on a row with actions
+     opens them, and a swipe made while a row shows its actions closes them: neither switches the filter.
+     Every other swipe still does (back across the rows, both ways on the pills and on empty space).
+     */
+    static func swipeBelongsToRow(swipingLeft: Bool,
+                                  isRightToLeft: Bool,
+                                  startedOnRowWithActions: Bool,
+                                  rowActionsOpen: Bool) -> Bool {
+        if rowActionsOpen {
+            return true
+        }
+        guard startedOnRowWithActions else {
+            return false
+        }
+        // Toward the leading edge: left in a left-to-right layout, right in a mirrored one.
+        return swipingLeft != isRightToLeft
+    }
 }

@@ -71,6 +71,9 @@ class ChatListController: UIViewController {
 
     fileprivate var cancelEditButton: UIBarButtonItem!
     fileprivate var deleteSelectedButton: UIBarButtonItem!
+    /// KHANDAQ (tester 8250): what was under the finger when the filter swipe began.
+    fileprivate var filterPanStartedOnRowWithActions = false
+    fileprivate var filterPanFoundRowActionsOpen = false
 
     init(theme: Theme,
          submanagerChats: OCTSubmanagerChats,
@@ -644,6 +647,15 @@ extension ChatListController: UIGestureRecognizerDelegate {
     }
 
     @objc fileprivate func handleFilterPan(_ recognizer: UIPanGestureRecognizer) {
+        if recognizer.state == .began {
+            // The pan begins after the finger has moved a little: step back to where the touch started.
+            let moved = recognizer.translation(in: tableView)
+            let location = recognizer.location(in: tableView)
+            let start = CGPoint(x: location.x - moved.x, y: location.y - moved.y)
+            filterPanStartedOnRowWithActions = tableView.indexPathForRow(at: start).map { dataSource.offersRowActions(at: $0) } ?? false
+            filterPanFoundRowActionsOpen = dataSource.rowActionsAreOpen
+            return
+        }
         guard recognizer.state == .ended, !isEditing, !isSearching else {
             return
         }
@@ -656,6 +668,13 @@ extension ChatListController: UIGestureRecognizerDelegate {
         }
 
         let isRightToLeft = view.effectiveUserInterfaceLayoutDirection == .rightToLeft
+        // KHANDAQ (tester 8250): a swipe that opens or closes a row's actions stays with the row.
+        guard !ChatListSwipeNavigation.swipeBelongsToRow(swipingLeft: translation.x < 0,
+                                                         isRightToLeft: isRightToLeft,
+                                                         startedOnRowWithActions: filterPanStartedOnRowWithActions,
+                                                         rowActionsOpen: filterPanFoundRowActionsOpen) else {
+            return
+        }
         guard let filter = ChatListSwipeNavigation.nextFilter(from: dataSource.filter,
                                                               swipingLeft: translation.x < 0,
                                                               isRightToLeft: isRightToLeft) else {

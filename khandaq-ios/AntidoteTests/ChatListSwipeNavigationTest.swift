@@ -39,6 +39,34 @@ class ChatListSwipeNavigationTest: XCTestCase {
         XCTAssertNil(ChatListSwipeNavigation.nextFilter(from: .favorites, swipingLeft: false, isRightToLeft: true))
     }
 
+    /// KHANDAQ (tester 8250): swiping a row to delete it or add it to Favourites switched the filter too.
+    func testASwipeThatOpensARowsActionsStaysWithTheRow() {
+        XCTAssertTrue(ChatListSwipeNavigation.swipeBelongsToRow(swipingLeft: true, isRightToLeft: false,
+                                                                startedOnRowWithActions: true, rowActionsOpen: false))
+        // Arabic: the actions come out from the left, so a swipe to the right opens them.
+        XCTAssertTrue(ChatListSwipeNavigation.swipeBelongsToRow(swipingLeft: false, isRightToLeft: true,
+                                                                startedOnRowWithActions: true, rowActionsOpen: false))
+    }
+
+    func testASwipeAwayFromTheActionsStillSwitchesTheFilter() {
+        XCTAssertFalse(ChatListSwipeNavigation.swipeBelongsToRow(swipingLeft: false, isRightToLeft: false,
+                                                                 startedOnRowWithActions: true, rowActionsOpen: false))
+        XCTAssertFalse(ChatListSwipeNavigation.swipeBelongsToRow(swipingLeft: true, isRightToLeft: true,
+                                                                 startedOnRowWithActions: true, rowActionsOpen: false))
+    }
+
+    func testASwipeOffTheRowsStillSwitchesTheFilter() {
+        XCTAssertFalse(ChatListSwipeNavigation.swipeBelongsToRow(swipingLeft: true, isRightToLeft: false,
+                                                                 startedOnRowWithActions: false, rowActionsOpen: false))
+    }
+
+    func testASwipeWhileARowShowsItsActionsOnlyClosesThem() {
+        XCTAssertTrue(ChatListSwipeNavigation.swipeBelongsToRow(swipingLeft: false, isRightToLeft: false,
+                                                                startedOnRowWithActions: true, rowActionsOpen: true))
+        XCTAssertTrue(ChatListSwipeNavigation.swipeBelongsToRow(swipingLeft: true, isRightToLeft: false,
+                                                                startedOnRowWithActions: false, rowActionsOpen: true))
+    }
+
     /// KHANDAQ (0.2.65, tester feedback): everything has a pill of its own, first, so the swipe walks exactly
     /// the pills the user sees.
     func testOrderMatchesTheVisiblePills() {

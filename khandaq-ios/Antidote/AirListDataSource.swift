@@ -1129,6 +1129,20 @@ extension AirListDataSource: UITableViewDelegate {
         isSwipingRow = true
     }
 
+    /// KHANDAQ (tester 8250): a row shows its swipe actions now.
+    var rowActionsAreOpen: Bool {
+        return isSwipingRow
+    }
+
+    /// KHANDAQ (tester 8250): whether a swipe on this row opens actions (delete, favourite, group info).
+    func offersRowActions(at indexPath: IndexPath) -> Bool {
+        guard self.tableView(tableView, canEditRowAt: indexPath),
+              let actions = self.tableView(tableView, trailingSwipeActionsConfigurationForRowAt: indexPath)?.actions else {
+            return false
+        }
+        return !actions.isEmpty
+    }
+
     func tableView(_ tableView: UITableView, didEndEditingRowAt indexPath: IndexPath?) {
         isSwipingRow = false
         if pendingRebuild {

@@ -2089,7 +2089,7 @@ static void OCTRealmApplyGroupSyncConfirmation(int32_t *count,
 
 // KHANDAQ (#170): strip the "NNN_" uniquifier prefixes that OCTFileTools/receivers prepend when
 // storing a file under an already-taken name, so re-broadcast copies compare equal to the original.
-static NSString *OCTGroupFileBaseName(NSString *fileName)
+NSString *OCTGroupFileBaseName(NSString *fileName)
 {
     NSString *base = fileName ?: @"";
     NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"^[0-9]+_"

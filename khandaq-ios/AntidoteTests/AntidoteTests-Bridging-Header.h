@@ -57,7 +57,42 @@
 // through the queue of the realm manager.
 - (void)updateGroupPrivacyState:(OCTToxGroupPrivacyState)privacyState forChat:(OCTChat *)chat;
 - (void)updateGroupVoiceState:(OCTToxGroupVoiceState)voiceState forChat:(OCTChat *)chat;
+// Tester 21.11 (8256/8257/8261): the chat of a group made on a Tox of the test's own, and the plain removal of rows
+// that the app used for the group messages deleted on this device.
+- (OCTChat *)getOrCreateGroupChatWithGroupNumber:(uint32_t)groupNumber
+                                       chatIdHex:(NSString *)chatIdHex
+                                       groupName:(NSString *)groupName
+                                    privacyState:(OCTToxGroupPrivacyState)privacyState;
+- (void)removeMessages:(NSArray<OCTMessageAbstract *> *)messages;
 @end
+
+// Tester 21.11 (8256/8261): the group messages deleted on this device, which the history sync and a resend do not
+// store again; and the base name of a group file, which a deleted file is also known by.
+@interface OCTGroupMessageTombstones : NSObject
++ (NSTimeInterval)retention;
++ (NSUInteger)capacityPerChat;
++ (NSString *)storeKeyForChatIdHex:(NSString *)chatIdHex chatUniqueIdentifier:(NSString *)chatUniqueIdentifier;
+- (instancetype)initWithGetValueBlock:(NSString *(^)(NSString *key))getValueBlock
+                        setValueBlock:(BOOL (^)(NSString *key, NSString *value))setValueBlock;
+- (void)recordMessages:(NSArray<OCTMessageAbstract *> *)messages storeKey:(NSString *)storeKey now:(NSTimeInterval)now;
+- (BOOL)isDeletedTextInStoreKey:(NSString *)storeKey
+                      messageId:(uint32_t)messageId
+                           text:(NSString *)text
+                      authorKey:(NSString *)authorKey
+                     authorName:(NSString *)authorName
+                   dateInterval:(NSTimeInterval)dateInterval
+                  windowSeconds:(NSTimeInterval)windowSeconds
+                            now:(NSTimeInterval)now;
+- (BOOL)isDeletedFileInStoreKey:(NSString *)storeKey msgIdHashHex:(NSString *)msgIdHashHex now:(NSTimeInterval)now;
+- (BOOL)isDeletedFileInStoreKey:(NSString *)storeKey
+                       baseName:(NSString *)baseName
+                       fileSize:(uint64_t)fileSize
+                   dateInterval:(NSTimeInterval)dateInterval
+                            now:(NSTimeInterval)now;
+- (NSUInteger)countInStoreKey:(NSString *)storeKey now:(NSTimeInterval)now;
+@end
+
+NSString *OCTGroupFileBaseName(NSString *fileName);
 
 // Redesign stage 3, item 10: the receive paths of the KQ packets (1:1 186, 187, 188 and group 0x41,
 // 0x42, 0x43), declared here so the tests can hand them the bytes Android sends. objcTox is unchanged.
@@ -90,6 +125,11 @@ void friendLosslessPacketCallback(void *cTox, uint32_t friendNumber, const uint8
 - (NSString *)serializedChatIds;
 @end
 
+// Tester 21.11 (8256/8261): the history sync of a group, handed a member's packet as toxcore hands it over.
+@interface OCTNgcGroupHistSync : NSObject
+- (void)handleIncomingPrivatePacketWithGroupNumber:(uint32_t)groupNumber peerId:(uint32_t)peerId data:(NSData *)data;
+@end
+
 @interface OCTSubmanagerGroupsImpl : NSObject
 - (BOOL)handleIncomingGroupEditPacketWithGroupNumber:(OCTToxGroupNumber)groupNumber peerId:(uint32_t)peerId data:(NSData *)data;
 - (BOOL)handleIncomingGroupDeletePacketWithGroupNumber:(OCTToxGroupNumber)groupNumber peerId:(uint32_t)peerId data:(NSData *)data;
@@ -118,6 +158,9 @@ void friendLosslessPacketCallback(void *cTox, uint32_t friendNumber, const uint8
 - (void)recordPendingGroupLeaveOfGroupNumber:(OCTToxGroupNumber)groupNumber chatIdHex:(NSString *)chatIdHex partMessage:(NSString *)partMessage;
 - (void)leaveGroupsOfStoredPendingLeaves;
 - (void)leavePendingGroupsNow;
+// Tester 21.11 (8256/8261): the history sync as the submanager sets it up, with its dedup and its store.
+@property (nonatomic, strong) OCTNgcGroupHistSync *histSync;
+- (void)setupHistSyncIfNeeded;
 @end
 
 // KHANDAQ (msgV3 receipt shown as "_"): the 1:1 message receive path and the msgV3 receipt sender,

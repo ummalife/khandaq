@@ -365,6 +365,7 @@ ChatWidget::ChatWidget(IChatLog& chatLog_, const Core& core_, DocumentCache& doc
     Translator::registerHandler(std::bind(&ChatWidget::retranslateUi, this), this);
 
     connect(this, &ChatWidget::renderFinished, this, &ChatWidget::onRenderFinished);
+    seenEnd = chatLog_.getNextIdx();
     connect(&chatLog_, &IChatLog::itemUpdated, this, &ChatWidget::onMessageUpdated);
     connect(verticalScrollBar(), &QScrollBar::valueChanged, this, &ChatWidget::onScrollValueChanged);
     // KHANDAQ (beta ideas 2026-11-20): a scroll of the person's own (the wheel, the keys, the bar)
@@ -1385,8 +1386,26 @@ void ChatWidget::onMultiClickTimeout()
 
 void ChatWidget::onMessageUpdated(ChatLogIdx idx)
 {
+    // KHANDAQ (beta feedback 2026-11-22): what we send shows at the foot, wherever the transcript
+    // was; what others send moves it only while it rests there, as before.
+    const bool isNew = idx >= seenEnd;
+    const bool ours = isNew && sentFromHere(chatLog, idx, seenEnd, core.getSelfPublicKey());
+    if (isNew) {
+        seenEnd = idx + 1;
+    }
+    if (ours) {
+        // A layout under way ends there too, not at the line it kept in view.
+        workerStb = true;
+    }
     if (shouldRenderMessage(idx)) {
         renderMessage(idx);
+        if (ours) {
+            scrollToBottom();
+        }
+    } else if (ours) {
+        // The lines drawn are far up the conversation: they move to its end first.
+        renderCompletionFns.push_back([this] { scrollToBottom(); });
+        setRenderedWindowEnd(chatLog.getNextIdx());
     }
 }
 
@@ -2230,6 +2249,24 @@ void ChatWidget::markUnread(int count, const QDateTime& since)
     } else {
         setRenderedWindowStart(clampedAdd(idx, -windowChunkSize, chatLog));
     }
+}
+
+bool ChatWidget::sentFromHere(const IChatLog& log, ChatLogIdx idx, ChatLogIdx knownEnd,
+                              const ToxPk& self)
+{
+    if (idx < knownEnd || idx < log.getFirstIdx() || idx >= log.getNextIdx()) {
+        return false;
+    }
+    const ChatLogItem& item = log.at(idx);
+    if (item.getSender() != self) {
+        return false;
+    }
+    const ChatLogItem::ContentType type = item.getContentType();
+    if (type == ChatLogItem::ContentType::fileTransfer) {
+        // A file that goes on from before, its entry of then not loaded, was not sent now.
+        return !item.getContentAsFile().file.continued;
+    }
+    return type == ChatLogItem::ContentType::message;
 }
 
 bool ChatWidget::firstUnreadIdx(const IChatLog& log, const ToxPk& self, const ToxPk& groupSelf,

@@ -333,6 +333,13 @@
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:theme="@style/KhandaqMediaTheme">
         </activity>
+        <!-- KHANDAQ (Khandaq Testers 8263): the PDF of a chat, shown in the app. -->
+        <activity
+            android:name="com.zoffcc.applications.trifa.PdfViewerActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
+            android:exported="false"
+            android:theme="@style/KhandaqMediaTheme">
+        </activity>
         <activity
             android:name="com.zoffcc.applications.trifa.MediaSendPreviewActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"

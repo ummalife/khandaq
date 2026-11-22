@@ -60,6 +60,8 @@ public class MediaViewerActivity extends AppCompatActivity
         final String exportPath = getIntent().getStringExtra(ChatMediaHelper.EXTRA_EXPORT_PATH);
         final boolean storageFramework = "1".equals(getIntent().getStringExtra(ChatMediaHelper.EXTRA_STORAGE_FRAMEWORK));
         final String mimeType = getIntent().getStringExtra(ChatMediaHelper.EXTRA_MIME_TYPE);
+        ChatFileShare.bindMoreButton(this, () -> shareSource(vfsPath, exportPath, storageFramework, mimeType),
+                                     loadingView);
 
         if (ChatMediaHelper.MODE_VIDEO.equals(mode))
         {
@@ -69,6 +71,22 @@ public class MediaViewerActivity extends AppCompatActivity
         {
             showImage(vfsPath, exportPath, storageFramework);
         }
+    }
+
+    /**
+     * KHANDAQ (Khandaq Testers 8263): what Share and Open in another app hand over. A video the viewer has
+     * already decrypted to play goes as that plain copy, which is not decrypted a second time.
+     */
+    private ChatFileShare.Source shareSource(final String vfsPath, final String exportPath,
+                                             final boolean storageFramework, final String mimeType)
+    {
+        if ((currentPlaybackUri != null) && "file".equals(currentPlaybackUri.getScheme()))
+        {
+            return new ChatFileShare.Source(currentPlaybackUri.getPath(), false, null, mimeType);
+        }
+        final boolean exported = (exportPath != null) && !exportPath.isEmpty();
+        return new ChatFileShare.Source(exported ? exportPath : vfsPath, !exported && storageFramework, null,
+                                        mimeType);
     }
 
     private void failOpenAndFinish()

@@ -1000,6 +1000,11 @@
     <string name="media_send_edit_photo">تعديل الصورة</string>
     <string name="media_send_edit_failed">تعذر تعديل الصورة</string>
     <string name="media_send_add_more">إضافة صور أو فيديوهات</string>
+    <!-- Khandaq Testers 8263: the PDF viewer, and More (Share, Open in another app) of the media viewers -->
+    <string name="media_viewer_more">المزيد</string>
+    <string name="media_viewer_open_elsewhere">فتح في تطبيق آخر</string>
+    <string name="pdf_viewer_page_format">الصفحة %1$d من %2$d</string>
+    <string name="pdf_viewer_opens_elsewhere">لا يمكن عرض ملف PDF هذا هنا، لذا سيُفتح في تطبيق آخر</string>
     <string name="media_send_counter_format">%1$d / %2$d</string>
     <string name="media_label_video">فيديو</string>
     <string name="media_label_audio">صوت</string>

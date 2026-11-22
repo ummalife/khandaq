@@ -171,7 +171,15 @@ final class ChatKeyboardPullLayout extends RelativeLayout implements NestedScrol
                                final int dxUnconsumed, final int dyUnconsumed, final int type,
                                @NonNull final int[] consumed)
     {
-        // The keyboard takes its part before the list (onNestedPreScroll); nothing is left for it here.
+        // The keyboard takes its part before the list (onNestedPreScroll). Only a list at its oldest message
+        // leaves something over while the drag is still to take the keyboard: that part stays here, or the list
+        // would stretch for it and keep the rest of the drag (ChatKeyboardPull.holdsOverscroll).
+        final boolean undecided = (type == ViewCompat.TYPE_TOUCH) && dragging && !pulled && (controller == null)
+                                  && (request == null);
+        if ((dyUnconsumed < 0) && ChatKeyboardPull.holdsOverscroll(undecided, keyboardUp(), dyUnconsumed))
+        {
+            consumed[1] += dyUnconsumed;
+        }
     }
 
     @Override
@@ -321,6 +329,11 @@ final class ChatKeyboardPullLayout extends RelativeLayout implements NestedScrol
         content = activity.findViewById(android.R.id.content);
         final WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(this);
         navigationBottom = (insets == null) ? 0 : insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
+        // Read now: once the window gives the keyboard to the finger, it lays the content out as if the keyboard
+        // were down already, and the padding says nothing more.
+        final int keyboardBottom = (insets == null) ? 0 : insets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+        padsContent = (content != null)
+                      && ChatKeyboardPull.padsContent(content.getPaddingBottom(), keyboardBottom, navigationBottom);
         final CancellationSignal signal = new CancellationSignal();
         request = signal;
         try
@@ -350,8 +363,12 @@ final class ChatKeyboardPullLayout extends RelativeLayout implements NestedScrol
             request = null;
             controller = ready;
             bottom = ready.getCurrentInsets().bottom;
-            final View c = content;
-            padsContent = (c != null) && (Math.abs(c.getPaddingBottom() - Math.max(bottom, navigationBottom)) <= 1);
+            if (padsContent)
+            {
+                // The window has laid the content out for a keyboard that is down already: the composer goes
+                // back above the keyboard, which is still where it was, and follows it from here.
+                moveTo(ready, bottom);
+            }
             if (!dragging || !padsContent)
             {
                 // The finger let go before the keyboard came, or the composer is held up by something else

@@ -19,6 +19,27 @@ final class ChatKeyboardPull
         return pulledDown >= Math.max(1, touchSlop);
     }
 
+    /**
+     * Whether what the list could not scroll of a drag stays with the pull: a drag down with the keyboard up,
+     * while it is still to say whether the drag takes the keyboard. The list stands at its oldest message then;
+     * from Android 12 on it would stretch for that part, and a stretched list keeps the rest of the drag to
+     * itself, so the drag would never go far enough to take the keyboard.
+     */
+    static boolean holdsOverscroll(final boolean undecided, final boolean keyboardUp, final int dyUnconsumed)
+    {
+        return undecided && keyboardUp && (dyUnconsumed < 0);
+    }
+
+    /**
+     * Whether the bottom padding of the window's content is what holds the composer above the keyboard: it is as
+     * tall as the keyboard, which stands above the navigation bar. Read before the window gives the keyboard to
+     * the finger, as from then on the window lays the content out as if the keyboard were down already.
+     */
+    static boolean padsContent(final int contentPaddingBottom, final int keyboardBottom, final int navigationBottom)
+    {
+        return (keyboardBottom > navigationBottom) && (Math.abs((long) contentPaddingBottom - (long) keyboardBottom) <= 1L);
+    }
+
     /** The keyboard's bottom inset after the finger moved by dy, held between its hidden and shown insets. */
     static int pulledBottom(final int bottom, final int dy, final int hidden, final int shown)
     {

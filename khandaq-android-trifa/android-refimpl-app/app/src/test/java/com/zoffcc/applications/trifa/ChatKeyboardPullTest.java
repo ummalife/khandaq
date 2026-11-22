@@ -51,6 +51,32 @@ public class ChatKeyboardPullTest
     }
 
     @Test
+    public void a_list_at_its_oldest_message_leaves_the_drag_to_the_pull()
+    {
+        // Android 12+ stretches a list pulled past its top, and the stretched list keeps the rest of the drag:
+        // in a short chat the pull never reached the touch slop and the keyboard stayed up.
+        assertTrue(ChatKeyboardPull.holdsOverscroll(true, true, -5));
+        // Not once the drag has taken the keyboard or let it go, nor with the keyboard down, nor for a drag up.
+        assertFalse(ChatKeyboardPull.holdsOverscroll(false, true, -5));
+        assertFalse(ChatKeyboardPull.holdsOverscroll(true, false, -5));
+        assertFalse(ChatKeyboardPull.holdsOverscroll(true, true, 5));
+        assertFalse(ChatKeyboardPull.holdsOverscroll(true, true, 0));
+    }
+
+    @Test
+    public void the_padding_holds_the_composer_when_it_is_as_tall_as_the_keyboard()
+    {
+        // Edge to edge (Android 16): the content's bottom padding is the keyboard's inset.
+        assertTrue(ChatKeyboardPull.padsContent(883, 883, 63));
+        assertTrue(ChatKeyboardPull.padsContent(884, 883, 63));
+        // The window is resized for the keyboard instead: the padding is the navigation bar's.
+        assertFalse(ChatKeyboardPull.padsContent(63, 883, 63));
+        // No keyboard above the navigation bar: the padding says nothing.
+        assertFalse(ChatKeyboardPull.padsContent(63, 63, 63));
+        assertFalse(ChatKeyboardPull.padsContent(0, 0, 0));
+    }
+
+    @Test
     public void a_fling_settles_the_keyboard_by_its_direction()
     {
         // RecyclerView's velocity: negative while the finger goes down.

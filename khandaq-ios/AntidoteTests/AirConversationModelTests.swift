@@ -170,6 +170,45 @@ class AirConversationModelTests: XCTestCase {
         XCTAssertTrue(AirTranscript.startsRun(afterMidnight, after: beforeMidnight, calendar: calendar))
     }
 
+    /// KHANDAQ (tester 21.11, 8255): the tile of a group member stands on the last entry of their run, the name
+    /// on the first: an entry closes its run wherever the next one in reading order starts a run of its own.
+    func testTheLastEntryOfARunIsTheOneTheNextDoesNotGoOnFrom() {
+        let start = date(2026, 11, 11, 12, 0)
+        let first = AirRunKey(author: "PEER", date: start, isText: true)
+        let soon = AirRunKey(author: "PEER", date: start.addingTimeInterval(4 * 60), isText: true)
+        let late = AirRunKey(author: "PEER", date: start.addingTimeInterval(6 * 60), isText: true)
+        let other = AirRunKey(author: "OTHER", date: start.addingTimeInterval(60), isText: true)
+        let ours = AirRunKey(author: "", date: start.addingTimeInterval(60), isText: true)
+        let file = AirRunKey(author: "PEER", date: start.addingTimeInterval(60), isText: false)
+
+        XCTAssertTrue(AirTranscript.endsRun(first, before: nil, calendar: calendar), "the newest entry of the log")
+        XCTAssertFalse(AirTranscript.endsRun(first, before: soon, calendar: calendar), "the run goes on")
+        XCTAssertTrue(AirTranscript.endsRun(first, before: late, calendar: calendar), "five minutes and more")
+        XCTAssertTrue(AirTranscript.endsRun(first, before: other, calendar: calendar), "another member")
+        XCTAssertTrue(AirTranscript.endsRun(first, before: ours, calendar: calendar), "your own message")
+        XCTAssertTrue(AirTranscript.endsRun(file, before: soon, calendar: calendar), "a file stands on its own")
+        XCTAssertFalse(AirTranscript.endsRun(first, before: file, calendar: calendar), "a file goes on from a text")
+        XCTAssertTrue(AirTranscript.endsRun(first, before: soon, nextUnderBand: true, calendar: calendar),
+                      "the unread band starts a run under it")
+
+        let beforeMidnight = AirRunKey(author: "PEER", date: date(2026, 11, 10, 23, 58), isText: true)
+        let afterMidnight = AirRunKey(author: "PEER", date: date(2026, 11, 11, 0, 1), isText: true)
+        XCTAssertTrue(AirTranscript.endsRun(beforeMidnight, before: afterMidnight, calendar: calendar), "the day mark")
+
+        // Every entry either goes on with the run of the one before it or starts one, so a run has its name
+        // over the first entry and its tile beside the last: in a log of runs [A A A] [B] [A A] the tile is on
+        // the third, fourth and sixth.
+        let log = [first, soon,
+                   AirRunKey(author: "PEER", date: start.addingTimeInterval(5 * 60), isText: true),
+                   AirRunKey(author: "OTHER", date: start.addingTimeInterval(5 * 60 + 10), isText: true),
+                   AirRunKey(author: "PEER", date: start.addingTimeInterval(5 * 60 + 20), isText: true),
+                   AirRunKey(author: "PEER", date: start.addingTimeInterval(5 * 60 + 30), isText: true)]
+        let names = log.indices.map { AirTranscript.startsRun(log[$0], after: $0 > 0 ? log[$0 - 1] : nil, calendar: calendar) }
+        let tiles = log.indices.map { AirTranscript.endsRun(log[$0], before: $0 + 1 < log.count ? log[$0 + 1] : nil, calendar: calendar) }
+        XCTAssertEqual(names, [true, false, false, true, true, false])
+        XCTAssertEqual(tiles, [false, false, true, true, false, true])
+    }
+
     func testShortNameIsTheFirstWord() {
         XCTAssertEqual(AirTranscript.shortName("  Yusuf Karimov "), "Yusuf")
         XCTAssertEqual(AirTranscript.shortName("Amina"), "Amina")

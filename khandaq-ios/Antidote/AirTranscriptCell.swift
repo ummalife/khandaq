@@ -34,6 +34,13 @@ enum AirEntryMetrics {
     /// Top and bottom room of an entry: 4 of its own and half of the 2 between entries, as .kq-log.
     static let entryInset: CGFloat = KQSpace.x4 + KQSpace.x2 / 2
 
+    /// KHANDAQ (tester 21.11, 8255): the room before the text and the name of an entry that has a column for its
+    /// author's tile (AirAuthorTile): the tile and a gap after it. None at the accessibility text sizes, where the
+    /// text takes the whole width and the name over the first entry of the run says who wrote it.
+    static func authorTileColumn(_ tile: AirAuthorTile?, stacked: Bool) -> CGFloat {
+        return tile != nil && !stacked ? KQSize.tileCompact + KQSpace.x8 : 0
+    }
+
     /// The line over the first entry of a run at the accessibility text sizes: the time, then the author,
     /// as one text from the leading margin that wraps at its words. Beside the time column a name of
     /// eleven letters broke inside itself at AX5; here it goes whole to the next line instead.
@@ -107,7 +114,7 @@ final class AirAuthorLabel: UILabel {
 
     /// Whether the name opens the member now: it has a tap, it shows, and the log is not selecting.
     var opensMember: Bool {
-        return onTap != nil && !isHidden && enclosingCell?.isEditing != true
+        return onTap != nil && !isHidden && airEnclosingCell?.isEditing != true
     }
 
     /// Where the words of the name stand, in the label's coordinates: the label runs to the far end of the
@@ -144,17 +151,6 @@ final class AirAuthorLabel: UILabel {
             return textAlignment
         }
         return effectiveUserInterfaceLayoutDirection == .rightToLeft ? .right : .left
-    }
-
-    private var enclosingCell: UITableViewCell? {
-        var view = superview
-        while let current = view {
-            if let cell = current as? UITableViewCell {
-                return cell
-            }
-            view = current.superview
-        }
-        return nil
     }
 
     /// Not the member's button now, the name lets every touch through, as a label does. Nor while VoiceOver
@@ -212,6 +208,100 @@ final class AirAuthorLabel: UILabel {
     }
 }
 
+private extension UIView {
+    /// The row of the log the view is drawn in.
+    var airEnclosingCell: UITableViewCell? {
+        var view = superview
+        while let current = view {
+            if let cell = current as? UITableViewCell {
+                return cell
+            }
+            view = current.superview
+        }
+        return nil
+    }
+}
+
+/// KHANDAQ (tester 21.11, 8255): the tile of the member who wrote an entry of a group, as Telegram has it: every
+/// entry of another member keeps a column for it before its text and its name, and the last entry of a run shows
+/// it, level with the bottom of the entry, while the name stays over the first one. It is the member's tile of
+/// the band and the dossier (initials in their tone), or the plain tile of an author nobody confirmed.
+struct AirAuthorTile {
+    let style: AirTileView.Style
+    /// Whether this entry shows the tile: the last entry of its run does, the others keep its column empty.
+    let shows: Bool
+    /// What a tap on the tile does; nil leaves it a picture.
+    let onTap: ((UIView) -> Void)?
+}
+
+/// KHANDAQ (tester 21.11, 8255): the author's tile beside a group entry (AirAuthorTile). A tap on the tile, or
+/// around it to a touch target's size, does what the model says. Without a tap, while the log selects messages
+/// and while VoiceOver runs, it lets every touch through, as the author's name does (AirAuthorLabel). VoiceOver
+/// passes it by: every entry says who wrote it, and the name over the first entry of the run is the member's
+/// button.
+final class AirAuthorTileView: UIView {
+    private let tile = AirTileView(side: KQSize.tileCompact)
+    private let tap = UITapGestureRecognizer()
+    private var onTap: ((UIView) -> Void)?
+    /// What the tile shows while it shows.
+    private(set) var style: AirTileView.Style?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isAccessibilityElement = false
+        addSubview(tile)
+        tile.snp.makeConstraints {
+            $0.edges.equalToSuperview()
+        }
+        tap.addTarget(self, action: #selector(tapped))
+        addGestureRecognizer(tap)
+        show(nil)
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// Shows the tile of `model`, or hides it: nil, or an entry that keeps the column empty.
+    func show(_ model: AirAuthorTile?) {
+        guard let model = model, model.shows else {
+            style = nil
+            onTap = nil
+            isHidden = true
+            isUserInteractionEnabled = false
+            return
+        }
+        style = model.style
+        tile.configure(style: model.style, photo: nil)
+        onTap = model.onTap
+        isHidden = false
+        isUserInteractionEnabled = model.onTap != nil
+    }
+
+    /// Whether a tap on the tile acts now: it has a tap, it shows, and the log is not selecting.
+    var acts: Bool {
+        return onTap != nil && !isHidden && airEnclosingCell?.isEditing != true
+    }
+
+    /// Where a finger takes the tile, in its own coordinates: the tile and the room around it to a touch target.
+    var touchRect: CGRect {
+        let dx = max(0, (KQSize.targetIos - bounds.width) / 2)
+        let dy = max(0, (KQSize.targetIos - bounds.height) / 2)
+        return bounds.insetBy(dx: -dx, dy: -dy)
+    }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        return acts && !UIAccessibilityIsVoiceOverRunning() && touchRect.contains(point)
+    }
+
+    @objc private func tapped() {
+        guard acts else {
+            return
+        }
+        onTap?(self)
+    }
+}
+
 /// The frame a file or a call entry shares with a text (AirEntryTextCell): the time in the time column,
 /// the author over the first entry of a run, and the status mark of our own entries at the far end,
 /// around the body the cell puts between them.
@@ -219,6 +309,9 @@ final class AirEntryFrame {
     let timeLabel = UILabel()
     let authorLabel = AirAuthorLabel()
     let mark = AirStatusMarkView()
+    /// KHANDAQ (tester 21.11, 8255): the author's tile of another member's entry in a group (AirAuthorTile).
+    let authorTile = AirAuthorTileView()
+    private var authorTileRoom: Constraint!
     private var timeWidthConstraint: Constraint!
     private var timeTopConstraint: Constraint!
     private var markTopConstraint: Constraint!
@@ -250,6 +343,7 @@ final class AirEntryFrame {
         content.addSubview(timeLabel)
         content.addSubview(authorLabel)
         content.addSubview(mark)
+        content.addSubview(authorTile)
 
         timeLabel.snp.makeConstraints {
             $0.leading.equalTo(cell.contentView).offset(KQSpace.x16)
@@ -279,6 +373,14 @@ final class AirEntryFrame {
             $0.trailing.equalTo(cell.contentView).offset(-KQSpace.x16)
             markTopConstraint = $0.top.equalTo(content).offset(AirEntryMetrics.entryInset).constraint
         }
+        authorTile.snp.makeConstraints {
+            $0.leading.equalTo(timeLabel.snp.trailing).offset(KQSpace.x10)
+            $0.bottom.equalTo(content).offset(-AirEntryMetrics.entryInset)
+            $0.size.equalTo(KQSize.tileCompact)
+            // An entry that shows the tile is at least as tall as the tile.
+            authorTileRoom = $0.top.greaterThanOrEqualTo(content).offset(AirEntryMetrics.entryInset).constraint
+        }
+        authorTileRoom.deactivate()
     }
 
     /// `firstLine` is the height of the body's first line: the time and the mark sit on it, or on the
@@ -302,6 +404,16 @@ final class AirEntryFrame {
         else {
             bodyLeadingToMargin.deactivate()
             bodyLeadingToTime.activate()
+        }
+        let tileColumn = AirEntryMetrics.authorTileColumn(model.authorTile, stacked: stacked)
+        bodyLeadingToTime.update(offset: KQSpace.x10 + tileColumn)
+        authorLeadingToTime.update(offset: KQSpace.x10 + tileColumn)
+        authorTile.show(tileColumn > 0 ? model.authorTile : nil)
+        if authorTile.isHidden {
+            authorTileRoom.deactivate()
+        }
+        else {
+            authorTileRoom.activate()
         }
         let captionLine = ceil(KQFont.lineHeight(.caption))
         let line: CGFloat
@@ -358,6 +470,9 @@ final class AirEntryTextCell: ChatBaseTextCell {
     private let timeLabel = UILabel()
     private let authorLabel = AirAuthorLabel()
     private let mark = AirStatusMarkView()
+    /// KHANDAQ (tester 21.11, 8255): the author's tile of another member's entry in a group (AirAuthorTile).
+    let authorTile = AirAuthorTileView()
+    private var authorTileRoom: Constraint!
     private var timeWidthConstraint: Constraint!
     private var timeTopConstraint: Constraint!
     private var markTopConstraint: Constraint!
@@ -397,6 +512,7 @@ final class AirEntryTextCell: ChatBaseTextCell {
         contentView.addSubview(authorLabel)
 
         contentView.addSubview(mark)
+        contentView.addSubview(authorTile)
     }
 
     override func installConstraints() {
@@ -435,6 +551,15 @@ final class AirEntryTextCell: ChatBaseTextCell {
             $0.trailing.equalTo(contentView).offset(-KQSpace.x16)
             markTopConstraint = $0.top.equalTo(movableContentView).offset(AirEntryMetrics.entryInset).constraint
         }
+
+        authorTile.snp.makeConstraints {
+            $0.leading.equalTo(timeLabel.snp.trailing).offset(KQSpace.x10)
+            $0.bottom.equalTo(movableContentView).offset(-AirEntryMetrics.entryInset)
+            $0.size.equalTo(KQSize.tileCompact)
+            // An entry that shows the tile is at least as tall as the tile: a one-line text grows to it.
+            authorTileRoom = $0.top.greaterThanOrEqualTo(movableContentView).offset(AirEntryMetrics.entryInset).constraint
+        }
+        authorTileRoom.deactivate()
     }
 
     override func setupWithTheme(_ theme: Theme, model: BaseCellModel) {
@@ -471,6 +596,18 @@ final class AirEntryTextCell: ChatBaseTextCell {
         else {
             bubbleLeadingToMargin.deactivate()
             bubbleLeadingToTime.activate()
+        }
+        // KHANDAQ (tester 21.11, 8255): the text and the name of another member's entry in a group stand after the
+        // column of the author's tile, which the last entry of a run shows.
+        let tileColumn = AirEntryMetrics.authorTileColumn(entry.authorTile, stacked: stacked)
+        bubbleLeadingToTime.update(offset: KQSpace.x10 + tileColumn)
+        authorLeadingToTime.update(offset: KQSpace.x10 + tileColumn)
+        authorTile.show(tileColumn > 0 ? entry.authorTile : nil)
+        if authorTile.isHidden {
+            authorTileRoom.deactivate()
+        }
+        else {
+            authorTileRoom.activate()
         }
         let bodyLine = ceil(KQFont.lineHeight(.body))
         let captionLine = ceil(KQFont.lineHeight(.caption))

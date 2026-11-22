@@ -139,6 +139,9 @@ final class AirTileView: UIView {
         /// KHANDAQ (0.2.60): Khandaq Community, the app's own group: the logo of the app instead of initials
         /// (owner, 2026-11-18), the same on every device.
         case community
+        /// KHANDAQ (tester 21.11, 8255): the author of a group entry nobody confirmed (one the history brought
+        /// without a signature over it): the plain tile, with neither initials nor a tone, so it stands for no member.
+        case unconfirmed
     }
 
     private let side: CGFloat
@@ -214,7 +217,7 @@ final class AirTileView: UIView {
         switch style {
             case .person, .me:
                 photoView.image = photo
-            case .group, .pending, .pendingGroup, .saved:
+            case .group, .pending, .pendingGroup, .saved, .unconfirmed:
                 photoView.image = nil
             case .community:
                 photoView.image = UIImage(named: "kq-community")
@@ -275,7 +278,7 @@ final class AirTileView: UIView {
             case .saved:
                 icon = "bookmark"
                 iconTint = KQColor.ink
-            case .community:
+            case .community, .unconfirmed:
                 break
         }
 

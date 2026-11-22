@@ -798,6 +798,8 @@
     <string name="MessageListActivity_longpress_to_record_audiomsg">long press to record an Audio Message</string>
     <string name="voice_recording_cancel">Cancel</string>
     <string name="voice_recording_send">Send voice message</string>
+    <string name="voice_recording_pause">Pause recording</string>
+    <string name="voice_recording_resume">Resume recording</string>
     <string name="message_list_open_friend_profile">Open contact profile</string>
     <string name="main_profile_open">Open my profile</string>
     <string name="group_open_group_info">Open group info</string>

@@ -1034,6 +1034,8 @@
     <string name="MessageListActivity_longpress_to_record_audiomsg">долгое нажатие для записи аудиосообщения</string>
     <string name="voice_recording_cancel">Отмена</string>
     <string name="voice_recording_send">Отправить голосовое сообщение</string>
+    <string name="voice_recording_pause">Приостановить запись</string>
+    <string name="voice_recording_resume">Продолжить запись</string>
     <string name="incoming_filetransfer_size_too_large">Слишком большой объём входящего файла. Могут быть приняты файлы объёмом до 2 Гбайт.</string>
     <string name="layout___peer_first_join_date">Дата первого подключения:</string>
     <string name="layout___group_peerlimit">Лимит человек (пиров)</string>

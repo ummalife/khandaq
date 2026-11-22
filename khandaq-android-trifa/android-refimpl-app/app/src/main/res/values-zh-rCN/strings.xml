@@ -824,6 +824,8 @@
     <string name="delete_for_everyone">为所有人删除</string>
     <string name="voice_recording_cancel">取消</string>
     <string name="voice_recording_send">发送语音消息</string>
+    <string name="voice_recording_pause">暂停录音</string>
+    <string name="voice_recording_resume">继续录音</string>
     <string name="message_list_open_friend_profile">打开联系人资料</string>
     <string name="main_profile_open">打开我的资料</string>
     <string name="group_open_group_info">打开群组信息</string>

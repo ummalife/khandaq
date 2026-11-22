@@ -808,6 +808,8 @@
     <string name="MessageListActivity_longpress_to_record_audiomsg">اضغط مطولا لتسجيل رسالة صوتية</string>
     <string name="voice_recording_cancel">إلغاء</string>
     <string name="voice_recording_send">إرسال رسالة صوتية</string>
+    <string name="voice_recording_pause">إيقاف التسجيل مؤقتًا</string>
+    <string name="voice_recording_resume">متابعة التسجيل</string>
     <string name="message_list_open_friend_profile">فتح ملف جهة الاتصال</string>
     <string name="main_profile_open">فتح ملفي الشخصي</string>
     <string name="group_open_group_info">فتح معلومات المجموعة</string>

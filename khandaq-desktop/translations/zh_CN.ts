@@ -2408,6 +2408,11 @@
         </translation>
     </message>
     <message>
+        <source>Add more</source>
+        <comment>dialog before files go: the button between Cancel and Send that opens the system dialog again; the files chosen there join the list</comment>
+        <translation>添加更多</translation>
+    </message>
+    <message>
         <source>Voice message</source>
         <comment>the name a voice note shows and a screen reader says</comment>
         <translation>语音消息</translation>

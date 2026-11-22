@@ -72,6 +72,7 @@
 #include <QRegularExpression>
 #include <QStringBuilder>
 #include <QTextDocument>
+#include <QTimer>
 #include <QtConcurrent/QtConcurrentRun>
 #include <QtGlobal>
 
@@ -833,6 +834,23 @@ void GenericChatForm::offerFiles(const QStringList& paths)
     auto* const list = new OutgoingFileList(paths);
     dialog->setContent(list);
     dialog->setAccessibleDescription(list->spokenText());
+    // KHANDAQ (beta feedback 2026-11-22): more files join the list. Send checks each of them as it
+    // checks any file chosen, and says why for each one it refuses.
+    dialog->addChoice(AirStrings::text(AirStrings::Text::FilesAddMore), [self, paths] {
+        if (GenericChatForm* const form = self.data()) {
+            // The system dialog runs a loop of its own: it opens once this one has gone.
+            QTimer::singleShot(0, form, [form, paths] { form->addMoreFiles(paths); });
+        }
+    });
+}
+
+void GenericChatForm::addMoreFiles(const QStringList& listed)
+{
+    const QString folder =
+        listed.isEmpty() ? QDir::homePath() : QFileInfo(listed.last()).absolutePath();
+    const QStringList chosen =
+        QFileDialog::getOpenFileNames(window(), tr("Send files"), folder, QString(), nullptr);
+    onPasteFiles(Air::withMoreFiles(listed, chosen));
 }
 
 void GenericChatForm::putAddressesInField(const QStringList& addresses)

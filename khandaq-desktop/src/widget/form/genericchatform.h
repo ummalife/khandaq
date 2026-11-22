@@ -244,6 +244,12 @@ protected:
      */
     void offerFiles(const QStringList& paths);
     /**
+     * KHANDAQ (beta feedback 2026-11-22): Add more of that dialog: the system dialog again, in the
+     * folder of the last file listed; the files chosen there join those listed, and they are asked
+     * about again as files pasted or dropped are (onPasteFiles). None chosen asks about the same.
+     */
+    void addMoreFiles(const QStringList& listed);
+    /**
      * KHANDAQ (beta ideas 2026-11-20): web addresses dropped on the conversation go into the field
      * at its cursor, to be sent with Enter like anything typed there.
      */

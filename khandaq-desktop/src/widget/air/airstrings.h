@@ -476,6 +476,7 @@ enum class Text
     // The dialog before files are sent (beta ideas 2026-11-20).
     FilesSendTitle,
     FilesSendMore,
+    FilesAddMore,
     VoiceNote,
     VoiceTooShort,
     VoiceNoMicrophone,

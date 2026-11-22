@@ -514,6 +514,7 @@ const Source sources[] = {
     {Text::FileGroupNotConnected, QT_TRANSLATE_NOOP3("Air", "The group is not connected right now. Try again once it is.", "why a file was not sent to a group")},
     {Text::FilesSendTitle, QT_TRANSLATE_N_NOOP3("Air", "Send %n file(s)?", "dialog before files go: the title; the files are listed under it, then Cancel and Send"), true},
     {Text::FilesSendMore, QT_TRANSLATE_N_NOOP3("Air", "%n more file(s)", "dialog before files go: under the files listed, how many more go with them"), true},
+    {Text::FilesAddMore, QT_TRANSLATE_NOOP3("Air", "Add more", "dialog before files go: the button between Cancel and Send that opens the system dialog again; the files chosen there join the list")},
     {Text::VoiceNote, QT_TRANSLATE_NOOP3("Air", "Voice message", "the name a voice note shows and a screen reader says")},
     {Text::VoiceTooShort, QT_TRANSLATE_NOOP3("Air", "Too short: a voice message lasts at least a second", "toast when a voice message was shorter than a second")},
     {Text::VoiceNoMicrophone, QT_TRANSLATE_NOOP3("Air", "No microphone: check that one is connected", "toast when no microphone could be opened for a voice message")},

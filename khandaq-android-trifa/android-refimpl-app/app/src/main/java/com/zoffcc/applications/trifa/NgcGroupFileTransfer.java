@@ -961,6 +961,13 @@ public final class NgcGroupFileTransfer
 
             final String beginFromPubkey = peerPubkeyOf(groupNumber, peerId);
 
+            // KHANDAQ (tester 21.11, 8256/8261): a file deleted here gets no row and no transfer when it comes again.
+            if (HelperMessageDelete.isDeletedGroupFile(groupId, beginFromPubkey, msgIdHex))
+            {
+                HelperGeneric.logI(TAG, "handleBegin:deleted here msg=" + msgIdHex.substring(0, 8));
+                return;
+            }
+
             final IncomingAssembly existingAsm = assemblies.get(assemblyKey);
             boolean replaceExisting = false;
             if (existingAsm != null)

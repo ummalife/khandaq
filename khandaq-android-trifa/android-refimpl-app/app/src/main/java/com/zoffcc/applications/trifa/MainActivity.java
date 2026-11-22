@@ -9613,6 +9613,9 @@ public class MainActivity extends AppCompatActivity
         // toxcore's thread, and the flush does not run on it.
         HelperGroup.schedule_pending_group_message_flush(temp_group_identifier,
                                                          HelperGroup.GROUP_PEER_JOIN_FLUSH_DELAY_MS);
+        // KHANDAQ (tester 21.11, 8256/8261): a member that was away when we deleted a message of ours for everyone
+        // gets the delete now, before it serves the message on.
+        HelperMessageDelete.onGroupPeerJoined(temp_group_identifier, group_peer_pubkey);
         // update_savedata_file_wrapper_throttled();
         update_savedata_file_wrapper();
     }
@@ -11909,6 +11912,10 @@ public class MainActivity extends AppCompatActivity
                 {
                     long mid = (Long) i.next();
                     final GroupMessage m_to_delete = (GroupMessage) orma.selectFromGroupMessage().idEq(mid).get(0);
+
+                    // KHANDAQ (tester 21.11, 8256/8261): a member's message deleted here stays deleted when the
+                    // history sync or its sender brings it again (GroupMessageTombstones).
+                    HelperMessageDelete.rememberDeletedGroupMessage(m_to_delete);
 
                     // KHANDAQ (#179): broadcast retraction of own group text messages (best effort,
                     // reaches currently-online peers; old clients drop the packet silently)

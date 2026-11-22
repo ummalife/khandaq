@@ -32,6 +32,9 @@ import static com.zoffcc.applications.trifa.TrifaToxService.orma;
  * sender (direction==0) — you can only retract what you sent me. A delete that arrives before
  * its original is stashed as a tombstone and applied on insert. Offline friends get the delete
  * on reconnect via a per-friend pending list in g_opts.
+ *
+ * In groups, what was deleted here is remembered for a week (GroupMessageTombstones), so that no receive
+ * path stores it again, and our own deletes go again to members that join without them (tester 21.11).
  */
 public class HelperMessageDelete
 {
@@ -456,13 +459,28 @@ public class HelperMessageDelete
                 }
                 pkt = buildGroupDeletePacket(gm.message_id_tox, System.currentTimeMillis() / 1000);
             }
-            final long group_number =
-                    HelperGroup.tox_group_by_groupid__wrapper(gm.group_identifier);
-            if (group_number < 0 || pkt == null)
+            if (pkt == null)
             {
                 return;
             }
-            MainActivity.tox_group_send_custom_packet(group_number, 1, pkt, pkt.length);
+            // KHANDAQ (tester 21.11, 8256/8261): kept for a week, so that it stays deleted here and goes again to
+            // the members that join without it (onGroupPeerJoined); the members connected now get it at once.
+            GROUP_TOMBSTONES.record(gm, GroupMessageTombstones.Origin.OWN, System.currentTimeMillis());
+            final long group_number =
+                    HelperGroup.tox_group_by_groupid__wrapper(gm.group_identifier);
+            if (group_number < 0)
+            {
+                return;
+            }
+            // Who is connected before it goes: a member that connects meanwhile is not taken to hold it.
+            final List<String> online = onlineGroupPeerKeys(group_number);
+            if (HelperGroup.is_ngc_custom_packet_send_ok(
+                    MainActivity.tox_group_send_custom_packet(group_number, 1, pkt, pkt.length)))
+            {
+                GROUP_TOMBSTONES.noteOwnDeleteSent(gm, online, System.currentTimeMillis());
+            }
+            // A member that had just joined, or a send that failed, gets it again a moment later.
+            scheduleGroupDeleteResend(gm.group_identifier, online);
         }
         catch (Exception e)
         {
@@ -494,6 +512,7 @@ public class HelperMessageDelete
             }
 
             GroupMessage gm = null;
+            String anchor = null;
             try
             {
                 if (isFile)
@@ -504,6 +523,7 @@ public class HelperMessageDelete
                     // at insert (live BEGIN, single-packet and history-sync all stamp it), exactly like the
                     // text branch binds via tox_group_peer_pubkeyEq.
                     final String hashHex = HelperGeneric.bytesToHex(data, 9, 32).toUpperCase(Locale.ENGLISH);
+                    anchor = hashHex;
                     final List<GroupMessage> list = orma.selectFromGroupMessage().
                             group_identifierEq(groupIdentifier).
                             msg_id_hashEq(hashHex).
@@ -532,6 +552,7 @@ public class HelperMessageDelete
                     {
                         return;
                     }
+                    anchor = messageIdHex;
                     final List<GroupMessage> list = orma.selectFromGroupMessage().
                             group_identifierEq(groupIdentifier).
                             tox_group_peer_pubkeyEq(senderPubkey.toUpperCase(Locale.ENGLISH)).
@@ -549,7 +570,17 @@ public class HelperMessageDelete
             }
             if (gm == null || gm.direction != 0)
             {
-                // unknown original (or our own echo) — silent drop, deletes never create state
+                // KHANDAQ (tester 21.11, 8256/8261): a delete of a message not here yet is kept, so that the message is
+                // not stored when the history sync or its sender brings it later; bounded per author and group, and
+                // it stops only the sender's own messages (the sender is the peer toxcore authenticated). Our own
+                // echo is dropped as before.
+                if (gm == null)
+                {
+                    GROUP_TOMBSTONES.recordUnseen(groupIdentifier,
+                                                  isFile ? GroupMessageTombstones.Kind.FILE
+                                                         : GroupMessageTombstones.Kind.TEXT,
+                                                  senderPubkey, anchor, System.currentTimeMillis());
+                }
                 return;
             }
             // KHANDAQ (audit): single authorship gate for BOTH anchors — you can only retract what you
@@ -560,6 +591,8 @@ public class HelperMessageDelete
                 return;
             }
 
+            // KHANDAQ (tester 21.11, 8256/8261): and it stays deleted when a member that missed the delete serves it.
+            GROUP_TOMBSTONES.record(gm, GroupMessageTombstones.Origin.REMOTE, System.currentTimeMillis());
             try
             {
                 orma.deleteFromGroupMessage().idEq(gm.id).execute();
@@ -588,6 +621,289 @@ public class HelperMessageDelete
         {
             Log.i(TAG, "handleIncomingGroupDelete:EE:" + e.getMessage());
         }
+    }
+
+    // =============================================================================================
+    // NGC groups: what was deleted here (tester 21.11, 8256/8261, GroupMessageTombstones)
+    // =============================================================================================
+
+    /**
+     * The tombstones of the open profile's groups, in its g_opts rows. Not final only so that a unit test, which has
+     * no database, can put a store of its own here.
+     */
+    static volatile GroupMessageTombstones.Store GROUP_TOMBSTONES = new GroupMessageTombstones.Store(
+            new GroupMessageTombstones.Rows()
+            {
+                @Override
+                public boolean ready()
+                {
+                    return orma != null;
+                }
+
+                @Override
+                public String get(final String key)
+                {
+                    return HelperGeneric.get_g_opts(key);
+                }
+
+                @Override
+                public void put(final String key, final String value)
+                {
+                    HelperGeneric.set_g_opts(key, value);
+                }
+
+                @Override
+                public void remove(final String key)
+                {
+                    HelperGeneric.del_g_opts(key);
+                }
+            });
+
+    /** Groups whose deletes of ours are due to go again: one pass per group at a time. */
+    private static final java.util.Set<String> group_delete_resend_due =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private static final java.util.concurrent.ScheduledExecutorService group_delete_resend_exec =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                final Thread t = new Thread(r, "grp-delete-resend");
+                t.setDaemon(true);
+                return t;
+            });
+
+    /**
+     * A member's message deleted here (the delete of a selection), while its row is still there. Ours is kept by
+     * sendOwnGroupDelete, which deletes it for everyone.
+     */
+    static void rememberDeletedGroupMessage(final GroupMessage gm)
+    {
+        if ((gm == null) || (gm.direction != 0))
+        {
+            return;
+        }
+        try
+        {
+            if (GROUP_TOMBSTONES.record(gm, GroupMessageTombstones.Origin.LOCAL, System.currentTimeMillis()))
+            {
+                Log.i(TAG, "group message deleted here, remembered");
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "rememberDeletedGroupMessage:EE:" + e.getMessage());
+        }
+    }
+
+    /** The history of a group is cleared here: what a history sync could still bring back stays deleted. */
+    static void rememberClearedGroupHistory(final String groupId)
+    {
+        try
+        {
+            final long now = System.currentTimeMillis();
+            final List<GroupMessage> recent = orma.selectFromGroupMessage().
+                    group_identifierEq(groupId.toLowerCase(Locale.ROOT)).
+                    sent_timestampGt(now - GroupMessageTombstones.CLEARED_WINDOW_MS).
+                    toList();
+            final int kept = GROUP_TOMBSTONES.recordCleared(groupId, recent, now);
+            Log.i(TAG, "group history cleared here, " + kept + " messages remembered");
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "rememberClearedGroupHistory:EE:" + e.getMessage());
+        }
+    }
+
+    /** Whether a member's text is a copy of a message deleted here. */
+    static boolean isDeletedGroupText(final String groupId, final String authorKey, final String messageIdHex,
+                                      final String text)
+    {
+        try
+        {
+            return GROUP_TOMBSTONES.isDeletedText(groupId, authorKey, messageIdHex, text, System.currentTimeMillis());
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+    }
+
+    /** Whether a member's file is a copy of a file deleted here. */
+    static boolean isDeletedGroupFile(final String groupId, final String authorKey, final String msgIdHashHex)
+    {
+        try
+        {
+            return GROUP_TOMBSTONES.isDeletedFile(groupId, authorKey, msgIdHashHex, System.currentTimeMillis());
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+    }
+
+    /** Whether a row about to be stored is a copy of a message deleted here, whichever way it came. */
+    static boolean isDeletedGroupRow(final GroupMessage m)
+    {
+        try
+        {
+            return GROUP_TOMBSTONES.isDeletedRow(m, System.currentTimeMillis());
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+    }
+
+    /**
+     * A member joined the group: our deletes for everyone it may lack go again, as the packets they went as, once it
+     * can take a broadcast of ours.
+     */
+    static void onGroupPeerJoined(final String groupId, final String peerPubkey)
+    {
+        try
+        {
+            if (groupId == null)
+            {
+                return;
+            }
+            GROUP_TOMBSTONES.notePeerJoined(groupId, peerPubkey, System.currentTimeMillis());
+            scheduleGroupDeleteResend(groupId, java.util.Collections.singletonList(peerPubkey));
+        }
+        catch (Throwable e)
+        {
+            Log.i(TAG, "onGroupPeerJoined:EE:" + e.getMessage());
+        }
+    }
+
+    /** A group deleted here: its tombstones go with it. */
+    static void forgetGroupDeletes(final String groupId)
+    {
+        try
+        {
+            GROUP_TOMBSTONES.forget(groupId);
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "forgetGroupDeletes:EE:" + e.getMessage());
+        }
+    }
+
+    /** At the start of a tox session: read again, from the database of the profile now open. */
+    static void forgetGroupDeletesRead()
+    {
+        GROUP_TOMBSTONES.forgetRead();
+    }
+
+    /** Our deletes go again in the group when a member connected now may lack one: once, after the wait it needs. */
+    private static void scheduleGroupDeleteResend(final String groupId, final List<String> lacking)
+    {
+        final long wait = GROUP_TOMBSTONES.resendWaitMs(groupId, lacking, System.currentTimeMillis());
+        if (wait < 0)
+        {
+            return;
+        }
+        final String key = groupId.toLowerCase(Locale.ROOT);
+        if (!group_delete_resend_due.add(key))
+        {
+            // The pass already due looks at every member connected then.
+            return;
+        }
+        try
+        {
+            group_delete_resend_exec.schedule(() -> {
+                group_delete_resend_due.remove(key);
+                resendOwnGroupDeletes(groupId);
+            }, wait, java.util.concurrent.TimeUnit.MILLISECONDS);
+        }
+        catch (Throwable e)
+        {
+            group_delete_resend_due.remove(key);
+            Log.i(TAG, "scheduleGroupDeleteResend:EE:" + e.getMessage());
+        }
+    }
+
+    private static void resendOwnGroupDeletes(final String groupId)
+    {
+        try
+        {
+            if (!TrifaToxService.is_tox_started)
+            {
+                return;
+            }
+            final long group_number = HelperGroup.tox_group_by_groupid__wrapper(groupId);
+            if (group_number < 0)
+            {
+                return;
+            }
+            final List<String> online = onlineGroupPeerKeys(group_number);
+            final long now = System.currentTimeMillis();
+            final long wait = GROUP_TOMBSTONES.resendWaitMs(groupId, online, now);
+            if (wait != 0)
+            {
+                // Nobody lacks one any more (-1), or a member that joined meanwhile is not ready yet.
+                if (wait > 0)
+                {
+                    scheduleGroupDeleteResend(groupId, online);
+                }
+                return;
+            }
+            final List<GroupMessageTombstones.Entry> own = GROUP_TOMBSTONES.ownToResend(groupId, now);
+            int sent = 0;
+            for (final GroupMessageTombstones.Entry entry : own)
+            {
+                final byte[] pkt = (entry.kind == GroupMessageTombstones.Kind.FILE)
+                                   ? buildGroupDeleteFilePacket(entry.anchor, entry.recordedMs / 1000)
+                                   : buildGroupDeletePacket(entry.anchor, entry.recordedMs / 1000);
+                if ((pkt != null) && HelperGroup.is_ngc_custom_packet_send_ok(
+                        MainActivity.tox_group_send_custom_packet(group_number, 1, pkt, pkt.length)))
+                {
+                    sent++;
+                }
+            }
+            Log.i(TAG, "group deletes sent again: " + sent + "/" + own.size());
+            if (sent < own.size())
+            {
+                // Not all went: the next member that joins brings another pass.
+                return;
+            }
+            GROUP_TOMBSTONES.noteOwnDeletesResent(groupId, online, own, now);
+            // The members that had only just joined get them in a pass of their own.
+            scheduleGroupDeleteResend(groupId, online);
+        }
+        catch (Throwable e)
+        {
+            Log.i(TAG, "resendOwnGroupDeletes:EE:" + e.getMessage());
+        }
+    }
+
+    /** The keys of the members of the group connected now, ourselves left out. */
+    private static List<String> onlineGroupPeerKeys(final long group_number)
+    {
+        final List<String> keys = new ArrayList<>();
+        try
+        {
+            final long self_peer_id = MainActivity.tox_group_self_get_peer_id(group_number);
+            final long[] peers = MainActivity.tox_group_get_peerlist(group_number);
+            if (peers == null)
+            {
+                return keys;
+            }
+            for (final long peer : peers)
+            {
+                if ((peer < 0) || (peer == self_peer_id) || !HelperGroup.is_group_peer_online(
+                        MainActivity.tox_group_peer_get_connection_status(group_number, peer)))
+                {
+                    continue;
+                }
+                final String key = HelperGroup.tox_group_peer_get_public_key__wrapper(group_number, peer);
+                if (isRealPeerPubkey(key))
+                {
+                    keys.add(key);
+                }
+            }
+        }
+        catch (Throwable e)
+        {
+            Log.i(TAG, "onlineGroupPeerKeys:EE:" + e.getMessage());
+        }
+        return keys;
     }
 
     // ---------------------------------- utils ----------------------------------

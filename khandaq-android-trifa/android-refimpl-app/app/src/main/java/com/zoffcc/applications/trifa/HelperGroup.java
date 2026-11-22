@@ -518,6 +518,13 @@ public class HelperGroup
             HelperGeneric.logI(TAG, "insert_into_group_message_db:skip empty message");
             return -1;
         }
+        // KHANDAQ (tester 21.11, 8256/8261): a message deleted here is not stored again, whichever way it came. The
+        // receive paths ask before their side effects (a notification, a file written); this holds for any other.
+        if (HelperMessageDelete.isDeletedGroupRow(m))
+        {
+            HelperGeneric.logI(TAG, "insert_into_group_message_db:deleted here, not stored again");
+            return -1;
+        }
 
         long row_id = orma.insertIntoGroupMessage(m);
 
@@ -4931,6 +4938,8 @@ public class HelperGroup
         forget_manual_group_invites_for_group(group_identifier); // KHANDAQ (0.2.60)
         // KHANDAQ (tester 21.11, 8257): deleted for good, the group's own name goes with it.
         set_group_own_name(group_identifier, null);
+        // KHANDAQ (tester 21.11, 8256/8261): and what was deleted in it.
+        HelperMessageDelete.forgetGroupDeletes(group_identifier);
     }
 
     static void update_group_in_friendlist(final String group_identifier)
@@ -6164,6 +6173,14 @@ public class HelperGroup
             e.printStackTrace();
         }
 
+        // KHANDAQ (tester 21.11, 8256/8261): nor a message deleted here that comes again (GroupMessageTombstones).
+        if (!is_private_message
+            && HelperMessageDelete.isDeletedGroupText(m.group_identifier, m.tox_group_peer_pubkey, m.message_id_tox, m.text))
+        {
+            HelperGeneric.logI(TAG, "group_message_cb: deleted here, not stored again msg_id=" + m.message_id_tox);
+            return;
+        }
+
         // KHANDAQ (#68): drop duplicate incoming group messages BEFORE insert. NGC re-delivers a message
         // (mesh relay + lossless retransmit), firing this LIVE callback many times for the SAME message;
         // only the history-sync path had dedup, so the live path produced ~Nx copies. Match by the stable
@@ -6323,6 +6340,14 @@ public class HelperGroup
         if (!GroupMessageLayoutHelper.hasNonBlankText(message))
         {
             HelperGeneric.logI(TAG, "group_message_add_from_sync: ignoring empty message");
+            return;
+        }
+
+        // KHANDAQ (tester 21.11, 8256/8261): a message deleted here stays deleted when a member serves it again (the
+        // history of the group's members and the relay's both come here).
+        if (HelperMessageDelete.isDeletedGroupText(group_identifier, peer_pubkey, message_id, message))
+        {
+            HelperGeneric.logI(TAG, "group_message_add_from_sync: deleted here, not stored again msg_id=" + message_id);
             return;
         }
 
@@ -8059,6 +8084,12 @@ public class HelperGroup
                                                  final NgcGroupFileTransfer.IncomingAssembly asm)
     {
         final String msgIdHex = bytebuffer_to_hexstring(ByteBuffer.wrap(msgId), true);
+        // KHANDAQ (tester 21.11, 8256/8261): a file deleted here gets no row, and no notification, when it comes again.
+        if (HelperMessageDelete.isDeletedGroupFile(groupId, asm.senderPubkey, msgIdHex))
+        {
+            HelperGeneric.logI(TAG, "handle_incoming_group_file_begin: deleted here, no row");
+            return;
+        }
         set_ngc_file_transfer_progress(groupId, msgIdHex, 0);
         clear_ngc_file_transfer_failed(groupId, msgIdHex);
 
@@ -8161,6 +8192,30 @@ public class HelperGroup
                                 (groupDb != null) ? groupDb.name : null,
                                 HelperMsgNotification.media_label_for_filename(context_s, displayName),
                                 m.sent_timestamp, m.tox_group_peer_pubkey);
+    }
+
+    /** The copy of a file put together for a row deleted while it came. */
+    private static void delete_received_group_file_copy(@Nullable final String out_path)
+    {
+        if (TextUtils.isEmpty(out_path))
+        {
+            return;
+        }
+        try
+        {
+            if (HelperFiletransfer.isIocipherVirtualPath(out_path))
+            {
+                new info.guardianproject.iocipher.File(out_path).delete();
+            }
+            else
+            {
+                new java.io.File(out_path).delete();
+            }
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "delete_received_group_file_copy:EE:" + e.getMessage());
+        }
     }
 
     static void handle_incoming_group_file_complete(final long groupNumber, final long peerId,
@@ -8266,6 +8321,13 @@ public class HelperGroup
             final String peer_pubkey = (asm.senderPubkey != null && !asm.senderPubkey.isEmpty())
                     ? asm.senderPubkey
                     : tox_group_peer_get_public_key__wrapper(groupNumber, peerId);
+            // KHANDAQ (tester 21.11, 8256/8261): its row was deleted here while it came: the copy put together goes.
+            if (HelperMessageDelete.isDeletedGroupFile(group_id, peer_pubkey, msgIdHex))
+            {
+                HelperGeneric.logI(TAG, "handle_incoming_group_file_complete: deleted here, copy removed");
+                delete_received_group_file_copy(asm.outPath);
+                return;
+            }
             final GroupMessage m = new GroupMessage();
             m.is_new = true;
             m.tox_group_peer_pubkey = peer_pubkey;
@@ -11450,6 +11512,12 @@ public class HelperGroup
                 HelperGeneric.logI(TAG, "group_custom_packet_cb:duplicate file msg_id_hash=" + m.msg_id_hash);
                 return;
             }
+            // KHANDAQ (tester 21.11, 8256/8261): nor a file deleted here, before anything is written.
+            if (HelperMessageDelete.isDeletedGroupFile(group_id, peer_pubkey, m.msg_id_hash))
+            {
+                HelperGeneric.logI(TAG, "group_custom_packet_cb:deleted here, not stored again");
+                return;
+            }
 
             try
             {
@@ -12859,6 +12927,13 @@ public class HelperGroup
         GroupDB group_temp = null;
 
         global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
+
+        // KHANDAQ (tester 21.11, 8256/8261): a file deleted here stays deleted when a member serves it again.
+        if (HelperMessageDelete.isDeletedGroupFile(group_identifier, original_sender_peerpubkey, message_id_hash))
+        {
+            HelperGeneric.logI(TAG, "group_file_add_from_sync: deleted here, not stored again");
+            return;
+        }
 
         // KHANDAQ (audit 2026-08-20): this path had NEITHER of the two controls that every
         // neighbouring file path has, and it is the one path where the bytes arrive unsolicited.

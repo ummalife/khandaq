@@ -1039,6 +1039,8 @@ public class TrifaToxService extends Service
                 NgcHistoryServeLedger.reset();
                 // KHANDAQ (tester 21.11, 8257): the groups' own names are read again, from this profile's database.
                 HelperGroup.forget_group_own_names_read();
+                // KHANDAQ (tester 21.11, 8256/8261): and what was deleted in its groups.
+                HelperMessageDelete.forgetGroupDeletesRead();
                 tox_session_number.incrementAndGet();
                 is_tox_started = true;
                 // KHANDAQ (logout crash fix): tox is up again, so we are no longer "logged out". Clearing

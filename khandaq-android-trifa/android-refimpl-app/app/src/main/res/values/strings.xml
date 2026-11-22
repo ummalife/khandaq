@@ -1027,6 +1027,20 @@
     <string name="media_viewer_open_elsewhere">Open in another app</string>
     <string name="pdf_viewer_page_format">Page %1$d of %2$d</string>
     <string name="pdf_viewer_opens_elsewhere">This PDF cannot be shown here, so it opens in another app</string>
+    <!-- Khandaq Testers 8264: the edits of a photo on the send screen, and Draw and write -->
+    <string name="media_send_edit_crop">Crop and rotate</string>
+    <string name="media_send_edit_markup">Draw and write</string>
+    <string name="photo_markup_undo">Undo</string>
+    <string name="photo_markup_done">Done</string>
+    <string name="photo_markup_text">Text</string>
+    <string name="photo_markup_add_text">Add text</string>
+    <string name="photo_markup_text_hint">Type the words</string>
+    <string name="photo_markup_color_white">White</string>
+    <string name="photo_markup_color_black">Black</string>
+    <string name="photo_markup_color_red">Red</string>
+    <string name="photo_markup_color_yellow">Yellow</string>
+    <string name="photo_markup_color_green">Green</string>
+    <string name="photo_markup_color_blue">Blue</string>
     <string name="media_send_counter_format">%1$d / %2$d</string>
     <string name="media_label_video">Video</string>
     <string name="media_label_audio">Audio</string>

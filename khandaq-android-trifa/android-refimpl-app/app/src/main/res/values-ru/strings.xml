@@ -781,6 +781,20 @@
     <string name="media_viewer_open_elsewhere">Открыть в другом приложении</string>
     <string name="pdf_viewer_page_format">Страница %1$d из %2$d</string>
     <string name="pdf_viewer_opens_elsewhere">Этот PDF нельзя показать здесь, поэтому он откроется в другом приложении</string>
+    <!-- Khandaq Testers 8264: the edits of a photo on the send screen, and Draw and write -->
+    <string name="media_send_edit_crop">Обрезать и повернуть</string>
+    <string name="media_send_edit_markup">Рисовать и писать</string>
+    <string name="photo_markup_undo">Отменить</string>
+    <string name="photo_markup_done">Готово</string>
+    <string name="photo_markup_text">Текст</string>
+    <string name="photo_markup_add_text">Добавить текст</string>
+    <string name="photo_markup_text_hint">Введите текст</string>
+    <string name="photo_markup_color_white">Белый</string>
+    <string name="photo_markup_color_black">Чёрный</string>
+    <string name="photo_markup_color_red">Красный</string>
+    <string name="photo_markup_color_yellow">Жёлтый</string>
+    <string name="photo_markup_color_green">Зелёный</string>
+    <string name="photo_markup_color_blue">Синий</string>
     <string name="media_send_counter_format">%1$d / %2$d</string>
     <string name="media_label_video">Видео</string>
     <string name="media_label_audio">Аудио</string>

@@ -345,6 +345,14 @@
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:theme="@style/KhandaqMediaTheme">
         </activity>
+        <!-- KHANDAQ (Khandaq Testers 8264): Draw and write on a photo of a send; the drawing lives in the
+             activity, so a turn of the phone must not make it anew. -->
+        <activity
+            android:name="com.zoffcc.applications.trifa.PhotoMarkupActivity"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|uiMode|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
+            android:exported="false"
+            android:theme="@style/KhandaqMediaTheme">
+        </activity>
         <!-- uCrop (avatar crop): the library AAR does NOT declare its activity; without this
              entry UCrop.start() throws ActivityNotFoundException ("Не удалось установить фото"). -->
         <activity

@@ -1001,6 +1001,20 @@
     <string name="media_viewer_open_elsewhere">在其他应用中打开</string>
     <string name="pdf_viewer_page_format">第 %1$d 页，共 %2$d 页</string>
     <string name="pdf_viewer_opens_elsewhere">此 PDF 无法在此显示，将在其他应用中打开</string>
+    <!-- Khandaq Testers 8264: the edits of a photo on the send screen, and Draw and write -->
+    <string name="media_send_edit_crop">裁剪和旋转</string>
+    <string name="media_send_edit_markup">绘制和书写</string>
+    <string name="photo_markup_undo">撤销</string>
+    <string name="photo_markup_done">完成</string>
+    <string name="photo_markup_text">文字</string>
+    <string name="photo_markup_add_text">添加文字</string>
+    <string name="photo_markup_text_hint">输入文字</string>
+    <string name="photo_markup_color_white">白色</string>
+    <string name="photo_markup_color_black">黑色</string>
+    <string name="photo_markup_color_red">红色</string>
+    <string name="photo_markup_color_yellow">黄色</string>
+    <string name="photo_markup_color_green">绿色</string>
+    <string name="photo_markup_color_blue">蓝色</string>
     <string name="media_send_counter_format">%1$d / %2$d</string>
     <string name="media_label_video">视频</string>
     <string name="media_label_audio">音频</string>

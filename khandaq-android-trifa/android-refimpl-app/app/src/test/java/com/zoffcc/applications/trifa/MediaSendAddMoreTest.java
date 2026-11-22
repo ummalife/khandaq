@@ -115,7 +115,8 @@ public class MediaSendAddMoreTest
         assertTrue(helper.contains("android.content.ContentResolver.SCHEME_CONTENT.equals(uri.getScheme())"));
         // The crop editor stays.
         assertTrue(screen.contains("startActivityForResult(crop, com.yalantis.ucrop.UCrop.REQUEST_CROP);"));
-        assertTrue(screen.contains("uris.set(pos, cropped);"));
+        assertTrue(screen.contains("replaceEdited(pos, cropped);"));
+        assertTrue(screen.contains("uris.set(pos, edited);"));
     }
 
     private static String read(final String path)

@@ -33,6 +33,8 @@ import java.util.List;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.PopupMenu;
+import androidx.core.content.IntentCompat;
 import androidx.core.os.BundleCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -43,6 +45,10 @@ public class MediaSendPreviewActivity extends AppCompatActivity
     private static final String TAG = "trifa.MediaSendPrev";
     /** KHANDAQ (Khandaq Testers 8265): the chat's media picker, opened by the tile that adds more. */
     private static final int REQUEST_ADD_MORE = 8011;
+    /** KHANDAQ (Khandaq Testers 8264): Draw and write (PhotoMarkupActivity), the second edit of a photo. */
+    private static final int REQUEST_MARKUP = 8012;
+    private static final int EDIT_CROP = 1;
+    private static final int EDIT_MARKUP = 2;
     private static final String STATE_URIS = "media_send_preview_uris";
 
     private ArrayList<Uri> uris;
@@ -140,7 +146,7 @@ public class MediaSendPreviewActivity extends AppCompatActivity
 
         // KHANDAQ (#7): crop/rotate the current photo before sending.
         editButton = findViewById(R.id.media_preview_edit);
-        editButton.setOnClickListener(v -> launchCropEditor(pager.getCurrentItem()));
+        editButton.setOnClickListener(v -> showEditMenu(v, pager.getCurrentItem()));
         updateEditButtonVisibility(0);
 
         final View.OnClickListener cancelListener = v ->
@@ -278,6 +284,59 @@ public class MediaSendPreviewActivity extends AppCompatActivity
         editButton.setVisibility(isVideo ? View.GONE : View.VISIBLE);
     }
 
+    /** KHANDAQ (Khandaq Testers 8264): the edit button asks which edit, as on iOS: crop it, or draw on it. */
+    private void showEditMenu(final View anchor, final int position)
+    {
+        final PopupMenu menu = new PopupMenu(this, anchor);
+        menu.getMenu().add(0, EDIT_CROP, 0, R.string.media_send_edit_crop);
+        menu.getMenu().add(0, EDIT_MARKUP, 1, R.string.media_send_edit_markup);
+        menu.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() == EDIT_MARKUP)
+            {
+                launchMarkupEditor(position);
+            }
+            else
+            {
+                launchCropEditor(position);
+            }
+            return true;
+        });
+        menu.show();
+    }
+
+    /**
+     * KHANDAQ (Khandaq Testers 8264): draw and write on the current photo. What is drawn comes back as a new
+     * JPEG in the cache, as a crop does, and takes the page's place; the photo picked is never written.
+     */
+    private void launchMarkupEditor(final int position)
+    {
+        if (uris == null || position < 0 || position >= uris.size())
+        {
+            return;
+        }
+        final Uri source = uris.get(position);
+        if (MediaSendPreviewHelper.isVideoUri(this, source))
+        {
+            return;
+        }
+        try
+        {
+            editingPosition = position;
+            final java.io.File dest = new java.io.File(getCacheDir(),
+                    "edit_markup_" + position + "_" + System.nanoTime() + ".jpg");
+            final Intent markup = new Intent(this, PhotoMarkupActivity.class);
+            markup.setData(source);
+            markup.putExtra(PhotoMarkupActivity.EXTRA_OUTPUT_PATH, dest.getAbsolutePath());
+            startActivityForResult(markup, REQUEST_MARKUP);
+        }
+        catch (Exception e)
+        {
+            editingPosition = -1;
+            Log.i(TAG, "launchMarkupEditor:EE:" + e.getClass().getSimpleName());
+            sayEditFailed();
+        }
+    }
+
     // KHANDAQ (#7): open uCrop (free crop + rotate/scale gestures) on the current photo; the result
     // returns to onActivityResult as UCrop.REQUEST_CROP and replaces that page's uri in place.
     private void launchCropEditor(final int position)
@@ -363,6 +422,21 @@ public class MediaSendPreviewActivity extends AppCompatActivity
             }
             return;
         }
+        if (requestCode == REQUEST_MARKUP)
+        {
+            final int pos = editingPosition;
+            editingPosition = -1;
+            if (resultCode == Activity.RESULT_OK)
+            {
+                replaceEdited(pos, (data == null) ? null
+                        : IntentCompat.getParcelableExtra(data, PhotoMarkupActivity.EXTRA_OUTPUT_URI, Uri.class));
+            }
+            else if (data != null && data.getBooleanExtra(PhotoMarkupActivity.EXTRA_FAILED, false))
+            {
+                sayEditFailed();
+            }
+            return;
+        }
         if (requestCode != com.yalantis.ucrop.UCrop.REQUEST_CROP)
         {
             return;
@@ -372,22 +446,28 @@ public class MediaSendPreviewActivity extends AppCompatActivity
         if (resultCode == Activity.RESULT_OK)
         {
             final Uri cropped = (data == null) ? null : com.yalantis.ucrop.UCrop.getOutput(data);
-            if (cropped != null && pos >= 0 && pos < uris.size())
-            {
-                uris.set(pos, cropped);
-                if (previewAdapter != null)
-                {
-                    previewAdapter.notifyItemChanged(pos);
-                }
-                if (thumbAdapter != null)
-                {
-                    thumbAdapter.notifyItemChanged(pos);
-                }
-            }
+            replaceEdited(pos, cropped);
         }
         else if (data != null && com.yalantis.ucrop.UCrop.getError(data) != null)
         {
             sayEditFailed();
+        }
+    }
+
+    /** The page edited takes the edit's copy in place, the crop's or the drawing's. */
+    private void replaceEdited(final int pos, final Uri edited)
+    {
+        if (edited != null && pos >= 0 && pos < uris.size())
+        {
+            uris.set(pos, edited);
+            if (previewAdapter != null)
+            {
+                previewAdapter.notifyItemChanged(pos);
+            }
+            if (thumbAdapter != null)
+            {
+                thumbAdapter.notifyItemChanged(pos);
+            }
         }
     }
 

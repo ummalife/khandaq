@@ -57,6 +57,19 @@
 // through the queue of the realm manager.
 - (void)updateGroupPrivacyState:(OCTToxGroupPrivacyState)privacyState forChat:(OCTChat *)chat;
 - (void)updateGroupVoiceState:(OCTToxGroupVoiceState)voiceState forChat:(OCTChat *)chat;
+// Beta 8253 (an edited note of Saved Messages): the Saved chat and a note in it as the app keeps them, and a text
+// to a friend as objcTox stores one it sent.
+- (OCTChat *)getOrCreateSavedMessagesChat;
+- (OCTMessageAbstract *)addSavedTextMessage:(NSString *)text toChat:(OCTChat *)chat;
+- (OCTMessageAbstract *)addMessageWithText:(NSString *)text
+                                      type:(OCTToxMessageType)type
+                                      chat:(OCTChat *)chat
+                                    sender:(OCTFriend *)sender
+                                 messageId:(OCTToxMessageId)messageId
+                              msgv3HashHex:(NSString *)msgv3HashHex
+                                  sentPush:(BOOL)sentPush
+                                    tssent:(UInt32)tssent
+                                    tsrcvd:(UInt32)tsrcvd;
 @end
 
 // Redesign stage 3, item 10: the receive paths of the KQ packets (1:1 186, 187, 188 and group 0x41,

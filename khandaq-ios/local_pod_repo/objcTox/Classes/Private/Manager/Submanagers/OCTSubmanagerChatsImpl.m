@@ -1925,10 +1925,6 @@ serialize:
     if (! message || message.senderUniqueIdentifier != nil || message.messageText == nil) {
         return;
     }
-    NSString *anchorHex = message.messageText.msgv3HashHex;
-    if (anchorHex.length != 64) {
-        return;
-    }
     NSString *trimmed = [newText stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
     if (trimmed.length == 0) {
         return;
@@ -1944,6 +1940,15 @@ serialize:
     OCTChat *chat = [realmManager objectWithUniqueIdentifier:message.chatUniqueIdentifier class:[OCTChat class]];
     OCTFriend *friend = [chat.friends firstObject];
     const BOOL isSaved = (friend == nil); // Saved Messages self-chat has no friend → local edit only
+
+    // KHANDAQ (beta 8253): the edit packet names the message by its msgV3 hash, which a note of the Saved
+    // chat never has (addSavedTextMessage: there is no peer to name it for). This check ran first, so an
+    // edit there returned before the row changed and the Edit action did nothing. A note is edited in
+    // place only and needs no hash; a message to a friend still does.
+    NSString *anchorHex = message.messageText.msgv3HashHex;
+    if (anchorHex.length != 64 && ! chat.isSavedMessages) {
+        return;
+    }
 
     // update the local row first so the UI reflects the edit immediately (Realm notification → reload)
     [realmManager updateObject:message withBlock:^(OCTMessageAbstract *m) {

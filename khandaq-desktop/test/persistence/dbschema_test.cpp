@@ -140,6 +140,7 @@ private slots:
     // test10to11 handled in dbTo11_test
     void test11to12();
     void test12to13();
+    void test13to14();
     // test suite
 
 private:
@@ -165,7 +166,7 @@ void TestDbSchema::testCreation()
     QVector<RawDatabase::Query> queries;
     auto db = std::shared_ptr<RawDatabase>{new RawDatabase{testDatabaseFile->fileName(), {}, {}}};
     QVERIFY(DbUpgrader::createCurrentSchema(*db));
-    DbUtility::verifyDb(db, DbUtility::schema13);
+    DbUtility::verifyDb(db, DbUtility::schema14);
 }
 
 void TestDbSchema::testIsNewDb()
@@ -556,6 +557,67 @@ void TestDbSchema::test12to13()
         version = row[0].toInt();
     })));
     QCOMPARE(version, 13);
+}
+
+/**
+ * @brief KHANDAQ (beta feedback 2026-11-22): a database of 0.2.68 gets the table of the deletions
+ * of groups, empty; what it holds stays as it was. A deletion is kept once.
+ */
+void TestDbSchema::test13to14()
+{
+    auto db = std::shared_ptr<RawDatabase>{new RawDatabase{testDatabaseFile->fileName(), {}, {}}};
+    createSchemaAtVersion(db, DbUtility::schema13);
+
+    const QByteArray chat(32, 'c');
+    QVector<RawDatabase::Query> setup;
+    setup += RawDatabase::Query("INSERT INTO chats (id, uuid) VALUES (1, ?);", {chat});
+    setup += RawDatabase::Query("INSERT INTO authors (id, public_key) VALUES (1, ?);",
+                                {QByteArray(32, 'a')});
+    setup += RawDatabase::Query("INSERT INTO aliases (id, owner, display_name) VALUES (1, 1, ?);",
+                                {QByteArray("Amina")});
+    setup += RawDatabase::Query(
+        "INSERT INTO history (id, message_type, timestamp, chat_id) VALUES (1, 'T', 1000, 1);");
+    setup += RawDatabase::Query("INSERT INTO text_messages (id, message_type, sender_alias, "
+                                "message) VALUES (1, 'T', 1, ?);",
+                                {QByteArray("from 0.2.68")});
+    QVERIFY(db->execNow(setup));
+
+    QVERIFY(DbUpgrader::dbSchema13to14(*db));
+    verifyDb(db, DbUtility::schema14);
+    size_t entries = 0;
+    QVERIFY(db->execNow(
+        RawDatabase::Query("SELECT COUNT(*) FROM sqlite_master WHERE sql IS NOT NULL;",
+                           [&](const QVector<QVariant>& row) { entries = row[0].toULongLong(); })));
+    QCOMPARE(entries, DbUtility::schema14.size());
+
+    QByteArray kept;
+    QVERIFY(db->execNow(
+        RawDatabase::Query("SELECT message FROM text_messages WHERE id = 1;",
+                           [&](const QVector<QVariant>& row) { kept = row[0].toByteArray(); })));
+    QCOMPARE(kept, QByteArray("from 0.2.68"));
+    int deletions = -1;
+    const auto countDeletions =
+        RawDatabase::Query("SELECT COUNT(*) FROM deleted_messages;",
+                           [&](const QVector<QVariant>& row) { deletions = row[0].toInt(); });
+    QVERIFY(db->execNow(countDeletions));
+    QCOMPARE(deletions, 0);
+
+    const QByteArray author(32, 'a');
+    const QByteArray textId("\x01\x02\x03\x04", 4);
+    const auto deletion = RawDatabase::Query(
+        "INSERT OR IGNORE INTO deleted_messages (chat_uuid, author, anchor, anchor_id, deleted_at) "
+        "VALUES (?, ?, 0, ?, 5000);",
+        {chat, author, textId});
+    QVERIFY(db->execNow(deletion));
+    QVERIFY(db->execNow(deletion));
+    QVERIFY(db->execNow(countDeletions));
+    QCOMPARE(deletions, 1);
+
+    int version = 0;
+    QVERIFY(db->execNow(RawDatabase::Query("PRAGMA user_version;", [&](const QVector<QVariant>& row) {
+        version = row[0].toInt();
+    })));
+    QCOMPARE(version, 14);
 }
 
 QTEST_GUILESS_MAIN(TestDbSchema)

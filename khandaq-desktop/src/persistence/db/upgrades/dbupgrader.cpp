@@ -29,7 +29,7 @@
 #include <QTranslator>
 
 namespace {
-constexpr int SCHEMA_VERSION = 13;
+constexpr int SCHEMA_VERSION = 14;
 
 /**
  * @brief The tables of schema 12.
@@ -80,6 +80,32 @@ QVector<RawDatabase::Query> msgV3Schema()
     queries += RawDatabase::Query(
         QStringLiteral("CREATE INDEX text_messages_msgv3_idx ON text_messages (msgv3_id) "
                        "WHERE msgv3_id IS NOT NULL;"));
+    return queries;
+}
+
+/**
+ * @brief KHANDAQ (beta feedback 2026-11-22): what schema 14 adds to schema 13, for a new database
+ * and an upgrade alike.
+ *
+ * deleted_messages keeps every deletion a member of a group made of a text or a file of theirs
+ * (packet 0x42): the chat, the author's key in the group, what it points at (anchor 0, a text by
+ * the 4-byte id the group gave it; anchor 1, a file by its 32-byte id), and when it came, by our
+ * clock, in milliseconds since 1970. A member who missed the deletion relays the message again
+ * from the history of the group, after a restart too, and the history no longer has its words to
+ * know it by; a deletion of a message that is not here yet is kept as well. The UNIQUE constraint
+ * gives the index a lookup uses.
+ */
+QVector<RawDatabase::Query> deletedMessagesSchema()
+{
+    QVector<RawDatabase::Query> queries;
+    queries +=
+        RawDatabase::Query(QStringLiteral("CREATE TABLE deleted_messages (id INTEGER PRIMARY KEY, "
+                                          "chat_uuid BLOB NOT NULL, "
+                                          "author BLOB NOT NULL, "
+                                          "anchor INTEGER NOT NULL, "
+                                          "anchor_id BLOB NOT NULL, "
+                                          "deleted_at INTEGER NOT NULL, "
+                                          "UNIQUE (chat_uuid, anchor, anchor_id, author));"));
     return queries;
 }
 
@@ -307,7 +333,7 @@ bool DbUpgrader::dbSchemaUpgrade(std::shared_ptr<RawDatabase>& db, IMessageBoxMa
                                                  dbSchema6to7,           dbSchema7to8,
                                                  dbSchema8to9,           dbSchema9to10,
                                                  DbTo11::dbSchema10to11, dbSchema11to12,
-                                                 dbSchema12to13};
+                                                 dbSchema12to13,         dbSchema13to14};
 
     assert(databaseSchemaVersion < static_cast<int>(upgradeFns.size()));
     assert(upgradeFns.size() == SCHEMA_VERSION);
@@ -394,6 +420,7 @@ bool DbUpgrader::createCurrentSchema(RawDatabase& db)
         "CREATE INDEX chat_id_idx on history (chat_id);");
     queries += outboxAndNotesSchema();
     queries += msgV3Schema();
+    queries += deletedMessagesSchema();
     queries += RawDatabase::Query(QStringLiteral("PRAGMA user_version = %1;").arg(SCHEMA_VERSION));
     return db.execNow(queries);
 }
@@ -704,6 +731,13 @@ bool DbUpgrader::dbSchema12to13(RawDatabase& db)
 {
     QVector<RawDatabase::Query> upgradeQueries = msgV3Schema();
     upgradeQueries += RawDatabase::Query(QStringLiteral("PRAGMA user_version = 13;"));
+    return db.execNow(upgradeQueries);
+}
+
+bool DbUpgrader::dbSchema13to14(RawDatabase& db)
+{
+    QVector<RawDatabase::Query> upgradeQueries = deletedMessagesSchema();
+    upgradeQueries += RawDatabase::Query(QStringLiteral("PRAGMA user_version = 14;"));
     return db.execNow(upgradeQueries);
 }
 

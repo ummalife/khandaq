@@ -211,6 +211,23 @@ std::vector<DbUtility::SqliteMasterEntry> withMsgV3Ids(std::vector<DbUtility::Sq
 const std::vector<DbUtility::SqliteMasterEntry> DbUtility::schema13 =
     withMsgV3Ids(DbUtility::schema12);
 
+namespace {
+/** KHANDAQ (beta feedback 2026-11-22): the deletions of groups kept by schema 14. */
+std::vector<DbUtility::SqliteMasterEntry>
+withDeletedMessages(std::vector<DbUtility::SqliteMasterEntry> schema)
+{
+    schema.push_back(
+        {"deleted_messages",
+         "CREATE TABLE deleted_messages (id INTEGER PRIMARY KEY, chat_uuid BLOB NOT NULL, author "
+         "BLOB NOT NULL, anchor INTEGER NOT NULL, anchor_id BLOB NOT NULL, deleted_at INTEGER NOT "
+         "NULL, UNIQUE (chat_uuid, anchor, anchor_id, author))"});
+    return schema;
+}
+} // namespace
+
+const std::vector<DbUtility::SqliteMasterEntry> DbUtility::schema14 =
+    withDeletedMessages(DbUtility::schema13);
+
 void DbUtility::createSchemaAtVersion(std::shared_ptr<RawDatabase> db, const std::vector<DbUtility::SqliteMasterEntry>& schema)
 {
     QVector<RawDatabase::Query> queries;

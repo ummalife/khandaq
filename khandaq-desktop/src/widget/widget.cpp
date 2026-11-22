@@ -3007,6 +3007,14 @@ void Widget::onGroupMessageReceived(int groupnumber, const ToxPk& author, const 
     if (!dispatcher) {
         return;
     }
+    // KHANDAQ (beta feedback 2026-11-22): a text its author deleted before it came is neither
+    // shown nor alerted.
+    if (messageId != 0
+        && deletedInGroup(groupId, author, Air::MessageEffect::Anchor::Text,
+                          Air::groupWireId(messageId))) {
+        qDebug() << "onGroupMessageReceived: a text its author deleted came; dropped";
+        return;
+    }
 
     dispatcher->onMessageReceived(author, isAction, message, messageId);
 }
@@ -3265,6 +3273,17 @@ void Widget::dispatchGroupFileToChatLog(const GroupId& groupId, const ToxPk& sen
     updateGroupFileInChatLog(groupId, sender, file);
 }
 
+bool Widget::deletedInGroup(const GroupId& groupId, const ToxPk& author,
+                            Air::MessageEffect::Anchor anchor, const QByteArray& anchorId) const
+{
+    const auto chatLog = groupChatLogs.constFind(groupId);
+    if (chatLog == groupChatLogs.constEnd()) {
+        return false;
+    }
+    const auto chatHistory = std::static_pointer_cast<ChatHistory>(chatLog.value());
+    return chatHistory->isDeleted(author, anchor, anchorId);
+}
+
 void Widget::updateGroupFileInChatLog(const GroupId& groupId, const ToxPk& sender,
                                       const ToxFile& file)
 {
@@ -3297,6 +3316,13 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     // count, nothing held in Khandaq Community to push the files of others out.
     if (settings.getBlackList().contains(sender.toString())) {
         qDebug() << "onGroupFileReceived: a file of a member whose messages are hidden; dropped";
+        stopGroupFileArrival(fileId);
+        return;
+    }
+    // KHANDAQ (beta feedback 2026-11-22): a file its sender deleted, relayed again by a member who
+    // missed the deletion, or still coming when it came, is neither written nor shown.
+    if (deletedInGroup(groupId, sender, Air::MessageEffect::Anchor::File, fileId)) {
+        qDebug() << "onGroupFileReceived: a file its sender deleted; dropped";
         stopGroupFileArrival(fileId);
         return;
     }
@@ -3617,9 +3643,11 @@ void Widget::onGroupFileArrivalStarted(int groupnumber, const ToxPk& sender,
         stoppedGroupFileArrivals.remove(fileId);
     }
     // No entry for a file whose sender toxcore cannot name yet, nor one of a member whose
-    // messages are hidden: onGroupFileReceived makes its entry, or drops it, once it is here.
+    // messages are hidden, nor one its sender deleted: onGroupFileReceived makes its entry, or
+    // drops it, once it is here.
     if (fileId.isEmpty() || sender.isEmpty() || !groupList->findGroup(groupId)
-        || settings.getBlackList().contains(sender.toString())) {
+        || settings.getBlackList().contains(sender.toString())
+        || deletedInGroup(groupId, sender, Air::MessageEffect::Anchor::File, fileId)) {
         return;
     }
     // A file of Khandaq Community held already keeps its entry with Accept, which this one would

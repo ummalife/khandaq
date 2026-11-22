@@ -77,6 +77,11 @@ public:
     bool isReadOnly() const;
     /** Send waits while the text cannot go as it is: a group message over its limit. */
     void setSendBlocked(bool blocked);
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): Send reads "Save" while the field holds a saved message
+     * being edited; false brings "Send" back.
+     */
+    void setSaving(bool saving);
 
 signals:
     void sendRequested();
@@ -119,6 +124,7 @@ private:
     AirProgressBar* recordingBar = nullptr;
     qint64 recordedMs = 0;
     AirButton* send = nullptr;
+    bool saving = false;
     QWidget* hintLine = nullptr;
     QWidget* dot = nullptr;
     QLabel* hint = nullptr;

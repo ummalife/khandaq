@@ -948,6 +948,11 @@
         <translation>إرسال</translation>
     </message>
     <message>
+        <source>Save</source>
+        <comment>the Send button while the field holds a saved message being edited; as message_edit_save on iOS</comment>
+        <translation>حفظ</translation>
+    </message>
+    <message>
         <source>Attach a file</source>
         <comment>paperclip button of the message field</comment>
         <translation>إرفاق ملف</translation>
@@ -1322,6 +1327,21 @@
         <source>Saved messages are kept only on this device, so it cannot be brought back.</source>
         <comment>confirmation before a saved message is deleted</comment>
         <translation>تُحفظ الرسائل المحفوظة على هذا الجهاز فقط، لذا لا يمكن استعادتها.</translation>
+    </message>
+    <message>
+        <source>Edit message</source>
+        <comment>menu action on a message in Saved Messages: its words go into the field to be changed</comment>
+        <translation>تعديل الرسالة</translation>
+    </message>
+    <message>
+        <source>Editing</source>
+        <comment>over the field while a saved message is being edited; as chat_edit_header on Android</comment>
+        <translation>تعديل الرسالة</translation>
+    </message>
+    <message>
+        <source>Cancel editing</source>
+        <comment>the cross over the field while a saved message is being edited: it stays as it was</comment>
+        <translation>إلغاء التعديل</translation>
     </message>
     <message>
         <source>Delete</source>

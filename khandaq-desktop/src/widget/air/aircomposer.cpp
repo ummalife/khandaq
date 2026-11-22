@@ -369,9 +369,18 @@ void AirComposer::setSendBlocked(bool blocked)
     send->setEnabled(!blocked);
 }
 
+void AirComposer::setSaving(bool saving_)
+{
+    if (saving == saving_) {
+        return;
+    }
+    saving = saving_;
+    restyle();
+}
+
 void AirComposer::restyle()
 {
-    send->setText(AirStrings::text(Text::ComposeSend));
+    send->setText(AirStrings::text(saving ? Text::ComposeSave : Text::ComposeSend));
     const QString attachName = AirStrings::text(Text::ComposeAttach);
     attach->setToolTip(attachNote.isEmpty() ? attachName : attachName + QLatin1Char('\n') + attachNote);
     attach->setAccessibleName(attachName);

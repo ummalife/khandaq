@@ -228,6 +228,28 @@ withDeletedMessages(std::vector<DbUtility::SqliteMasterEntry> schema)
 const std::vector<DbUtility::SqliteMasterEntry> DbUtility::schema14 =
     withDeletedMessages(DbUtility::schema13);
 
+namespace {
+/**
+ * KHANDAQ (beta feedback 2026-11-22): when a saved message was edited, kept by schema 15, as ALTER
+ * TABLE ADD COLUMN writes it into the SQL of the table.
+ */
+std::vector<DbUtility::SqliteMasterEntry>
+withNotesEdited(std::vector<DbUtility::SqliteMasterEntry> schema)
+{
+    for (auto& entry : schema) {
+        if (entry.name == QStringLiteral("notes")) {
+            entry.sql =
+                QStringLiteral("CREATE TABLE notes (id INTEGER PRIMARY KEY, timestamp "
+                               "INTEGER NOT NULL, message BLOB NOT NULL, edited_at INTEGER)");
+        }
+    }
+    return schema;
+}
+} // namespace
+
+const std::vector<DbUtility::SqliteMasterEntry> DbUtility::schema15 =
+    withNotesEdited(DbUtility::schema14);
+
 void DbUtility::createSchemaAtVersion(std::shared_ptr<RawDatabase> db, const std::vector<DbUtility::SqliteMasterEntry>& schema)
 {
     QVector<RawDatabase::Query> queries;

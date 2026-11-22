@@ -329,15 +329,19 @@ void ChatMessage::setStatus(Air::EntryStatus status)
     }
 }
 
-bool ChatMessage::updateMessage(const QString& rawMessage, const Air::EntryMarks& marks,
-                                SmileyPack& smileyPack)
+bool ChatMessage::updateMessage(const QString& rawMessage, MessageType type,
+                                const Air::EntryMarks& marks, SmileyPack& smileyPack)
 {
     bool resized = updateMarks(marks);
-    if (rawMessage == rawText || getLayout() != Layout::AirEntry) {
+    if ((rawMessage == rawText && type == messageType) || getLayout() != Layout::AirEntry) {
         return resized;
     }
     // Its author changed the words: the text is drawn again, and so is the quote it opens with.
     rawText = rawMessage;
+    // As createChatMessage gives them.
+    messageType = type;
+    action = type == ACTION;
+    mentionsYou = type == ALERT;
     replaceContent(1, createBody(AirStrings::messageWords(rawMessage), senderName, messageType,
                                  documentCache, smileyPack, settings, style));
     if (auto* const quote = qobject_cast<AirQuote*>(quotePart())) {

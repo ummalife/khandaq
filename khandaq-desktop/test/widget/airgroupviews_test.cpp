@@ -159,6 +159,7 @@ private slots:
     void inviteListKeepsTheChoiceByKey();
     void readOnlyBarTakesThePlaceOfTheField();
     void composerOffersTheEmojiAtTheEndOfTheField();
+    void composerSendSaysSaveWhileANoteIsEdited();
     void composerRecordsAVoiceNoteInPlaceOfTheField();
     void dossierSaysTheRoleAndListsTheMembers();
     void dossierSetsYourNameInTheGroup();
@@ -525,6 +526,23 @@ void TestAirGroupViews::composerOffersTheEmojiAtTheEndOfTheField()
     QVERIFY(emoji->isVisible());
     composer->setEmojiVisible(false);
     QVERIFY(!emoji->isVisible());
+}
+
+/** KHANDAQ (beta feedback 2026-11-22): Send reads "Save" while a saved message is edited. */
+void TestAirGroupViews::composerSendSaysSaveWhileANoteIsEdited()
+{
+    QWidget host;
+    auto* const composer = new AirComposer(new QTextEdit(), &host);
+    auto* const send = part<QAbstractButton>(composer, "composerSend");
+    QCOMPARE(send->text(), AirStrings::text(Text::ComposeSend));
+    QSignalSpy asks(composer, &AirComposer::sendRequested);
+    composer->setSaving(true);
+    QCOMPARE(send->text(), AirStrings::text(Text::ComposeSave));
+    QVERIFY(send->isEnabled());
+    send->click();
+    QCOMPARE(asks.count(), 1);
+    composer->setSaving(false);
+    QCOMPARE(send->text(), AirStrings::text(Text::ComposeSend));
 }
 
 /**

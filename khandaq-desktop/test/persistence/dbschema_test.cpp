@@ -141,6 +141,7 @@ private slots:
     void test11to12();
     void test12to13();
     void test13to14();
+    void test14to15();
     // test suite
 
 private:
@@ -166,7 +167,7 @@ void TestDbSchema::testCreation()
     QVector<RawDatabase::Query> queries;
     auto db = std::shared_ptr<RawDatabase>{new RawDatabase{testDatabaseFile->fileName(), {}, {}}};
     QVERIFY(DbUpgrader::createCurrentSchema(*db));
-    DbUtility::verifyDb(db, DbUtility::schema14);
+    DbUtility::verifyDb(db, DbUtility::schema15);
 }
 
 void TestDbSchema::testIsNewDb()
@@ -618,6 +619,42 @@ void TestDbSchema::test13to14()
         version = row[0].toInt();
     })));
     QCOMPARE(version, 14);
+}
+
+/**
+ * @brief KHANDAQ (beta feedback 2026-11-22): a database of schema 14 learns when a saved message
+ * was edited; the saved messages it holds stay as they were, never edited.
+ */
+void TestDbSchema::test14to15()
+{
+    auto db = std::shared_ptr<RawDatabase>{new RawDatabase{testDatabaseFile->fileName(), {}, {}}};
+    createSchemaAtVersion(db, DbUtility::schema14);
+    QVERIFY(db->execNow(
+        RawDatabase::Query("INSERT INTO notes (id, timestamp, message) VALUES (1, 1000, ?);",
+                           {QByteArray("Buy dates")})));
+
+    QVERIFY(DbUpgrader::dbSchema14to15(*db));
+    verifyDb(db, DbUtility::schema15);
+    size_t entries = 0;
+    QVERIFY(db->execNow(
+        RawDatabase::Query("SELECT COUNT(*) FROM sqlite_master WHERE sql IS NOT NULL;",
+                           [&](const QVector<QVariant>& row) { entries = row[0].toULongLong(); })));
+    QCOMPARE(entries, DbUtility::schema15.size());
+
+    QByteArray kept;
+    QVariant editedAt{0};
+    QVERIFY(db->execNow(RawDatabase::Query("SELECT message, edited_at FROM notes WHERE id = 1;",
+                                           [&](const QVector<QVariant>& row) {
+                                               kept = row[0].toByteArray();
+                                               editedAt = row[1];
+                                           })));
+    QCOMPARE(kept, QByteArray("Buy dates"));
+    QVERIFY(editedAt.isNull());
+
+    int version = 0;
+    const auto readVersion = [&](const QVector<QVariant>& row) { version = row[0].toInt(); };
+    QVERIFY(db->execNow(RawDatabase::Query("PRAGMA user_version;", readVersion)));
+    QCOMPARE(version, 15);
 }
 
 QTEST_GUILESS_MAIN(TestDbSchema)

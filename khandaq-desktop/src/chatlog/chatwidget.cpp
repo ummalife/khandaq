@@ -79,13 +79,8 @@ ChatMessage::Ptr createDateMessage(QDateTime timestamp, DocumentCache& documentC
     return ChatMessage::createDayMark(dateText, documentCache, settings, style);
 }
 
-ChatMessage::Ptr createMessage(const ChatMessage::AirLook& look, const QString& displayName,
-                               const ChatLogMessage& chatLogMessage, DocumentCache& documentCache,
-                               SmileyPack& smileyPack, Settings& settings, Style& style)
+ChatMessage::MessageType messageTypeOf(const ChatLogMessage& chatLogMessage)
 {
-    auto messageType = chatLogMessage.message.isAction ? ChatMessage::MessageType::ACTION
-                                                       : ChatMessage::MessageType::NORMAL;
-
     const bool bSelfMentioned =
         std::any_of(chatLogMessage.message.metadata.begin(), chatLogMessage.message.metadata.end(),
                     [](const MessageMetadata& metadata) {
@@ -93,13 +88,21 @@ ChatMessage::Ptr createMessage(const ChatMessage::AirLook& look, const QString& 
                     });
 
     if (bSelfMentioned) {
-        messageType = ChatMessage::MessageType::ALERT;
+        return ChatMessage::MessageType::ALERT;
     }
+    return chatLogMessage.message.isAction ? ChatMessage::MessageType::ACTION
+                                           : ChatMessage::MessageType::NORMAL;
+}
 
+ChatMessage::Ptr createMessage(const ChatMessage::AirLook& look, const QString& displayName,
+                               const ChatLogMessage& chatLogMessage, DocumentCache& documentCache,
+                               SmileyPack& smileyPack, Settings& settings, Style& style)
+{
     const auto timestamp = chatLogMessage.message.timestamp;
     return ChatMessage::createChatMessage(look, displayName, chatLogMessage.message.content,
-                                          messageType, timestamp, chatLogMessage.marks,
-                                          documentCache, smileyPack, settings, style);
+                                          messageTypeOf(chatLogMessage), timestamp,
+                                          chatLogMessage.marks, documentCache, smileyPack, settings,
+                                          style);
 }
 
 /** Returns whether a line drawn before may have changed its height: an edit, a reaction. */
@@ -119,6 +122,7 @@ bool renderMessageRaw(const ChatMessage::AirLook& look, const QString& displayNa
         chatMessage->setStatus(look.status);
         const bool authorChanged = chatMessage->updateAuthor(look);
         const bool bodyChanged = chatMessage->updateMessage(chatLogMessage.message.content,
+                                                            messageTypeOf(chatLogMessage),
                                                             chatLogMessage.marks, smileyPack);
         return authorChanged || bodyChanged;
     }

@@ -85,6 +85,19 @@ public:
      * Returns false when there is no such note, also when it is deleted already.
      */
     bool removeNote(ChatLogIdx idx);
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): the text the field takes to edit the note the log shows
+     * at idx, as it would be typed: its words, after the action prefix for an action. Empty when
+     * there is no such note.
+     */
+    QString editableText(ChatLogIdx idx) const;
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): the note the log shows at idx takes the words Send
+     * would give for the field (an action with isAction): the database keeps them and when they
+     * changed, and the log shows them marked "edited", after a restart as well. Returns false, and
+     * nothing changes, when there is no such note, or no words, or the same ones.
+     */
+    bool editNote(ChatLogIdx idx, bool isAction, const QString& content);
 
 private:
     friend std::unique_ptr<SessionChatLog> makeNotesLog(SavedNotes* notes, NotesDispatcher& dispatcher,

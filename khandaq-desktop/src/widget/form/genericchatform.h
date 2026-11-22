@@ -111,7 +111,8 @@ public slots:
 protected slots:
     void onChatContextMenuRequested(QPoint pos);
     virtual void onScreenshotClicked() = 0;
-    void onSendTriggered();
+    /** Enter or Send: the field goes. KHANDAQ (beta feedback 2026-11-22): a form may take it. */
+    virtual void onSendTriggered();
     virtual void onAttachClicked() = 0;
     virtual void onPasteFiles(const QStringList& paths);
     /**

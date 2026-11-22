@@ -113,6 +113,36 @@ bool NotesDispatcher::removeNote(ChatLogIdx idx)
     return true;
 }
 
+QString NotesDispatcher::editableText(ChatLogIdx idx) const
+{
+    if (!hasNote(idx) || !log || !log->isShown(idx)) {
+        return QString();
+    }
+    const ChatLogItem& item = log->at(idx);
+    if (item.getContentType() != ChatLogItem::ContentType::message) {
+        return QString();
+    }
+    const Message& message = item.getContentAsMessage().message;
+    return storedText(message.isAction, message.content);
+}
+
+bool NotesDispatcher::editNote(ChatLogIdx idx, bool isAction, const QString& content)
+{
+    const auto found = noteIds.find(idx);
+    if (found == noteIds.end() || !log || content.trimmed().isEmpty()) {
+        return false;
+    }
+    const QDateTime now = QDateTime::currentDateTime();
+    if (!log->editOwnMessage(idx, isAction, content,
+                             static_cast<quint32>(now.toMSecsSinceEpoch() / 1000))) {
+        return false;
+    }
+    if (notes && found->second >= 0) {
+        notes->edit(found->second, storedText(isAction, content), now);
+    }
+    return true;
+}
+
 std::pair<DispatchedMessageId, DispatchedMessageId>
 NotesDispatcher::sendExtendedMessage(const QString& content, ExtensionSet extensions)
 {
@@ -141,6 +171,12 @@ std::unique_ptr<SessionChatLog> makeNotesLog(SavedNotes* notes, NotesDispatcher&
         note.message.isAction = isAction;
         note.message.content = text;
         note.message.timestamp = stored[i].timestamp;
+        // KHANDAQ (beta feedback 2026-11-22): an edited note says so after a restart too.
+        if (stored[i].editedAt.isValid()) {
+            note.marks.edited = true;
+            note.marks.editedAt =
+                static_cast<quint32>(stored[i].editedAt.toMSecsSinceEpoch() / 1000);
+        }
         const ChatLogIdx idx(static_cast<size_t>(i));
         log->insertCompleteMessageAtIdx(idx, self, selfName, note);
         dispatcher.noteIds[idx] = stored[i].id;

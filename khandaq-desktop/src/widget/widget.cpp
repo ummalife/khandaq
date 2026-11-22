@@ -5262,7 +5262,7 @@ void Widget::showStatusMenu(const QPoint& globalPos)
  * wait <ms> | size <w> <h> | theme system|light|dark | lang <code> | filter <name> |
  * query <text> | open <title> | send <title>|<text> | favorite|unfavorite <title> |
  * compact on|off | settings [section] | reveal <object name> | add | click <object name> |
- * press <name> | type <text> | hours <title>|<hours ago,...> | notedelete <text> |
+ * press <name> | type <text> | hours <title>|<hours ago,...> | notedelete|noteedit <text> |
  * newcontact [text] | toxlink <tox:...> | fill <object name>|<text> | key <key> | focuslist |
  * card accept|decline <words> | newgroup [contact] | joingroup [text] | private <member> |
  * groupask <member>|moderator|member|observer|remove | sendfile <title>|<path> |
@@ -5363,20 +5363,28 @@ void Widget::runShotScript(const QString& path)
                         dispatcher->sendMessage(false, text);
                     }
                 }
-            } else if (command == QStringLiteral("notedelete")) {
-                // notedelete <text>: asks to delete the newest saved message with this text.
+            } else if (command == QStringLiteral("notedelete")
+                       || command == QStringLiteral("noteedit")) {
+                // notedelete <text>: asks to delete the newest saved message with this text;
+                // noteedit <text>: puts it into the field to be edited, as its menu does.
                 bool found = false;
                 for (auto idx = notesLog->getNextIdx(); idx > notesLog->getFirstIdx() && !found;) {
                     idx = idx - 1;
                     const ChatLogItem& item = notesLog->at(idx);
                     if (notesLog->isShown(idx) && item.getContentType() == ChatLogItem::ContentType::message
                         && item.getContentAsMessage().message.content == rest) {
-                        notesForm->askToDelete(idx);
+                        if (command == QStringLiteral("notedelete")) {
+                            notesForm->askToDelete(idx);
+                        } else {
+                            notesForm->startEdit(idx);
+                        }
                         found = true;
                     }
                 }
                 if (!found) {
-                    qWarning() << "No saved message to delete:" << rest;
+                    qWarning() << "No saved message to"
+                               << (command == QStringLiteral("notedelete") ? "delete:" : "edit:")
+                               << rest;
                 }
             } else if (command == QStringLiteral("favorite")
                        || command == QStringLiteral("unfavorite")) {

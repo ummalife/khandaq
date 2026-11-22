@@ -29,7 +29,7 @@
 #include <QTranslator>
 
 namespace {
-constexpr int SCHEMA_VERSION = 14;
+constexpr int SCHEMA_VERSION = 15;
 
 /**
  * @brief The tables of schema 12.
@@ -106,6 +106,22 @@ QVector<RawDatabase::Query> deletedMessagesSchema()
                                           "anchor_id BLOB NOT NULL, "
                                           "deleted_at INTEGER NOT NULL, "
                                           "UNIQUE (chat_uuid, anchor, anchor_id, author));"));
+    return queries;
+}
+
+/**
+ * @brief KHANDAQ (beta feedback 2026-11-22): what schema 15 adds to schema 14, for a new database
+ * and an upgrade alike.
+ *
+ * edited_at is when a saved message (notes) was last edited, in milliseconds since 1970 as its
+ * timestamp is; NULL for one never edited. The message shows "edited" under it then, after a
+ * restart as well.
+ */
+QVector<RawDatabase::Query> notesEditedSchema()
+{
+    QVector<RawDatabase::Query> queries;
+    queries +=
+        RawDatabase::Query(QStringLiteral("ALTER TABLE notes ADD COLUMN edited_at INTEGER;"));
     return queries;
 }
 
@@ -333,7 +349,8 @@ bool DbUpgrader::dbSchemaUpgrade(std::shared_ptr<RawDatabase>& db, IMessageBoxMa
                                                  dbSchema6to7,           dbSchema7to8,
                                                  dbSchema8to9,           dbSchema9to10,
                                                  DbTo11::dbSchema10to11, dbSchema11to12,
-                                                 dbSchema12to13,         dbSchema13to14};
+                                                 dbSchema12to13,         dbSchema13to14,
+                                                 dbSchema14to15};
 
     assert(databaseSchemaVersion < static_cast<int>(upgradeFns.size()));
     assert(upgradeFns.size() == SCHEMA_VERSION);
@@ -421,6 +438,7 @@ bool DbUpgrader::createCurrentSchema(RawDatabase& db)
     queries += outboxAndNotesSchema();
     queries += msgV3Schema();
     queries += deletedMessagesSchema();
+    queries += notesEditedSchema();
     queries += RawDatabase::Query(QStringLiteral("PRAGMA user_version = %1;").arg(SCHEMA_VERSION));
     return db.execNow(queries);
 }
@@ -738,6 +756,13 @@ bool DbUpgrader::dbSchema13to14(RawDatabase& db)
 {
     QVector<RawDatabase::Query> upgradeQueries = deletedMessagesSchema();
     upgradeQueries += RawDatabase::Query(QStringLiteral("PRAGMA user_version = 14;"));
+    return db.execNow(upgradeQueries);
+}
+
+bool DbUpgrader::dbSchema14to15(RawDatabase& db)
+{
+    QVector<RawDatabase::Query> upgradeQueries = notesEditedSchema();
+    upgradeQueries += RawDatabase::Query(QStringLiteral("PRAGMA user_version = 15;"));
     return db.execNow(upgradeQueries);
 }
 

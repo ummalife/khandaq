@@ -45,6 +45,7 @@ namespace DbUpgrader
     bool dbSchema11to12(RawDatabase& db);
     bool dbSchema12to13(RawDatabase& db);
     bool dbSchema13to14(RawDatabase& db);
+    bool dbSchema14to15(RawDatabase& db);
 
     struct BadEntry
     {

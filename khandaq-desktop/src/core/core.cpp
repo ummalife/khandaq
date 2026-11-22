@@ -3660,6 +3660,13 @@ void Core::checkGroupFileArrivals(qint64 nowMs)
 {
     QMutexLocker ml{&coreLoopLock};
 
+    // KHANDAQ (2026-11-22): while no file comes there is nothing to look at. begin() would detach
+    // the empty hash, which writes it, and the hash is the process's (ngcForgetFiles): two cores
+    // started at once (test_core starts two) did that together, and one of them walked the table
+    // the other had just put in its place.
+    if (ngcIncomingAssemblies.isEmpty()) {
+        return;
+    }
     QVector<QByteArray> givenUp;
     for (auto it = ngcIncomingAssemblies.begin(); it != ngcIncomingAssemblies.end();) {
         NgcIncomingAssembly& assembly = it.value();

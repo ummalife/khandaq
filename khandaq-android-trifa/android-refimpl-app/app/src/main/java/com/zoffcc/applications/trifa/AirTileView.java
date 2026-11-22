@@ -44,7 +44,13 @@ final class AirTileView extends FrameLayout
          * KHANDAQ (testers' ideas, 0.2.67): the place of our photo where it may stay empty (the first launch): a
          * plus on the sunken ground in place of the initials, as the desktop draws it.
          */
-        ADD_PHOTO
+        ADD_PHOTO,
+        /**
+         * KHANDAQ (tester 21.11, 8255): the author of a group entry nobody confirmed (one the history brought
+         * without a signature over it, or one the group could not attribute): the plain tile, with neither initials
+         * nor a tone, so it stands for no member.
+         */
+        UNCONFIRMED
     }
 
     private final ImageView photo;
@@ -145,6 +151,10 @@ final class AirTileView extends FrameLayout
                 ImageViewCompat.setImageTintList(icon, android.content.res.ColorStateList.valueOf(
                         AirUi.color(context, R.color.kq_ink_2)));
                 break;
+            case UNCONFIRMED:
+                initials.setVisibility(View.GONE);
+                icon.setVisibility(View.GONE);
+                break;
             case ME:
                 icon.setVisibility(View.GONE);
                 initials.setVisibility(View.VISIBLE);
@@ -201,10 +211,10 @@ final class AirTileView extends FrameLayout
         return kind == Kind.PENDING || kind == Kind.PENDING_GROUP;
     }
 
-    /** A tile that shows its glyph, never a photo or initials. */
+    /** A tile that shows its glyph, or nothing at all, never a photo or initials. */
     private boolean glyphOnly()
     {
-        return pending() || kind == Kind.SAVED || kind == Kind.ADD_PHOTO;
+        return pending() || kind == Kind.SAVED || kind == Kind.ADD_PHOTO || kind == Kind.UNCONFIRMED;
     }
 
     @Override

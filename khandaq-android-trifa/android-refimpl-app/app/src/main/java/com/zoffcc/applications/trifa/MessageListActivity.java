@@ -2184,8 +2184,8 @@ public class MessageListActivity extends AppCompatActivity
             {
                 return;
             }
-            if (newBody.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-                > HelperMessageEdit.MAX_EDIT_TEXT_BYTES)
+            // KHANDAQ (Khandaq Testers 8253): a note in Saved Messages has no limit; a correction to a contact does.
+            if (HelperMessageEdit.isDirectEditTooLong(friend_pubkey, newBody))
             {
                 AirComposerNotice.say(getString(R.string.chat_edit_too_long), false);
                 return; // edit mode stays active so the user can shorten the text

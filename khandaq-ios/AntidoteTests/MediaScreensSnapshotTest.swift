@@ -124,6 +124,11 @@ class MediaScreensSnapshotTest: SnapshotBaseTest {
         XCTAssertFalse(videoEdit.isEnabled, "a video offers the editing of a photo")
     }
 
+    /// KHANDAQ (tester 8264/8265): the words of the pencil's menu and of "Add" in every language the app ships.
+    func testTheWordsOfEditAndAddAreInEveryLanguage() {
+        assertTranslated(["media_send_add_more", "media_edit_crop", "media_edit_markup"])
+    }
+
     /// KHANDAQ (tester 8265): "Add" is there while the send takes more, and what it brings comes after what is
     /// there, up to the limit; a video copied for an item past the limit is removed.
     func testAddBringsMoreUpToTheLimitOfTheSend() throws {

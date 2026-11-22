@@ -22,6 +22,7 @@
 #include "src/model/air/aircommunity.h"
 #include "src/model/air/airconversation.h"
 #include "src/model/air/airmodel.h"
+#include "src/model/air/airyou.h"
 #include "src/widget/air/airchatparts.h"
 #include "src/widget/air/airgroupviews.h"
 #include "src/widget/air/airnewcontact.h"
@@ -35,6 +36,8 @@
 #include <QBoxLayout>
 #include <QClipboard>
 #include <QDateTime>
+#include <QFocusEvent>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLocale>
 #include <QMenu>
@@ -127,8 +130,16 @@ AirGroupDossier::AirGroupDossier(QWidget* parent)
     columns->addLayout(right, 1);
     sections->addLayout(columns);
 
+    // KHANDAQ (beta feedback 2026-11-22): your name in this group only, and what it changes.
+    QVBoxLayout* body = section(left, &selfNameTitle);
+    selfNameField = new AirTextField(AirTextField::Kind::Line, pageWidget);
+    selfNameField->setObjectName(QStringLiteral("groupSelfName"));
+    body->addWidget(selfNameField);
+    selfNameNote = makeLabel(TextRole::Caption, Color::Ink2, pageWidget);
+    body->addWidget(selfNameNote);
+
     // Your role, in one or two sentences.
-    QVBoxLayout* body = section(left, &roleTitle);
+    body = section(left, &roleTitle);
     roleText = makeLabel(TextRole::Body, Color::Ink2, pageWidget);
     roleText->setObjectName(QStringLiteral("groupRole"));
     body->addWidget(roleText);
@@ -238,6 +249,9 @@ AirGroupDossier::AirGroupDossier(QWidget* parent)
         close();
         emit renameRequested();
     });
+    connect(selfNameField, &AirTextField::changed, this, &AirGroupDossier::keepSelfNameWithin);
+    connect(selfNameField, &AirTextField::submitted, this, &AirGroupDossier::commitSelfName);
+    selfNameField->edit()->installEventFilter(this);
     connect(search, &AirTextField::changed, this, [this] {
         query = search->text();
         refreshMembers();
@@ -349,6 +363,10 @@ void AirGroupDossier::setInfo(const AirGroupInfo& info_)
     renameButton->setVisible(
         !Air::Community::isCommunity(QByteArray::fromHex(info.groupKey.toLatin1())));
     countsLabel->setText(AirStrings::groupHeaderText(info.reach));
+    // What is typed stays while the field is being edited, as on the You page.
+    if (!selfNameField->edit()->hasFocus()) {
+        revertSelfName();
+    }
     roleText->setText(AirStrings::groupRoleExplanation(info.selfRole));
     // A group by invitation only is joined by invitation, not with its key: the key is neither
     // shown nor copied nor shared as a QR code; Invite stays.
@@ -383,6 +401,11 @@ void AirGroupDossier::setInfo(const AirGroupInfo& info_)
 void AirGroupDossier::retranslate()
 {
     renameButton->setText(AirStrings::text(Text::DossierRename));
+    selfNameTitle->setText(AirStrings::text(Text::GroupSelfName));
+    selfNameField->setPlaceholder(AirStrings::text(Text::YouNamePlaceholder));
+    selfNameField->edit()->setAccessibleName(AirStrings::text(Text::GroupSelfName));
+    selfNameField->edit()->setAccessibleDescription(AirStrings::text(Text::GroupSelfNameNote));
+    selfNameNote->setText(AirStrings::text(Text::GroupSelfNameNote));
     roleTitle->setText(AirStrings::text(Text::GroupYourRole));
     search->setPlaceholder(AirStrings::text(Text::GroupSearchMembers));
     search->edit()->setAccessibleName(AirStrings::text(Text::GroupSearchMembers));
@@ -420,6 +443,8 @@ void AirGroupDossier::restyle()
     } texts[] = {
         {nameLabel, TextRole::Heading, Color::Ink},
         {countsLabel, TextRole::Caption, Color::Ink2},
+        {selfNameTitle, TextRole::Label, Color::Ink3},
+        {selfNameNote, TextRole::Caption, Color::Ink2},
         {roleTitle, TextRole::Label, Color::Ink3},
         {roleText, TextRole::Body, Color::Ink2},
         {membersTitle, TextRole::Label, Color::Ink3},
@@ -590,6 +615,61 @@ void AirGroupDossier::arrange(int width)
 void AirGroupDossier::aboutToFold()
 {
     inviteBox->hide();
+}
+
+bool AirGroupDossier::eventFilter(QObject* watched, QEvent* event)
+{
+    if (selfNameField && watched == selfNameField->edit()) {
+        if (event->type() == QEvent::FocusOut) {
+            // Editing ends when the focus goes elsewhere, not while the field's own menu is open.
+            if (static_cast<QFocusEvent*>(event)->reason() != Qt::PopupFocusReason) {
+                commitSelfName();
+            }
+        } else if (event->type() == QEvent::KeyPress
+                   && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape
+                   && selfNameField->text() != info.selfName) {
+            // Esc takes the edit back; with nothing to take back it folds the dossier.
+            revertSelfName();
+            return true;
+        }
+    }
+    return AirFoldPanel::eventFilter(watched, event);
+}
+
+void AirGroupDossier::keepSelfNameWithin()
+{
+    const QString now = selfNameField->text();
+    const Air::FittedEdit fitted = Air::fitEdit(typedSelfName, now, Air::nameLimitBytes);
+    if (fitted.text != now) {
+        selfNameField->setText(fitted.text);
+        QTextCursor cursor = selfNameField->edit()->textCursor();
+        cursor.setPosition(qBound(0, fitted.caret, fitted.text.size()));
+        selfNameField->edit()->setTextCursor(cursor);
+    }
+    typedSelfName = fitted.text;
+}
+
+void AirGroupDossier::commitSelfName()
+{
+    const QString typed = selfNameField->text().trimmed();
+    // Nothing new; an emptied name takes the name back, as on the You page.
+    if (typed.isEmpty() || typed == info.selfName) {
+        revertSelfName();
+        return;
+    }
+    // The field holds the name the group has while the request goes, so that a notice taking the
+    // focus asks nothing twice; then it shows the one setInfo brought.
+    revertSelfName();
+    emit selfNameRequested(typed);
+    revertSelfName();
+}
+
+void AirGroupDossier::revertSelfName()
+{
+    if (selfNameField->text() != info.selfName) {
+        selfNameField->setText(info.selfName);
+    }
+    typedSelfName = info.selfName;
 }
 
 // ---- AirPrivateThread ----

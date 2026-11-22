@@ -18,6 +18,7 @@
 */
 
 #include "src/model/air/airgroup.h"
+#include "src/model/air/airyou.h"
 #include "src/widget/air/airchatparts.h"
 #include "src/widget/air/aircomposer.h"
 #include "src/widget/air/airgroupdossier.h"
@@ -160,6 +161,7 @@ private slots:
     void composerOffersTheEmojiAtTheEndOfTheField();
     void composerRecordsAVoiceNoteInPlaceOfTheField();
     void dossierSaysTheRoleAndListsTheMembers();
+    void dossierSetsYourNameInTheGroup();
     void memberMenuIsTheSameFromTheRowAndFromTheirName();
     void aGroupByInvitationOnlySharesNoKeyAndItsFounderOpensIt();
     void privateThreadTellsAnObserverWhyItCannotAnswer();
@@ -701,6 +703,83 @@ void TestAirGroupViews::dossierSaysTheRoleAndListsTheMembers()
     part<AirButton>(dialog, "dialogConfirm")->click();
     QCOMPARE(leaves.count(), 1);
     QVERIFY(!dossier->isOpen());
+}
+
+/**
+ * KHANDAQ (beta feedback 2026-11-22): the dossier shows our name in the group, with the note that
+ * the profile name stays, and asks for a new one on Enter or when the field loses the focus. An
+ * emptied field, the same name or Esc ask nothing, and a refresh keeps what is being typed.
+ */
+void TestAirGroupViews::dossierSetsYourNameInTheGroup()
+{
+    QWidget host;
+    host.resize(1100, 800);
+    auto* const dossier = new AirGroupDossier(&host);
+    host.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&host));
+    host.activateWindow();
+    QVERIFY(QTest::qWaitForWindowActive(&host));
+    AirGroupInfo info;
+    info.name = QStringLiteral("Study circle");
+    info.groupKey = groupKey;
+    info.selfName = QStringLiteral("Amina");
+    info.members = {member(1, QStringLiteral("Amina"), Air::GroupRole::Member, true, true)};
+    info.reach = Air::GroupReach::make(1, 1, 0, true);
+    dossier->setInfo(info);
+    dossier->open();
+
+    auto* const field = part<AirTextField>(dossier, "groupSelfName");
+    QVERIFY(field);
+    QVERIFY(field->isVisibleTo(dossier));
+    QCOMPARE(field->text(), QStringLiteral("Amina"));
+    QVERIFY(showsText(dossier, AirStrings::text(Text::GroupSelfName)));
+    QVERIFY(showsText(dossier, AirStrings::text(Text::GroupSelfNameNote)));
+    QCOMPARE(field->edit()->accessibleName(), AirStrings::text(Text::GroupSelfName));
+
+    // Enter asks for the name, trimmed, and the field shows the one the group took.
+    QSignalSpy asked(dossier, &AirGroupDossier::selfNameRequested);
+    const QMetaObject::Connection answer =
+        QObject::connect(dossier, &AirGroupDossier::selfNameRequested, dossier,
+                         [&](const QString& name) {
+                             info.selfName = name;
+                             dossier->setInfo(info);
+                         });
+    field->edit()->setFocus();
+    QVERIFY(field->edit()->hasFocus());
+    field->setText(QStringLiteral("  Sister Amina "));
+    QTest::keyClick(field->edit(), Qt::Key_Return);
+    QCOMPARE(asked.count(), 1);
+    QCOMPARE(asked.at(0).at(0).toString(), QStringLiteral("Sister Amina"));
+    QCOMPARE(field->text(), QStringLiteral("Sister Amina"));
+
+    // A refresh while it is being edited keeps what is typed; Esc takes it back and asks nothing,
+    // and the dossier stays.
+    field->setText(QStringLiteral("Umm"));
+    dossier->setInfo(info);
+    QCOMPARE(field->text(), QStringLiteral("Umm"));
+    QTest::keyClick(field->edit(), Qt::Key_Escape);
+    QCOMPARE(field->text(), QStringLiteral("Sister Amina"));
+    QVERIFY(dossier->isOpen());
+
+    // Typing stops at the bytes toxcore takes for a name.
+    QTest::keyClicks(field->edit(), QString(Air::nameLimitBytes, QLatin1Char('a')));
+    QCOMPARE(field->text().toUtf8().size(), Air::nameLimitBytes);
+    QTest::keyClick(field->edit(), Qt::Key_Escape);
+
+    // An emptied field takes the name back; the same name asks nothing.
+    field->setText(QStringLiteral("   "));
+    QTest::keyClick(field->edit(), Qt::Key_Return);
+    QCOMPARE(field->text(), QStringLiteral("Sister Amina"));
+    QTest::keyClick(field->edit(), Qt::Key_Return);
+    QCOMPARE(asked.count(), 1);
+
+    // Leaving the field asks as well; a name the group refused leaves the one it has.
+    QObject::disconnect(answer);
+    field->setText(QStringLiteral("Amina B."));
+    part<AirButton>(dossier, "groupLeave")->setFocus();
+    QCOMPARE(asked.count(), 2);
+    QCOMPARE(asked.at(1).at(0).toString(), QStringLiteral("Amina B."));
+    QCOMPARE(field->text(), QStringLiteral("Sister Amina"));
 }
 
 /**

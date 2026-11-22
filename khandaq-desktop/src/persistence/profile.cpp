@@ -346,6 +346,16 @@ bool Profile::initCore(const QByteArray& toxsave, Settings& s, bool isNewProfile
         settings.savePersonal();
     });
     core->leaveStoredGroups(settings.getPendingGroupLeaves());
+    // KHANDAQ (beta feedback 2026-11-22): the groups with a name of our own, kept with the profile:
+    // the joins below and the groups that load take it, and a rename of the profile leaves it.
+    connect(core.get(), &Core::groupSelfNamesChanged, this, [this](const QString& stored) {
+        if (isRemoved) {
+            return;
+        }
+        settings.setGroupSelfNames(stored);
+        settings.savePersonal();
+    });
+    core->restoreGroupSelfNames(settings.getGroupSelfNames());
     // 0.2.56: toxcore saves a group joined by its ID only once it synced; until then the profile
     // keeps its chat id, and it is joined again now, before the groups load.
     connect(core.get(), &Core::unsyncedGroupJoinsChanged, this, [this](const QString& stored) {

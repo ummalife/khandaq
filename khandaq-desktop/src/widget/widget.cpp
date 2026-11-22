@@ -3902,9 +3902,13 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
         groupName = tr("Group %1").arg(groupId.toString().left(8));
     }
     const bool enabled = core->getGroupAvEnabled(groupnumber);
-    Group* newgroup =
-        groupList->addGroup(*core, groupnumber, groupId, groupName, enabled, core->getUsername(),
-            *friendList);
+    // KHANDAQ (beta feedback 2026-11-22): our name in this group, which may be its own.
+    const auto selfNameIn = [this](uint32_t number) {
+        const QString name = core->getGroupSelfName(static_cast<int>(number));
+        return name.isEmpty() ? core->getUsername() : name;
+    };
+    Group* newgroup = groupList->addGroup(*core, groupnumber, groupId, groupName, enabled,
+                                          selfNameIn(groupnumber), *friendList);
     assert(newgroup);
 
     if (enabled) {
@@ -4002,7 +4006,10 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
     });
     connect(widget, &GroupWidget::chatroomWidgetClicked, form, &ChatForm::focusInput);
     connect(newgroup, &Group::titleChangedByUser, this, &Widget::titleChangedByUser);
-    connect(core, &Core::usernameSet, newgroup, &Group::setSelfName);
+    // A rename of the profile passes to the group unless it has a name of our own
+    // (Core::setUsername).
+    connect(core, &Core::usernameSet, newgroup,
+            [newgroup, selfNameIn] { newgroup->setSelfName(selfNameIn(newgroup->getId())); });
 
     return newgroup;
 }

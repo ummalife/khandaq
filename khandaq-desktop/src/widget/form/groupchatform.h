@@ -169,6 +169,11 @@ private:
     void undoRole(const Air::GroupMember& member, Air::GroupRole role);
     /** The founder's switch: toxcore sets who can join, or the reason shows. */
     void setPrivacy(Air::GroupPrivacy privacy);
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): our name in this group only, from the dossier: toxcore
+     * takes it and the profile keeps it (Core::setGroupSelfName), or the reason shows.
+     */
+    void setNameInGroup(const QString& name);
     void inviteContacts(const QVector<Air::InviteCandidate>& chosen);
     void askToWrite();
     void showPrivate(const QString& name, const QString& peerKey);

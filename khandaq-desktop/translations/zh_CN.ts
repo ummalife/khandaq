@@ -1753,6 +1753,16 @@
         <translation>打开对该成员的操作</translation>
     </message>
     <message>
+        <source>Your name in the group</source>
+        <comment>group dossier section and its field: our name in this group only</comment>
+        <translation>你在群组中的名字</translation>
+    </message>
+    <message>
+        <source>Members of this group see it. Your profile name stays as it is.</source>
+        <comment>group dossier: under the field of our name in the group</comment>
+        <translation>本群成员可以看到它，你的个人资料名称不会改变。</translation>
+    </message>
+    <message>
         <source>Your role</source>
         <comment>group dossier section</comment>
         <translation>你的角色</translation>
@@ -3820,6 +3830,11 @@
         <source>Couldn&apos;t change who can join</source>
         <comment>title of the error when the group refused a change of who can join</comment>
         <translation>无法更改谁可以加入</translation>
+    </message>
+    <message>
+        <source>Couldn&apos;t change your name in the group</source>
+        <comment>title of the error when the group refused our name in it</comment>
+        <translation>无法更改你在群组中的名字</translation>
     </message>
     <message>
         <source>Couldn&apos;t invite to the group</source>

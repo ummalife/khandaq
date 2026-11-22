@@ -1813,6 +1813,16 @@
         <translation>يفتح الإجراءات الخاصة بهذا العضو</translation>
     </message>
     <message>
+        <source>Your name in the group</source>
+        <comment>group dossier section and its field: our name in this group only</comment>
+        <translation>اسمك في المجموعة</translation>
+    </message>
+    <message>
+        <source>Members of this group see it. Your profile name stays as it is.</source>
+        <comment>group dossier: under the field of our name in the group</comment>
+        <translation>يراه أعضاء هذه المجموعة، ويبقى اسم ملفك الشخصي كما هو.</translation>
+    </message>
+    <message>
         <source>Your role</source>
         <comment>group dossier section</comment>
         <translation>دورك</translation>
@@ -3940,6 +3950,11 @@
         <source>Couldn&apos;t change who can join</source>
         <comment>title of the error when the group refused a change of who can join</comment>
         <translation>تعذّر تغيير من يمكنه الانضمام</translation>
+    </message>
+    <message>
+        <source>Couldn&apos;t change your name in the group</source>
+        <comment>title of the error when the group refused our name in it</comment>
+        <translation>تعذّر تغيير اسمك في المجموعة</translation>
     </message>
     <message>
         <source>Couldn&apos;t invite to the group</source>

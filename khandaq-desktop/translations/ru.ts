@@ -1777,6 +1777,16 @@
         <translation>Открывает действия с участником</translation>
     </message>
     <message>
+        <source>Your name in the group</source>
+        <comment>group dossier section and its field: our name in this group only</comment>
+        <translation>Ваше имя в группе</translation>
+    </message>
+    <message>
+        <source>Members of this group see it. Your profile name stays as it is.</source>
+        <comment>group dossier: under the field of our name in the group</comment>
+        <translation>Его видят участники этой группы. Имя профиля остаётся прежним.</translation>
+    </message>
+    <message>
         <source>Your role</source>
         <comment>group dossier section</comment>
         <translation>Ваша роль</translation>
@@ -3868,6 +3878,11 @@
         <source>Couldn&apos;t change who can join</source>
         <comment>title of the error when the group refused a change of who can join</comment>
         <translation>Не удалось изменить, кто может войти</translation>
+    </message>
+    <message>
+        <source>Couldn&apos;t change your name in the group</source>
+        <comment>title of the error when the group refused our name in it</comment>
+        <translation>Не удалось сменить имя в группе</translation>
     </message>
     <message>
         <source>Couldn&apos;t invite to the group</source>

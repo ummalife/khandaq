@@ -115,11 +115,14 @@ public class AirReactionBarTest
         final String group = method(read(JAVA + "GroupMessageListActivity.java"),
                                     "static GroupMessageListActivity.long_click_message_return onLongClick_message_helper(");
         assertTrue(group.indexOf("amode.invalidate();") > group.indexOf("selected_group_messages.add(message_.id);"));
-        // The bar finds the log of either chat by one id, in the layout it can stand over.
+        // The bar finds the log of either chat by one id, in the layout it can stand over: a RelativeLayout, which
+        // the layout that pulls the keyboard down with the list is (Khandaq Testers 8251).
+        assertTrue(read(JAVA + "ChatKeyboardPullLayout.java")
+                           .contains("final class ChatKeyboardPullLayout extends RelativeLayout"));
         for (final String layout : new String[]{"message_list_layout.xml", "group_message_list_layout.xml"})
         {
             final String xml = read(RES + "layout/" + layout);
-            assertTrue(layout, xml.contains("<RelativeLayout"));
+            assertTrue(layout, xml.contains("<com.zoffcc.applications.trifa.ChatKeyboardPullLayout"));
             assertTrue(layout, xml.contains("android:id=\"@+id/msg_rv_list\""));
         }
         assertTrue(read(JAVA + "AirReactionBar.java").contains("activity.findViewById(R.id.msg_rv_list)"));

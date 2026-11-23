@@ -1970,7 +1970,8 @@ public class MessageListActivity extends AppCompatActivity
         }
 
         sheet.setContentView(content);
-        sheet.show();
+        // KHANDAQ (tester 23.11): whole, not at the peek height, so nothing of it waits below the screen.
+        AttachSheet.showWhole(sheet);
     }
 
     /** KHANDAQ (Figma attach grid): route 1..N picked media Uris into the existing send preview / send flow. */

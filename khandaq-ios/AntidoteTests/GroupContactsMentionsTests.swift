@@ -246,6 +246,14 @@ class GroupContactsMentionsTests: XCTestCase {
                        "Amina", "a handle of one member stays as it is")
     }
 
+    func testTwinsWhoseKeysStartAlikeTakeEightCharacters() {
+        let first = "ABCD1111" + String(repeating: "0", count: 56)
+        let second = "ABCD2222" + String(repeating: "0", count: 56)
+        let handles = GroupMentionHelper.handles(for: [member("Ali", key: first), member("Ali", key: second)])
+        XCTAssertEqual(handles[first], "Ali_ABCD1111", "as Android and desktop name them")
+        XCTAssertEqual(handles[second], "Ali_ABCD2222")
+    }
+
     // MARK: - Mentions in a message
 
     func testTheBlockListsEveryMemberTheTextNamesOnceAsTyped() throws {

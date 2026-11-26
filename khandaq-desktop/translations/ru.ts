@@ -2129,7 +2129,7 @@
     <message>
         <source>Privately to %1: other members don&apos;t see this</source>
         <comment>first line of our private message in the feed of a group: %1 is the member it went to</comment>
-        <translation>Лично для %1: другие участники этого не видят</translation>
+        <translation>Только вы и %1: другие участники этого не видят</translation>
     </message>
     <message>
         <source>Privately to you: other members don&apos;t see this</source>

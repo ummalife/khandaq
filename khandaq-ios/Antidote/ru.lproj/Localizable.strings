@@ -1437,7 +1437,7 @@
 /* Redesign stage 5: group settings, joining by key, private messages in a group */
 "air_group_private_note_format" = "Личная переписка в группе «%1$@»: её видите только вы и %2$@.";
 "air_group_private_hint_away_format" = "%@ не в сети: напишите, когда появится";
-"air_group_private_to_format" = "Лично для %@: остальные участники этого не видят";
+"air_group_private_to_format" = "Только вы и %@: другие участники этого не видят";
 "air_group_private_to_you" = "Лично вам: остальные участники этого не видят";
 "air_group_mention_hint" = "Упоминает участника в сообщении";
 "air_group_settings_self_name" = "Ваше имя в группе";

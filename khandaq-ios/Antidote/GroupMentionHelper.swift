@@ -125,24 +125,30 @@ enum GroupMentionHelper {
 
     /// The handle of every member with a key, by the key in upper case: `baseHandle`, else "u" and the first 8
     /// characters of the key; a handle two members would share (in any case of its letters) gets "_" and the first
-    /// 4 characters of the key, for each of them, so every client names them alike.
+    /// 4 characters of the key, for each of them, and the first 8 when that still leaves two alike, so every
+    /// client names them alike (Android `mentionHandles`, desktop `mentionHandles`).
     static func handles(for members: [AirGroupMember]) -> [String: String] {
         var base: [String: String] = [:]
-        var uses: [String: Int] = [:]
         for member in members where !member.publicKey.isEmpty {
             let key = member.publicKey.uppercased()
+            guard base[key] == nil else {
+                continue
+            }
             var handle = baseHandle(fromName: member.name)
             if handle.isEmpty {
                 handle = "u" + String(key.prefix(8))
             }
             base[key] = handle
         }
-        for handle in base.values {
-            uses[handle.lowercased(), default: 0] += 1
-        }
-        var result: [String: String] = [:]
-        for (key, handle) in base {
-            result[key] = (uses[handle.lowercased()] ?? 0) > 1 ? handle + "_" + String(key.prefix(4)) : handle
+        var result = base
+        for digits in [4, 8] {
+            var uses: [String: Int] = [:]
+            for handle in result.values {
+                uses[handle.lowercased(), default: 0] += 1
+            }
+            for (key, handle) in result where (uses[handle.lowercased()] ?? 0) > 1 {
+                result[key] = (base[key] ?? handle) + "_" + String(key.prefix(digits))
+            }
         }
         return result
     }

@@ -116,8 +116,10 @@ final class GroupContactExchange
         final byte[] nonce = new byte[GroupContactPackets.NONCE_BYTES];
         RANDOM.nextBytes(nonce);
         final byte[] packet = GroupContactPackets.build(GroupContactPackets.PKT_OFFER, address, nonce);
-        final int result = packet == null ? -1
-                           : MainActivity.tox_group_send_custom_private_packet(groupNum, peerId, 1, packet, packet.length);
+        final int result = packet == null
+                           ? -1
+                           : MainActivity.tox_group_send_custom_private_packet(groupNum, peerId, 1, packet,
+                                                                                packet.length);
         if (packet == null || !is_ngc_custom_packet_send_ok(result))
         {
             Log.i(TAG, "offer: not sent, result=" + result);
@@ -253,7 +255,11 @@ final class GroupContactExchange
             Log.i(TAG, "accept: no offer of ours to this member with that nonce");
             return;
         }
-        takeOffer(packet.nonceHex());
+        if (takeOffer(packet.nonceHex()) == null)
+        {
+            Log.i(TAG, "accept: their contact request answered the offer first");
+            return;
+        }
         Log.i(TAG, "accept: adding the member as a contact");
         addAsked(packet.publicKeyHex(), string(offer, FIELD_NAME));
         rememberMember(gid, member, packet.publicKeyHex(), packet.addressHex());
@@ -306,7 +312,8 @@ final class GroupContactExchange
         {
             return;
         }
-        final int result = MainActivity.tox_group_send_custom_private_packet(groupNum, peerId, 1, packet, packet.length);
+        final int result =
+                MainActivity.tox_group_send_custom_private_packet(groupNum, peerId, 1, packet, packet.length);
         Log.i(TAG, "accept sent: ok=" + is_ngc_custom_packet_send_ok(result));
     }
 
@@ -358,7 +365,8 @@ final class GroupContactExchange
                 }
                 for (final GroupPeerDB peer : peers)
                 {
-                    final String gid = peer.group_identifier == null ? "" : peer.group_identifier.toLowerCase(Locale.ROOT);
+                    final String gid =
+                            peer.group_identifier == null ? "" : peer.group_identifier.toLowerCase(Locale.ROOT);
                     final long groupNum = gid.isEmpty() ? -1 : tox_group_by_groupid__wrapper(gid);
                     if (groupNum < 0 || key.equalsIgnoreCase(MainActivity.tox_group_self_get_public_key(groupNum)))
                     {
@@ -376,9 +384,11 @@ final class GroupContactExchange
     }
 
     // ---- storage ----
+    // The offers are read and taken from the toxcore thread (a contact request) and from WORK (an accept packet),
+    // so these three are synchronized: whichever answer comes first takes the offer, and only that one adds.
 
-    private static void keepOffer(final String gid, final String member, final String name, final String nonce,
-                                  final long at)
+    private static synchronized void keepOffer(final String gid, final String member, final String name,
+                                               final String nonce, final long at)
     {
         final String toMember = OFFER_TO_MEMBER_KEY + gid + ":" + member;
         final String previous = get_g_opts(toMember);
@@ -397,7 +407,7 @@ final class GroupContactExchange
 
     /** The pending offer with this nonce, still in its thirty days; an older one is forgotten. */
     @Nullable
-    private static JsonObject loadOffer(final String nonce)
+    private static synchronized JsonObject loadOffer(final String nonce)
     {
         final JsonObject offer = parse(get_g_opts(OFFER_KEY + nonce));
         if (offer == null)
@@ -405,7 +415,8 @@ final class GroupContactExchange
             return null;
         }
         final JsonElement at = offer.get(FIELD_AT);
-        final long sent = at != null && at.isJsonPrimitive() && at.getAsJsonPrimitive().isNumber() ? at.getAsLong() : 0L;
+        final long sent =
+                at != null && at.isJsonPrimitive() && at.getAsJsonPrimitive().isNumber() ? at.getAsLong() : 0L;
         if (System.currentTimeMillis() - sent > OFFER_LIFETIME_MS)
         {
             takeOffer(nonce);
@@ -416,13 +427,14 @@ final class GroupContactExchange
 
     /** The offer, answered or expired: it no longer waits. */
     @Nullable
-    private static JsonObject takeOffer(final String nonce)
+    private static synchronized JsonObject takeOffer(final String nonce)
     {
         final JsonObject offer = parse(get_g_opts(OFFER_KEY + nonce));
         del_g_opts(OFFER_KEY + nonce);
         if (offer != null)
         {
-            final String toMember = OFFER_TO_MEMBER_KEY + string(offer, FIELD_GROUP) + ":" + string(offer, FIELD_MEMBER);
+            final String toMember =
+                    OFFER_TO_MEMBER_KEY + string(offer, FIELD_GROUP) + ":" + string(offer, FIELD_MEMBER);
             if (nonce.equals(get_g_opts(toMember)))
             {
                 del_g_opts(toMember);

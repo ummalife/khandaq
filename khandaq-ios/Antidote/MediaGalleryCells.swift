@@ -26,6 +26,9 @@ final class MediaPageCell: UICollectionViewCell, UIScrollViewDelegate {
     // KHANDAQ (#207): single tap toggles the gallery chrome (top bar + action row) so a photo
     // can be viewed edge-to-edge; the owning gallery VC supplies the toggle.
     var onSingleTap: (() -> Void)?
+    /// KHANDAQ (tester 8263): the play button hands the video to the gallery, which plays it with controls;
+    /// without a handler the page plays it itself, as before.
+    var onPlayVideo: ((URL) -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -136,6 +139,10 @@ final class MediaPageCell: UICollectionViewCell, UIScrollViewDelegate {
 
     @objc private func playTapped() {
         guard let url = videoURL else { return }
+        if let onPlayVideo = onPlayVideo {
+            onPlayVideo(url)
+            return
+        }
         teardownVideo()
         let p = AVPlayer(url: url)
         let layer = AVPlayerLayer(player: p)

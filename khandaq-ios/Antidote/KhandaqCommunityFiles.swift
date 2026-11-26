@@ -103,6 +103,7 @@ extension KhandaqCommunity {
         model.previewSize = nil
         model.caption = nil
         model.isVoiceMessage = false
+        model.isAudioFile = false
         model.voiceDuration = 0
         model.transferProgress = 0
         model.voiceTransferProgress = 0

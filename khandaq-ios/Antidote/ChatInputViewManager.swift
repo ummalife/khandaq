@@ -24,6 +24,10 @@ fileprivate let imageEncodeQueue = DispatchQueue(label: "khandaq.image.encode", 
     saving entered text in database.
  */
 class ChatInputViewManager: NSObject {
+    /// The most photos and videos one send takes: the Gallery picks up to this many, and "Add" on the send
+    /// preview picks more until there are this many (tester 8265).
+    static let mediaPerSendLimit = 10
+
     fileprivate var chat: OCTChat!
     fileprivate weak var inputView: ChatInputView?
     fileprivate let theme: Theme
@@ -311,6 +315,15 @@ extension ChatInputViewManager: ChatInputViewDelegate {
         }
     }
 
+    // KHANDAQ (tester 8249): pause and resume of a hands-free recording.
+    func chatInputViewVoiceRecordDidPause(_ view: ChatInputView) {
+        voiceRecorder.pauseRecording()
+    }
+
+    func chatInputViewVoiceRecordDidResume(_ view: ChatInputView) {
+        voiceRecorder.resumeRecording()
+    }
+
     func chatInputViewVoiceButtonTapped(_ view: ChatInputView) {
         UIAlertController.showWithTitle("",
                                         message: String(localized: "group_voice_hold_to_record"),
@@ -493,17 +506,7 @@ fileprivate extension ChatInputViewManager {
 
     func presentPhotoLibraryPicker() {
         if #available(iOS 14.0, *) {
-            var configuration = PHPickerConfiguration()
-            configuration.filter = .any(of: [.images, .videos])
-            configuration.selectionLimit = 10
-            // KHANDAQ (large media): the file as it is in the library. With the default the system may
-            // transcode a video before handing it over, a long wait for a big one, while the app
-            // transcodes it anyway when it is large (VideoSendPreprocessor, to HEVC) and re-encodes
-            // every photo as JPEG.
-            configuration.preferredAssetRepresentationMode = .current
-
-            let controller = PHPickerViewController(configuration: configuration)
-            controller.delegate = self
+            let controller = PickedMediaLoader.libraryPicker(selectionLimit: Self.mediaPerSendLimit, delegate: self)
             presentingViewController.present(controller, animated: true, completion: nil)
         } else if UIImagePickerController.isSourceTypeAvailable(.photoLibrary) {
             let controller = UIImagePickerController()
@@ -857,7 +860,7 @@ fileprivate extension ChatInputViewManager {
     }
 
     func movieTypeIdentifiers() -> [String] {
-        [kUTTypeMovie as String, kUTTypeMPEG4 as String, kUTTypeVideo as String]
+        PickedMediaLoader.movieTypes
     }
 
     func stageVideoURL(_ sourceURL: URL, completion: @escaping (Result<URL, Error>) -> Void) {
@@ -887,7 +890,8 @@ fileprivate extension ChatInputViewManager {
         // KHANDAQ: dismiss the chat input keyboard before showing the media-send preview. Otherwise the
         // still-active keyboard overlapped the preview / caption editor when sending video with a caption.
         presentingViewController.view.endEditing(true)
-        let controller = MediaSendPreviewController(items: items)
+        // KHANDAQ (tester 8265): "Add" on the preview picks more for the same send, up to what the Gallery takes.
+        let controller = MediaSendPreviewController(items: items, maxItemCount: Self.mediaPerSendLimit)
         controller.delegate = self
         presentingViewController.present(controller, animated: true, completion: nil)
     }

@@ -165,13 +165,17 @@ extension ChatGroupController {
 
         let toRemove = selectedRows.map { messageEntry(atDisplayIndex: $0.row).message }
         // KHANDAQ (#193): own group TEXT messages retract for everyone; the rest delete locally.
+        // KHANDAQ (tester 21.11, 8256/8261): locally through the groups submanager, which keeps them deleted when the
+        // history sync brings them again.
+        var localOnly = [OCTMessageAbstract]()
         for message in toRemove {
             if message.messageText != nil && message.groupSenderPeerId == 0 {
                 submanagerGroups.deleteGroupMessage(forBoth: message, in: chat)
             } else {
-                submanagerChats.removeMessages([message])
+                localOnly.append(message)
             }
         }
+        submanagerGroups.removeGroupMessages(localOnly, in: chat)
         toggleTableViewEditing(false, animated: true)
     }
 
@@ -284,7 +288,8 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
         if message.messageText != nil && message.groupSenderPeerId == 0 {
             submanagerGroups.deleteGroupMessage(forBoth: message, in: chat)
         } else {
-            submanagerChats.removeMessages([message])
+            // KHANDAQ (tester 21.11, 8256/8261): kept deleted when the history sync brings it again.
+            submanagerGroups.removeGroupMessages([message], in: chat)
         }
     }
 

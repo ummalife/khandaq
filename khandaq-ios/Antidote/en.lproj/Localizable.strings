@@ -125,6 +125,8 @@
 "theme_toggle_accessibility" = "Toggle dark mode";
 "voice_recording_cancel" = "Cancel";
 "voice_recording_send" = "Send voice message";
+"voice_recording_pause" = "Pause recording";
+"voice_recording_resume" = "Resume recording";
 "voice_recording_slide_to_cancel" = "‹ slide to cancel";
 "voice_recording_slide_hint" = "‹ cancel   ⌃ lock";
 "voice_recording_release_to_cancel" = "Release to cancel";
@@ -441,6 +443,10 @@
 "media_send_button" = "Send";
 "media_send_caption_hint" = "Add a caption...";
 "media_send_counter_format" = "%1$d / %2$d";
+/* KHANDAQ (tester 8264/8265): the send preview: more items, and the pencil's menu for a photo */
+"media_send_add_more" = "Add photos or videos";
+"media_edit_crop" = "Crop and rotate";
+"media_edit_markup" = "Draw and add text";
 /* Error */
 "error_wrong_password_title" = "Wrong password";
 /* Error */

@@ -61,4 +61,14 @@ class ChatGenericFileCellModel: ChatMovableDateCellModel {
     var voicePlayToggleHandle: (() -> Void)?
     // KHANDAQ (Android parity): scrub the voice note (the share 0 to 1 along the wave)
     var voiceSeekHandle: ((Float) -> Void)?
+
+    /// KHANDAQ (tester 8263): an audio file that is here (VoiceMessageHelper.isInlineAudioFile), not a voice
+    /// note: it plays in its entry with the player of the voice notes and the voice handles, at its own
+    /// speed, and keeps its name row, a tap on which opens it in QuickLook (share, save, another app).
+    var isAudioFile = false
+
+    /// The entry has the player: a voice note, or an audio file.
+    var playsInline: Bool {
+        return isVoiceMessage || isAudioFile
+    }
 }

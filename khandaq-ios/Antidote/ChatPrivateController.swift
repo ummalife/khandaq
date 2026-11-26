@@ -2705,6 +2705,14 @@ private extension ChatPrivateController {
                 model.voiceDuration = VoiceMessageHelper.audioDuration(at: path)
             }
         }
+        // KHANDAQ (tester 8263): an audio file that is here plays in its entry; until then it is a file with
+        // its download.
+        model.isAudioFile = message.messageFile?.fileType == .ready
+            && VoiceMessageHelper.isInlineAudioFile(fileName: message.messageFile?.fileName,
+                                                    filePath: message.messageFile?.filePath())
+        if model.isAudioFile, let path = message.messageFile?.filePath() {
+            model.voiceDuration = VoiceMessageHelper.cachedAudioDuration(at: path)
+        }
 
         switch message.messageFile!.fileType {
             case .waitingConfirmation:
@@ -2786,7 +2794,7 @@ private extension ChatPrivateController {
             }
         }
 
-        model.openHandle = { [weak self] in
+        let open: () -> Void = { [weak self] in
             guard let sself = self else {
                 return
             }
@@ -2796,6 +2804,30 @@ private extension ChatPrivateController {
             }
 
             sself.delegate?.chatPrivateControllerShowQuickLookController(sself, dataSource: qlDataSource, selectedIndex: index)
+        }
+        model.openHandle = open
+
+        if model.isAudioFile {
+            // KHANDAQ (tester 8263): the play button of an audio file plays it here; one the player does not
+            // read opens as before, in QuickLook.
+            model.voicePlayToggleHandle = {
+                guard message.messageFile?.fileType == .ready,
+                      let path = message.messageFile?.filePath(),
+                      let messageId = message.uniqueIdentifier else {
+                    return
+                }
+                if !ChatVoiceMessagePlayer.shared.togglePlayback(messageId: messageId, filePath: path, atOwnSpeed: true) {
+                    open()
+                }
+            }
+            model.voiceSeekHandle = { fraction in
+                guard message.messageFile?.fileType == .ready,
+                      let path = message.messageFile?.filePath(),
+                      let messageId = message.uniqueIdentifier else {
+                    return
+                }
+                ChatVoiceMessagePlayer.shared.seek(messageId: messageId, filePath: path, fraction: fraction)
+            }
         }
 
         if isVoice {

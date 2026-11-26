@@ -28,8 +28,9 @@ class ProfileMainController: AirScrollController {
     fileprivate let photoButton = AirYouPhotoButton()
     fileprivate let nameField = AirYouField(placeholder: String(localized: "air_you_name_placeholder"),
                                             maxBytes: Int(kOCTToxMaxNameLength))
-    fileprivate let statusField = AirYouField(placeholder: String(localized: "air_you_status_placeholder"),
-                                              maxBytes: Int(kOCTToxMaxStatusMessageLength))
+    // KHANDAQ (tester 8254): the status wraps onto as many lines as it takes instead of running off the field.
+    fileprivate let statusField = AirYouTextArea(placeholder: String(localized: "air_you_status_placeholder"),
+                                                 maxBytes: Int(kOCTToxMaxStatusMessageLength))
     fileprivate let idParts = AirIdPartsView()
     /// What Log out means: it changes when a profile without a password gets one (stage 4).
     fileprivate let logoutNote = AirKit.note("")
@@ -89,9 +90,9 @@ private extension ProfileMainController {
         nameField.onCommit = { [weak self] text in
             self?.commitName(text)
         }
-        statusField.field.accessibilityIdentifier = "air.you.status"
-        statusField.field.accessibilityLabel = String(localized: "air_you_status")
-        statusField.field.returnKeyType = .done
+        statusField.textView.accessibilityIdentifier = "air.you.status"
+        statusField.textView.accessibilityLabel = String(localized: "air_you_status")
+        statusField.textView.returnKeyType = .done
         statusField.onCommit = { [weak self] text in
             self?.commitStatus(text)
         }
@@ -798,6 +799,116 @@ final class AirYouField: UIView, UITextFieldDelegate {
 
     private func applyColors() {
         let focused = field.isEditing
+        backgroundColor = focused ? KQColor.raised : KQColor.sunken
+        layer.borderColor = airCGColor(focused ? KQColor.ink : KQColor.line)
+    }
+}
+
+/// KHANDAQ (tester 8254): AirYouField for a longer text — the status — that wraps onto as many lines as it
+/// takes and grows with them. Return finishes the editing (a status is one paragraph), as in the field.
+final class AirYouTextArea: UIView, UITextViewDelegate {
+    let textView = UITextView()
+    var onCommit: ((String) -> Void)?
+
+    private let maxBytes: Int
+    private let placeholderLabel = UILabel()
+
+    var text: String {
+        get {
+            return textView.text ?? ""
+        }
+        set {
+            textView.text = newValue
+            updatePlaceholder()
+        }
+    }
+
+    var isEditing: Bool {
+        return textView.isFirstResponder
+    }
+
+    init(placeholder: String, maxBytes: Int) {
+        self.maxBytes = maxBytes
+        super.init(frame: .zero)
+        layer.cornerRadius = KQRadius.field
+        layer.borderWidth = KQStroke.hairline
+
+        textView.font = KQFont.font(.body)
+        textView.adjustsFontForContentSizeCategory = true
+        textView.textColor = KQColor.ink
+        textView.tintColor = KQColor.ink
+        textView.backgroundColor = .clear
+        textView.isScrollEnabled = false
+        textView.autocorrectionType = .no
+        // The same inner margins as the one-line field: 12 at the sides, the text centred in 44 points.
+        textView.textContainer.lineFragmentPadding = 0
+        let font = textView.font ?? KQFont.font(.body)
+        let vertical = max(0, (KQSize.targetIos - font.lineHeight) / 2)
+        textView.textContainerInset = UIEdgeInsets(top: vertical, left: 0, bottom: vertical, right: 0)
+        textView.delegate = self
+        addSubview(textView)
+        textView.snp.makeConstraints {
+            $0.top.bottom.equalToSuperview()
+            $0.leading.trailing.equalToSuperview().inset(KQSpace.x12)
+            $0.height.greaterThanOrEqualTo(KQSize.targetIos)
+        }
+
+        placeholderLabel.text = placeholder
+        placeholderLabel.font = KQFont.font(.body)
+        placeholderLabel.adjustsFontForContentSizeCategory = true
+        placeholderLabel.textColor = KQColor.ink3
+        placeholderLabel.numberOfLines = 0
+        placeholderLabel.isAccessibilityElement = false
+        addSubview(placeholderLabel)
+        placeholderLabel.snp.makeConstraints {
+            $0.leading.trailing.equalTo(textView)
+            $0.top.equalTo(textView).offset(vertical)
+        }
+        applyColors()
+        updatePlaceholder()
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        applyColors()
+    }
+
+    func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText string: String) -> Bool {
+        if string == "\n" {
+            textView.resignFirstResponder()
+            return false
+        }
+        let current = textView.text ?? ""
+        guard let swiftRange = Range(range, in: current) else {
+            return false
+        }
+        let next = current.replacingCharacters(in: swiftRange, with: string)
+        return next.utf8.count <= maxBytes && !next.contains("\n")
+    }
+
+    func textViewDidChange(_ textView: UITextView) {
+        updatePlaceholder()
+    }
+
+    func textViewDidBeginEditing(_ textView: UITextView) {
+        applyColors()
+    }
+
+    func textViewDidEndEditing(_ textView: UITextView) {
+        applyColors()
+        onCommit?(text)
+    }
+
+    private func updatePlaceholder() {
+        placeholderLabel.isHidden = !(textView.text ?? "").isEmpty
+    }
+
+    private func applyColors() {
+        let focused = textView.isFirstResponder
         backgroundColor = focused ? KQColor.raised : KQColor.sunken
         layer.borderColor = airCGColor(focused ? KQColor.ink : KQColor.line)
     }

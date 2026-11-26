@@ -291,6 +291,91 @@ final class VoicePlaybackSpeedTests: XCTestCase {
         XCTAssertEqual(playingCell.voiceMessageView.shownSpeedText, VoicePlaybackSpeed.text(for: 1.5))
         XCTAssertEqual(ChatVoiceMessagePlayer.shared.activeRate, 1.5)
     }
+
+    /// KHANDAQ (tester 8263): the files that play in their entry: the formats the player reads, never a voice note.
+    func testWhichFilesPlayInTheirEntry() {
+        XCTAssertTrue(VoiceMessageHelper.isInlineAudioFile(fileName: "Song.mp3", filePath: nil))
+        XCTAssertTrue(VoiceMessageHelper.isInlineAudioFile(fileName: "Talk.M4A", filePath: nil))
+        XCTAssertTrue(VoiceMessageHelper.isInlineAudioFile(fileName: "take", filePath: "/files/take.wav"))
+        XCTAssertFalse(VoiceMessageHelper.isInlineAudioFile(fileName: VoiceMessageHelper.makeOutgoingFileName(), filePath: nil),
+                       "a voice note plays as a file")
+        XCTAssertFalse(VoiceMessageHelper.isInlineAudioFile(fileName: "note.ogg", filePath: nil))
+        XCTAssertFalse(VoiceMessageHelper.isInlineAudioFile(fileName: "Report.pdf", filePath: nil))
+        XCTAssertFalse(VoiceMessageHelper.isInlineAudioFile(fileName: "Clip.mp4", filePath: nil))
+        XCTAssertFalse(VoiceMessageHelper.isInlineAudioFile(fileName: nil, filePath: nil))
+    }
+
+    /// KHANDAQ (tester 8263): an audio file plays at 1x whatever the speed of the notes, and shows no speed;
+    /// the next voice note plays at the notes' speed again.
+    func testAnAudioFilePlaysAtItsOwnSpeed() throws {
+        let player = ChatVoiceMessagePlayer.shared
+        player.cycleSpeed()
+        XCTAssertEqual(player.speed, 1.5)
+
+        let song = try silentNote(seconds: 4)
+        XCTAssertTrue(player.togglePlayback(messageId: "song", filePath: song.path, atOwnSpeed: true))
+        XCTAssertEqual(player.activeRate, 1, "an audio file plays at the speed of the voice notes")
+        XCTAssertNil(player.speedShown(for: "song"))
+        player.cycleSpeed()
+        XCTAssertEqual(player.activeRate, 1, "a new speed of the notes reached the audio file")
+        XCTAssertEqual(player.speed, 2)
+
+        let note = try silentNote(seconds: 2)
+        XCTAssertTrue(player.togglePlayback(messageId: "note", filePath: note.path))
+        XCTAssertEqual(player.activeRate, 2)
+        XCTAssertEqual(player.speedShown(for: "note"), 2)
+    }
+
+    /// KHANDAQ (tester 8263): a file the player does not read, or one that is gone, is not played; the entry
+    /// opens it in QuickLook instead.
+    func testAFileThePlayerCannotReadIsNotPlayed() throws {
+        let player = ChatVoiceMessagePlayer.shared
+        let fake = FileManager.default.temporaryDirectory.appendingPathComponent("not-audio-\(UUID().uuidString).mp3")
+        files.append(fake)
+        try Data("no sound in here".utf8).write(to: fake)
+
+        XCTAssertFalse(player.togglePlayback(messageId: "fake", filePath: fake.path, atOwnSpeed: true))
+        XCTAssertNil(player.activeMessageId)
+        XCTAssertFalse(player.togglePlayback(messageId: "gone", filePath: fake.path + ".gone", atOwnSpeed: true))
+        XCTAssertNil(player.activeMessageId)
+    }
+
+    /// KHANDAQ (tester 8263): the entry of an audio file: the player over its name row, no speed while it plays,
+    /// and a tap on the name row opens the file (QuickLook: share, save, another app).
+    func testAnAudioFileEntryHasThePlayerOverItsNameRow() throws {
+        let song = try silentNote(seconds: 4)
+        let theme = try Theme(yamlString: String(contentsOfFile: try XCTUnwrap(Bundle.main.path(forResource: "default-theme", ofType: "yaml")),
+                                                 encoding: .utf8))
+        let model = ChatIncomingFileCellModel()
+        model.state = .done
+        model.fileName = "Song.mp3"
+        model.fileSize = "64 KB"
+        model.isAudioFile = true
+        model.voiceMessageId = "song"
+        model.voiceDuration = 4
+        var opened = 0
+        model.openHandle = {
+            opened += 1
+        }
+        model.voicePlayToggleHandle = {
+            ChatVoiceMessagePlayer.shared.togglePlayback(messageId: "song", filePath: song.path, atOwnSpeed: true)
+        }
+        let cell = ChatIncomingFileCell()
+        cell.setupWithTheme(theme, model: model)
+
+        XCTAssertFalse(cell.voiceMessageView.isHidden, "an audio file has no player")
+        XCTAssertFalse(cell.fileRow.isHidden, "an audio file lost its name row")
+        XCTAssertTrue(labels(of: cell.fileRow).contains { $0.text == "Song.mp3" }, "the row does not name the file")
+        XCTAssertTrue(labels(of: cell.voiceMessageView).contains { $0.text == "0:04" }, "the player does not give the length")
+
+        cell.voicePlayTogglePressed()
+        cell.refreshVoicePlaybackState(theme: theme)
+        XCTAssertEqual(ChatVoiceMessagePlayer.shared.activeMessageId, "song")
+        XCTAssertNil(cell.voiceMessageView.shownSpeedText, "an audio file shows the speed of the voice notes")
+
+        cell.fileRowTapped()
+        XCTAssertEqual(opened, 1, "a tap on the name row did not open the file")
+    }
 }
 
 private extension VoicePlaybackSpeedTests {

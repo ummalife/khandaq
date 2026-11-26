@@ -170,4 +170,43 @@ public class GroupContactPacketsTest
         assertNull(GroupContactPackets.fromHex(null, 8));
         assertEquals("01020304050607AB", GroupContactPackets.toHex(NONCE, 0, 8));
     }
+
+    /**
+     * KHANDAQ (26.11.2026): the same offer, accept and contact request are in the tests of iOS
+     * (GroupContactsMentionsTests) and desktop (airgroupcontact_test.cpp), so what one client sends the others read.
+     */
+    static final String SHARED_ADDRESS =
+            "3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C0A0B0C0D0606";
+    static final String SHARED_OFFER = "6677881134350161" + SHARED_ADDRESS + "0123456789ABCDEF";
+    static final String SHARED_ACCEPT = "6677881134350162" + SHARED_ADDRESS + "0123456789ABCDEF";
+    static final String SHARED_WORDS = "I accepted your request from the group \u00abQA 2611\u00bb";
+    static final String SHARED_REQUEST = "[KQ|c|0123456789abcdef]\n" + SHARED_WORDS;
+
+    @Test
+    public void every_client_builds_and_reads_the_same_bytes()
+    {
+        final byte[] address = GroupContactPackets.fromHex(SHARED_ADDRESS, GroupContactPackets.ADDRESS_BYTES);
+        final byte[] nonce = GroupContactPackets.fromHex("0123456789abcdef", 8);
+        assertTrue(GroupContactPackets.checksumMatches(address));
+        assertArrayEquals(GroupContactPackets.fromHex(SHARED_OFFER, 54), GroupContactPackets.build(PKT_OFFER, address, nonce));
+        assertArrayEquals(GroupContactPackets.fromHex(SHARED_ACCEPT, 54),
+                          GroupContactPackets.build(PKT_ACCEPT, address, nonce));
+
+        final GroupContactPackets.Packet offer =
+                GroupContactPackets.parse(GroupContactPackets.fromHex(SHARED_OFFER, 54), 54);
+        assertNotNull(offer);
+        assertEquals(PKT_OFFER, offer.kind);
+        assertEquals(SHARED_ADDRESS, offer.addressHex());
+        assertEquals(SHARED_ADDRESS.substring(0, 64), offer.publicKeyHex());
+        assertEquals("0123456789abcdef", offer.nonceHex());
+        final GroupContactPackets.Packet accept =
+                GroupContactPackets.parse(GroupContactPackets.fromHex(SHARED_ACCEPT, 54), 54);
+        assertNotNull(accept);
+        assertEquals(PKT_ACCEPT, accept.kind);
+        assertEquals("0123456789abcdef", accept.nonceHex());
+
+        assertEquals(SHARED_REQUEST, GroupContactPackets.requestMessage("0123456789ABCDEF", SHARED_WORDS));
+        assertEquals("0123456789abcdef", GroupContactPackets.nonceOfRequest(SHARED_REQUEST));
+        assertEquals(SHARED_WORDS, GroupContactPackets.withoutMarker(SHARED_REQUEST));
+    }
 }

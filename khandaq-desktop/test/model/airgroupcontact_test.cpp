@@ -110,6 +110,7 @@ private slots:
     void anOfferIsTakenOnceAndOnlyByItsMember();
     void membersBehindContactsAreKept();
     void privateEntriesAreMarkedOnThisDevice();
+    void everyClientBuildsAndReadsTheSameBytes();
 };
 
 void TestAirGroupContact::offerIsLaidOutAsTheDesignSays()
@@ -447,6 +448,37 @@ void TestAirGroupContact::privateEntriesAreMarkedOnThisDevice()
     QVERIFY(!store.privateEntry(elsewhere).isNull());
     QVERIFY(store.forgetEntries());
     QVERIFY(store.privateEntry(elsewhere).isNull());
+}
+
+void TestAirGroupContact::everyClientBuildsAndReadsTheSameBytes()
+{
+    // KHANDAQ (26.11.2026): the same offer, accept and contact request are in the tests of Android
+    // (GroupContactPacketsTest) and iOS (GroupContactsMentionsTests): what one client sends, the others read.
+    const QByteArray sharedAddress = QByteArray::fromHex(
+        "3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C0A0B0C0D0606");
+    const QByteArray offer = QByteArray::fromHex("6677881134350161") + sharedAddress + nonce;
+    const QByteArray accept = QByteArray::fromHex("6677881134350162") + sharedAddress + nonce;
+    QCOMPARE(sharedAddress, address('\x3C', QByteArray::fromHex("0A0B0C0D")));
+    QCOMPARE(groupContactPacket(GroupContactPacket::Kind::Offer, sharedAddress, nonce), offer);
+    QCOMPARE(groupContactPacket(GroupContactPacket::Kind::Accept, sharedAddress, nonce), accept);
+
+    GroupContactPacket packet;
+    QVERIFY(read(offer, &packet));
+    QVERIFY(packet.kind == GroupContactPacket::Kind::Offer);
+    QCOMPARE(packet.address, sharedAddress);
+    QCOMPARE(packet.nonce, nonce);
+    QVERIFY(read(accept, &packet));
+    QVERIFY(packet.kind == GroupContactPacket::Kind::Accept);
+    QCOMPARE(packet.nonce, nonce);
+
+    const QString words = QStringLiteral("I accepted your request from the group «QA 2611»");
+    const QString request = QStringLiteral("[KQ|c|0123456789abcdef]\n") + words;
+    QCOMPARE(contactRequestMessage(nonce, words), request);
+    QByteArray readNonce;
+    QString readWords;
+    QVERIFY(readContactRequestMarker(request, &readNonce, &readWords));
+    QCOMPARE(readNonce, nonce);
+    QCOMPARE(readWords, words);
 }
 
 QTEST_GUILESS_MAIN(TestAirGroupContact)

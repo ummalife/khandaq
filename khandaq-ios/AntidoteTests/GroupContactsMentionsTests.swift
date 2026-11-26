@@ -254,6 +254,67 @@ class GroupContactsMentionsTests: XCTestCase {
         XCTAssertEqual(handles[second], "Ali_ABCD2222")
     }
 
+    // MARK: - The same bytes on every client
+
+    /// KHANDAQ (26.11.2026): the same offer, accept and contact request are in the tests of Android
+    /// (GroupContactPacketsTest) and desktop (airgroupcontact_test.cpp): what one client sends, the others read.
+    func testEveryClientBuildsAndReadsTheSameBytes() throws {
+        let address = "3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C0A0B0C0D0606"
+        let offer = "6677881134350161" + address + "0123456789ABCDEF"
+        let accept = "6677881134350162" + address + "0123456789ABCDEF"
+        XCTAssertEqual(toxAddress(key: String(repeating: "3C", count: 32), nospam: "0A0B0C0D"), address)
+        let built = try XCTUnwrap(OCTGroupContactExchange.packet(with: .offer, addressHex: address, nonceHex: "0123456789abcdef"))
+        XCTAssertEqual(hex([UInt8](built)), offer)
+        let builtAccept = try XCTUnwrap(OCTGroupContactExchange.packet(with: .accept, addressHex: address, nonceHex: "0123456789abcdef"))
+        XCTAssertEqual(hex([UInt8](builtAccept)), accept)
+
+        let parsed = try XCTUnwrap(OCTGroupContactExchange.parsePacket(Data(bytesOf(offer))))
+        XCTAssertEqual(parsed.kind, .offer)
+        XCTAssertEqual(parsed.addressHex, address)
+        XCTAssertEqual(parsed.publicKeyHex, String(address.prefix(64)))
+        XCTAssertEqual(parsed.nonceHex, "0123456789abcdef")
+        let parsedAccept = try XCTUnwrap(OCTGroupContactExchange.parsePacket(Data(bytesOf(accept))))
+        XCTAssertEqual(parsedAccept.kind, .accept)
+        XCTAssertEqual(parsedAccept.nonceHex, "0123456789abcdef")
+
+        let words = "I accepted your request from the group \u{AB}QA 2611\u{BB}"
+        let request = "[KQ|c|0123456789abcdef]\n" + words
+        XCTAssertEqual(OCTGroupContactExchange.requestMessage(withNonceHex: "0123456789ABCDEF", text: words), request)
+        XCTAssertEqual(OCTGroupContactExchange.nonceHex(inRequestMessage: request), "0123456789abcdef")
+        XCTAssertEqual(OCTGroupContactExchange.requestMessageWithoutMarker(request), words)
+    }
+
+    /// KHANDAQ (26.11.2026): the same members, handles and block are in the tests of Android (GroupMentionsTest)
+    /// and desktop (airmention_test.cpp): every client names a member alike and reads the block another one wrote.
+    func testEveryClientNamesTheMembersAlikeAndReadsTheSameBlock() {
+        let murad = String(repeating: "1", count: 64)
+        let isa = "ABCD" + String(repeating: "1", count: 60)
+        let isaDot = "1234" + String(repeating: "2", count: 60)
+        let isaCaps = "ABCD" + String(repeating: "3", count: 60)
+        let dots = "0123456789" + String(repeating: "F", count: 54)
+        let muradName = "\u{41C}\u{443}\u{440}\u{430}\u{434} \u{422}\u{435}\u{441}\u{442}"
+        let muradHandle = "\u{41C}\u{443}\u{440}\u{430}\u{434}_\u{422}\u{435}\u{441}\u{442}"
+        let handles = GroupMentionHelper.handles(for: [member(muradName, key: murad), member("Isa", key: isa),
+                                                       member("isa.", key: isaDot), member("ISA", key: isaCaps),
+                                                       member("...", key: dots)])
+        XCTAssertEqual(handles[murad], muradHandle)
+        XCTAssertEqual(handles[isa], "Isa_ABCD1111")
+        XCTAssertEqual(handles[isaDot], "isa_1234")
+        XCTAssertEqual(handles[isaCaps], "ISA_ABCD3333")
+        XCTAssertEqual(handles[dots], "u01234567")
+
+        let body = "@\(muradHandle) and @Isa_ABCD1111, look"
+        let raw = "[KQ|m|\(murad):\(muradHandle);\(isa):Isa_ABCD1111][KQ/m]\n" + body
+        let mentions = GroupMentionHelper.mentions(in: body, handles: handles)
+        XCTAssertEqual(mentions.map { $0.pubkey }, [murad, isa])
+        XCTAssertEqual(mentions.map { $0.handle }, [muradHandle, "Isa_ABCD1111"])
+        XCTAssertEqual(GroupMentionHelper.block(for: mentions) + body, raw)
+        let parsed = GroupMentionHelper.parse(raw)
+        XCTAssertEqual(parsed.mentions.map { $0.pubkey }, [murad, isa])
+        XCTAssertEqual(parsed.mentions.map { $0.handle }, [muradHandle, "Isa_ABCD1111"])
+        XCTAssertEqual(parsed.bodyText, body)
+    }
+
     // MARK: - Mentions in a message
 
     func testTheBlockListsEveryMemberTheTextNamesOnceAsTyped() throws {

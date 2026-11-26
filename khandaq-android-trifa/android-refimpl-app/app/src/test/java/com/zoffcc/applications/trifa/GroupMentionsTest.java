@@ -180,6 +180,44 @@ public class GroupMentionsTest
         assertFalse(GroupMentionHelper.mentionsSelfByText(bare, "", "Иса"));
     }
 
+    /**
+     * KHANDAQ (26.11.2026): the same members, handles and block are in the tests of iOS (GroupContactsMentionsTests)
+     * and desktop (airmention_test.cpp), so every client names a member alike and reads the block another one wrote.
+     */
+    @Test
+    public void every_client_names_the_members_alike_and_reads_the_same_block()
+    {
+        final String murad = "1111111111111111111111111111111111111111111111111111111111111111";
+        final String isa = "ABCD111111111111111111111111111111111111111111111111111111111111";
+        final String isaDot = "1234222222222222222222222222222222222222222222222222222222222222";
+        final String isaCaps = "ABCD333333333333333333333333333333333333333333333333333333333333";
+        final String dots = "0123456789FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF";
+        final Map<String, String> handles = GroupMentionHelper.mentionHandles(Arrays.asList(
+                member(murad, "\u041c\u0443\u0440\u0430\u0434 \u0422\u0435\u0441\u0442", true, false),
+                member(isa, "Isa", true, false),
+                member(isaDot, "isa.", true, false),
+                member(isaCaps, "ISA", true, false),
+                member(dots, "...", true, false)));
+        final String muradHandle = "\u041c\u0443\u0440\u0430\u0434_\u0422\u0435\u0441\u0442";
+        assertEquals(muradHandle, handles.get(murad));
+        assertEquals("Isa_ABCD1111", handles.get(isa));
+        assertEquals("isa_1234", handles.get(isaDot));
+        assertEquals("ISA_ABCD3333", handles.get(isaCaps));
+        assertEquals("u01234567", handles.get(dots));
+        assertEquals(isa, GroupMentionHelper.keyOfHandle(handles, "isa_abcd1111"));
+
+        final String body = "@" + muradHandle + " and @Isa_ABCD1111, look";
+        final String raw = "[KQ|m|" + murad + ":" + muradHandle + ";" + isa + ":Isa_ABCD1111][KQ/m]\n" + body;
+        final GroupMentionHelper.ParsedGroupText parsed = GroupMentionHelper.parse(raw);
+        assertEquals(2, parsed.mentions.size());
+        assertEquals(murad, parsed.mentions.get(0).pubkey);
+        assertEquals(muradHandle, parsed.mentions.get(0).handle);
+        assertEquals(isa, parsed.mentions.get(1).pubkey);
+        assertEquals("Isa_ABCD1111", parsed.mentions.get(1).handle);
+        assertEquals(body, parsed.bodyText);
+        assertEquals(raw, GroupMentionHelper.encodeMentionsBlock(body, parsed.mentions));
+    }
+
     @Test
     public void the_list_after_at_puts_online_first_then_by_name_and_leaves_you_out()
     {

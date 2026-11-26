@@ -114,6 +114,7 @@ private slots:
     void tellsWhomTheBlockNames();
     void spansCoverWholeHandles();
     void aMentionLinkCarriesTheMemberKeyOnly();
+    void everyClientNamesTheMembersAlikeAndReadsTheSameBlock();
 };
 
 void TestAirMention::handleKeepsLettersOfAnyScript()
@@ -425,6 +426,41 @@ void TestAirMention::aMentionLinkCarriesTheMemberKeyOnly()
     QVERIFY(mentionLinkKey(QStringLiteral("kqmention:1234")).isEmpty());
     QVERIFY(mentionLinkKey(QStringLiteral("kqmention:") + QString(64, QLatin1Char('G'))).isEmpty());
     QVERIFY(mentionLinkKey(QString()).isEmpty());
+}
+
+void TestAirMention::everyClientNamesTheMembersAlikeAndReadsTheSameBlock()
+{
+    // KHANDAQ (26.11.2026): the same members, handles and block are in the tests of Android
+    // (GroupMentionsTest) and iOS (GroupContactsMentionsTests): every client names a member alike and
+    // reads the block another one wrote.
+    const QString murad = key('1');
+    const QString isa = key(QStringLiteral("ABCD"), '1');
+    const QString isaDot = key(QStringLiteral("1234"), '2');
+    const QString isaCaps = key(QStringLiteral("ABCD"), '3');
+    const QString dots = key(QStringLiteral("0123456789"), 'F');
+    // "Murad Test" in Cyrillic, and the handle it gives.
+    const QString muradName = QStringLiteral("Мурад Тест");
+    const QString muradHandle = QStringLiteral("Мурад_Тест");
+    const QVector<GroupMember> members = {member(muradName, murad), member(QStringLiteral("Isa"), isa),
+                                          member(QStringLiteral("isa."), isaDot),
+                                          member(QStringLiteral("ISA"), isaCaps),
+                                          member(QStringLiteral("..."), dots)};
+    const QHash<QString, QString> handles = mentionHandles(members);
+    QCOMPARE(handles.value(murad), muradHandle);
+    QCOMPARE(handles.value(isa), QStringLiteral("Isa_ABCD1111"));
+    QCOMPARE(handles.value(isaDot), QStringLiteral("isa_1234"));
+    QCOMPARE(handles.value(isaCaps), QStringLiteral("ISA_ABCD3333"));
+    QCOMPARE(handles.value(dots), QStringLiteral("u01234567"));
+
+    const QString body = QStringLiteral("@") + muradHandle + QStringLiteral(" and @Isa_ABCD1111, look");
+    const QString raw = QStringLiteral("[KQ|m|") + murad + QStringLiteral(":") + muradHandle
+                        + QStringLiteral(";") + isa + QStringLiteral(":Isa_ABCD1111][KQ/m]\n") + body;
+    const QVector<Mention> expected = {mention(murad, muradHandle),
+                                       mention(isa, QStringLiteral("Isa_ABCD1111"))};
+    QCOMPARE(collectMentions(body, members), expected);
+    QCOMPARE(mentionBlock(expected) + body, raw);
+    QCOMPARE(readMentions(raw), expected);
+    QCOMPARE(plainMessageBody(raw), body);
 }
 
 QTEST_GUILESS_MAIN(TestAirMention)

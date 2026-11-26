@@ -32,4 +32,8 @@ class ChatMovableDateCellModel: BaseCellModel {
     /// KHANDAQ (0.2.58): a tap on the author opens that member, with the author's label to point at. A group
     /// sets it over the entries of the other members it names; nil leaves the author a plain label.
     var onAuthorTap: ((UIView) -> Void)?
+    /// KHANDAQ (tester 21.11, 8255): the tile of the member who wrote an entry of a group, as Telegram has it. A
+    /// group sets it on the entries of the other members; nil (your own entries, a conversation with one person,
+    /// a call) leaves the entry as it was.
+    var authorTile: AirAuthorTile?
 }

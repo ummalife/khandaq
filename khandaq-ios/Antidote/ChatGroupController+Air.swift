@@ -241,11 +241,16 @@ extension ChatGroupController {
     // MARK: Transcript
 
     /// The author over the first entry of a run, in the tone of that member, and who wrote it for
-    /// VoiceOver on every entry.
+    /// VoiceOver on every entry; beside the entries of another member, the column of their tile, which the
+    /// last entry of a run shows.
     func configureGroupEntry(_ entry: ChatMovableDateCellModel, message: OCTMessageAbstract, row: Int) {
         let label: String
         // The name over another member's entry that it names, which opens that member (openAuthor).
         var opensAuthor: String?
+        // KHANDAQ (tester 21.11, 8255): the tile of another member's entry, and whether it stands for an author
+        // nobody confirmed; none for yours.
+        var tile: AirTileView.Style?
+        var unconfirmed = false
         if message.isOutgoing() {
             label = String(localized: "air_you")
             entry.authorColor = AirTone.you
@@ -257,11 +262,14 @@ extension ChatGroupController {
             label = String(localized: "air_group_author_unconfirmed")
             entry.authorColor = KQColor.ink2
             entry.spokenAuthor = label
+            tile = .unconfirmed
+            unconfirmed = true
         }
         else {
             // peerName names an unknown peer number itself; nil is a relayed row with neither a number
             // nor a name frozen on it.
-            let name = peerName(for: message) ?? String(localized: "air_group_author_unknown")
+            let knownName = peerName(for: message)
+            let name = knownName ?? String(localized: "air_group_author_unknown")
             // KHANDAQ (0.2.63): the role of the member who wrote it, by the key it kept, not of whoever has
             // its peer number now.
             let role = AirGroupTranscript.authorRole(key: AirGroupTranscript.authorKey(of: message),
@@ -278,16 +286,61 @@ extension ChatGroupController {
             if named && (key.isEmpty || key != AirGroupMembers.selfKey(in: groupMembers)?.uppercased()) {
                 opensAuthor = name
             }
+            // KHANDAQ (tester 21.11, 8255): the member's tile of the band and the dossier, by the name and the key
+            // the entry kept. An entry the history brought without a signature over it (it says so under its
+            // text, senderUnverified; a file never has one) has the plain tile, and so has one with no name.
+            unconfirmed = message.groupHistorySync && !submanagerGroups.isGroupMessageAuthorVerified(message, in: chat)
+            if unconfirmed || knownName == nil {
+                tile = .unconfirmed
+            }
+            else {
+                tile = .person(initials: AirInitials.from(name), tone: AirTone.index(for: groupToneKey(for: message, name: name)))
+            }
         }
 
+        let current = groupRunKey(forDisplayIndex: row)
         let previous = row + 1 < displayableRowCount() ? groupRunKey(forDisplayIndex: row + 1) : nil
-        let startsRun = entry.unreadSeparator || AirTranscript.startsRun(groupRunKey(forDisplayIndex: row), after: previous)
+        let startsRun = entry.unreadSeparator || AirTranscript.startsRun(current, after: previous)
         entry.authorText = startsRun ? label : nil
         if startsRun, let name = opensAuthor {
             entry.onAuthorTap = { [weak self] source in
                 self?.openAuthor(of: message, name: name, from: source)
             }
         }
+
+        if let style = tile {
+            // The entry after this one in reading order is the row above it in the flipped log.
+            let next = row > 0 ? groupRunKey(forDisplayIndex: row - 1) : nil
+            let nextUnderBand = row > 0 && unreadBand.marks(messageEntry(atDisplayIndex: row - 1).message.uniqueIdentifier)
+            let onTap: ((UIView) -> Void)?
+            if unconfirmed {
+                // The tile of an author nobody confirmed opens nobody: the message may not be theirs.
+                onTap = { [weak self] _ in
+                    self?.sayAuthorUnconfirmed()
+                }
+            }
+            else if let name = opensAuthor {
+                // As the name over the first entry of the run.
+                onTap = { [weak self] source in
+                    self?.openAuthor(of: message, name: name, from: source)
+                }
+            }
+            else {
+                onTap = nil
+            }
+            entry.authorTile = AirAuthorTile(style: style,
+                                             shows: AirTranscript.endsRun(current, before: next, nextUnderBand: nextUnderBand),
+                                             onTap: onTap)
+        }
+    }
+
+    /// KHANDAQ (tester 21.11, 8255): a tap on the tile of an author nobody confirmed says so again, as the entry
+    /// does under its text, instead of opening a member who may not have written it.
+    func sayAuthorUnconfirmed() {
+        guard tableView?.isEditing != true else {
+            return
+        }
+        AirToast.show(String(localized: "group_msg_sender_unverified"), in: view, above: groupToastAnchor)
     }
 
     /// KHANDAQ (0.2.58): the actions on the member who wrote `message`, from the name over the entry: the sheet

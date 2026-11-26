@@ -40,8 +40,9 @@ class ChatGroupController: PortraitChatController {
     // updates don't re-scroll the list).
     fileprivate var lastAutoScrolledOutgoingId: String?
     /// KHANDAQ (ideas 1): the "Unread messages" band and the jump to it on open, as in the conversation with
-    /// one person (AirUnreadBand); taken in viewDidLoad, before viewWillAppear marks the group read.
-    fileprivate var unreadBand = AirUnreadBand.none
+    /// one person (AirUnreadBand); taken in viewDidLoad, before viewWillAppear marks the group read. Read where the
+    /// transcript decides which entry closes a run (configureGroupEntry).
+    fileprivate(set) var unreadBand = AirUnreadBand.none
     var visibleMessages: Int
     fileprivate var showsSystemMessages: Bool
 

@@ -400,6 +400,7 @@ CLIENT_FILES=(
   khandaq-desktop/src/widget/tool/chatquotepreview.h
   khandaq-desktop/test/chatlog/chatlinecontentproxy_test.cpp
   khandaq-desktop/test/core/networkdiagnostics_test.cpp
+  khandaq-desktop/test/model/aircallstage_test.cpp
   khandaq-desktop/test/model/airconversation_test.cpp
   khandaq-desktop/test/model/airgroup_test.cpp
   khandaq-desktop/test/model/airmedia_test.cpp

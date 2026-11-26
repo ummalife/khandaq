@@ -26,6 +26,7 @@
 #include "src/video/videosource.h"
 #include "src/video/videosurface.h"
 #include "src/widget/air/aircallparts.h"
+#include "src/widget/air/airchatparts.h"
 #include "src/widget/air/airstyle.h"
 #include "src/widget/air/airtokens.h"
 #include "src/widget/style.h"
@@ -578,6 +579,14 @@ void TestNetCamView::rowFollowsTheReadingDirection()
     QCOMPARE(stage.box()->pos(), QPoint(16, 369));
     stage.view.setLayoutDirection(Qt::LeftToRight);
     QCOMPARE(stage.box()->pos(), QPoint(757, 369));
+
+    // The link mark of the head stands where the words start: left, then right.
+    fullScreen(stage);
+    const AirLinkMark* const mark = stage.header()->findChild<AirLinkMark*>();
+    QVERIFY(mark != nullptr);
+    QVERIFY(mark->x() < stage.header()->width() / 2);
+    stage.view.setLayoutDirection(Qt::RightToLeft);
+    QVERIFY(mark->x() > stage.header()->width() / 2);
 }
 
 void TestNetCamView::fullScreenHasItsHeadAndTheWholeRow()

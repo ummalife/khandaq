@@ -28,6 +28,7 @@
 #include "src/widget/translator.h"
 
 #include <QDebug>
+#include <QEvent>
 #include <QFile>
 #include <QFontMetricsF>
 #include <QHash>
@@ -576,6 +577,16 @@ void AirCallHeader::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
     placeMark();
+}
+
+void AirCallHeader::changeEvent(QEvent* event)
+{
+    QWidget::changeEvent(event);
+    if (event->type() == QEvent::LayoutDirectionChange) {
+        // The mark stands at the end the words start from.
+        placeMark();
+        update();
+    }
 }
 
 void AirCallHeader::retranslate()

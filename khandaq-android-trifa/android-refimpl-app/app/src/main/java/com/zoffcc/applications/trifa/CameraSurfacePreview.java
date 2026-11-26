@@ -20,41 +20,55 @@
 package com.zoffcc.applications.trifa;
 
 import android.content.Context;
-import android.graphics.PixelFormat;
+import android.graphics.Matrix;
+import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.TypedValue;
-import android.view.MotionEvent;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
+import android.view.TextureView;
+import android.view.View;
+
+import androidx.annotation.NonNull;
 
 import java.util.List;
 
-import static com.zoffcc.applications.trifa.CallingActivity.toggle_osd_views;
-
-public class CameraSurfacePreview extends SurfaceView implements SurfaceHolder.Callback
+/**
+ * Your own camera on the call screen.
+ *
+ * KHANDAQ (calls stage, 26.11): a TextureView, no longer a SurfaceView forced to 120x160 dp. That fixed box
+ * was 3:4 while the camera shows 9:16 in portrait, so the face came out squashed, and a SurfaceView cannot
+ * be clipped to round corners, turned or stacked over the other person's picture. The view now takes the
+ * box AirCallStageController gives it (the camera's own aspect, R2 of the call stage spec) and undoes the
+ * stretch a TextureView puts on every frame (setFrameSize), so the picture keeps its aspect, filling the
+ * box or the whole stage when the pictures are swapped. The camera still starts when the surface is there
+ * and stops when it goes, as it did with the SurfaceView; CallingActivity.onStop stops it too, since a
+ * TextureView keeps its surface while the screen is away.
+ */
+public class CameraSurfacePreview extends TextureView implements TextureView.SurfaceTextureListener
 {
 
     public static final String TAG = "trifa.CameraSurfacePrv";
-    SurfaceHolder mSurfaceHolder;
     Context mContext;
     static List<Camera.Size> mSupportedPreviewSizes = null;
     static Camera.Size mPreviewSize = null;
-    private float my_alpha = 1.0f;
 
     CameraWrapper mCameraWrapper;
 
-    @SuppressWarnings("deprecation")
+    /** The frame as it shows after the camera's turn, 0 while it is not known. */
+    private int frameW = 0;
+    private int frameH = 0;
+    private AirCallStage.Scale frameScale = AirCallStage.Scale.FILL;
+    private final Matrix frameTransform = new Matrix();
+    private Runnable onShownChanged = null;
+
     public CameraSurfacePreview(Context context, AttributeSet attrs)
     {
         super(context, attrs);
-        this.my_alpha = 1.0f;
-        this.mSurfaceHolder = getHolder();
         this.mContext = getContext();
-        this.mSurfaceHolder.setFormat(PixelFormat.TRANSPARENT);
-        this.mSurfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
-        this.mSurfaceHolder.addCallback(this);
+        // Until the first frame the box's own ground (lock-bottom) shows through.
+        setOpaque(false);
+        setSurfaceTextureListener(this);
     }
 
     private Camera.Size getOptimalPreviewSize_2(List<Camera.Size> sizes, int w, int h)
@@ -147,27 +161,6 @@ public class CameraSurfacePreview extends SurfaceView implements SurfaceHolder.C
         return optimalSize;
     }
 
-    @Override
-    public boolean onTouchEvent(MotionEvent event)
-    {
-        if ((event.getAction() == MotionEvent.ACTION_DOWN) || (event.getAction() == MotionEvent.ACTION_CANCEL))
-        {
-            // KHANDAQ (call-screen report, 17 Aug): tapping your own preview used to set THIS surface
-            // to alpha 0 while its 5dp border frame stayed on screen — so the frame filled with the
-            // full-screen REMOTE video showing through it, and the user reported "I tap my own camera
-            // and it shows the other person's view". It also flipped the OSD back on, which is how the
-            // debug HUD appeared. Hide the whole preview box instead (frame included); a tap anywhere
-            // on the remote video brings it back (CustomVideoImageView.onTouch).
-            CallingActivity.set_self_preview_hidden(true);
-            toggle_osd_views(false, false);
-            return true;
-        }
-        else
-        {
-            return false;
-        }
-    }
-
     public static int convertDpToPixels(float dp, Context context)
     {
         int px = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp,
@@ -182,127 +175,122 @@ public class CameraSurfacePreview extends SurfaceView implements SurfaceHolder.C
         return px;
     }
 
-    @Override
-    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec)
+    /** KHANDAQ (calls stage, 26.11): told when this preview or its box shows or hides; the stage lays out again. */
+    void setOnShownChanged(final Runnable listener)
     {
-        Log.i(TAG, "onMeasure");
-        int width = resolveSize(getSuggestedMinimumWidth(), widthMeasureSpec);
-        int height = resolveSize(getSuggestedMinimumHeight(), heightMeasureSpec);
-        // setMeasuredDimension(width, height);
-
-
-        // TODO: HINT: mSupportedPreviewSizes here is always NULL, because it gets only set after we get here
-        //             hard code 640x480 for now. 3g networks can't handle too much more anyways when moving around
-        if (mSupportedPreviewSizes != null)
-        {
-            // mPreviewSize = getOptimalPreviewSize_1(mSupportedPreviewSizes, width, height);
-            // Log.i(TAG, "mOptimalPreviewSize(1)=" + mPreviewSize.width + "," + mPreviewSize.height);
-            mPreviewSize = getOptimalPreviewSize_2(mSupportedPreviewSizes, width, height);
-            Log.i(TAG, "mOptimalPreviewSize(2)=" + mPreviewSize.width + "," + mPreviewSize.height);
-        }
-
-        // HINT: TODO: 120x160 has to match up with camera resolution and
-        //       camera_surfaceview in acticty_calling.xml
-        //       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-        width = convertDpToPixels(120, getContext());
-        height = convertDpToPixels(160, getContext());
-        setMeasuredDimension(width, height);
-        if (2 == 1 + 1)
-        {
-            return;
-        }
-        // HINT: TODO: 120x160 has to match up with camera resolution and
-        //       camera_surfaceview in acticty_calling.xml
-        //       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-
-        if (mPreviewSize != null)
-        {
-            float ratio;
-            if (mPreviewSize.height >= mPreviewSize.width)
-            {
-                ratio = (float) mPreviewSize.height / (float) mPreviewSize.width;
-            }
-            else
-            {
-                ratio = (float) mPreviewSize.width / (float) mPreviewSize.height;
-            }
-
-            Log.i(TAG, "ratio=" + ratio + " w=" + width + " h=" + height + " wmin=" + widthMeasureSpec + " hmin=" +
-                       heightMeasureSpec);
-
-            // One of these methods should be used, second method squishes preview slightly
-            setMeasuredDimension(width, (int) (width * ratio));
-            //  setMeasuredDimension((int) (width * ratio), height);
-        }
-        else
-        {
-            setMeasuredDimension(width, height);
-        }
+        onShownChanged = listener;
     }
 
     @Override
-    public void surfaceCreated(SurfaceHolder holder)
+    protected void onVisibilityChanged(@NonNull final View changedView, final int visibility)
     {
-        Log.i(TAG, "surfaceCreated...");
+        super.onVisibilityChanged(changedView, visibility);
+        if (onShownChanged != null)
+        {
+            onShownChanged.run();
+        }
+    }
 
+    /** R2: the camera frame as it shows; the view keeps its aspect in whatever box it stands in. */
+    void setFrameSize(final int width, final int height)
+    {
+        if ((width == frameW) && (height == frameH))
+        {
+            return;
+        }
+        frameW = width;
+        frameH = height;
+        applyFrameTransform();
+    }
+
+    /** R1, R6: fill in its box; on the whole stage, fill or fit as the stage's turn decides. */
+    void setFrameScale(final AirCallStage.Scale scale)
+    {
+        if (scale == frameScale)
+        {
+            return;
+        }
+        frameScale = scale;
+        applyFrameTransform();
+    }
+
+    int frameWidth()
+    {
+        return frameW;
+    }
+
+    int frameHeight()
+    {
+        return frameH;
+    }
+
+    private void applyFrameTransform()
+    {
+        final int vw = getWidth();
+        final int vh = getHeight();
+        if ((vw <= 0) || (vh <= 0))
+        {
+            return;
+        }
+        final float[] scale = AirCallStage.stretchUndo(frameW, frameH, vw, vh, frameScale);
+        frameTransform.setScale(scale[0], scale[1], vw / 2f, vh / 2f);
+        setTransform(frameTransform);
+    }
+
+    @Override
+    protected void onSizeChanged(final int w, final int h, final int oldw, final int oldh)
+    {
+        super.onSizeChanged(w, h, oldw, oldh);
+        applyFrameTransform();
+    }
+
+    @Override
+    public void onSurfaceTextureAvailable(final SurfaceTexture surface, final int width, final int height)
+    {
+        Log.i(TAG, "onSurfaceTextureAvailable...");
+        applyFrameTransform();
         try
         {
-            Log.i(TAG, "surfaceCreated:re init camera:START");
             if (CallingActivity.ca != null)
             {
                 CallingActivity.ca.onCameraSurfaceReady();
             }
-            Log.i(TAG, "surfaceCreated:re init camera:READY");
         }
         catch (Exception e)
         {
-            e.printStackTrace();
-            Log.i(TAG, "surfaceCreated:EE1:" + e.getMessage());
+            Log.i(TAG, "onSurfaceTextureAvailable:EE1:" + e.getMessage());
         }
-
     }
 
     @Override
-    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height)
+    public void onSurfaceTextureSizeChanged(final SurfaceTexture surface, final int width, final int height)
     {
-        Log.i(TAG, "surfaceChanged...");
-        //        try
-        //        {
-        //            CameraWrapper.mCamera.startPreview();
-        //        }
-        //        catch (Exception e)
-        //        {
-        //            e.printStackTrace();
-        //            Log.i(TAG, "surfaceChanged:EE1:" + e.getMessage());
-        //        }
-        //
-        //        try
-        //        {
-        //            CameraWrapper.mCamera.startPreview();
-        //        }
-        //        catch (Exception e)
-        //        {
-        //            e.printStackTrace();
-        //            Log.i(TAG, "surfaceChanged:EE2:" + e.getMessage());
-        //        }
+        applyFrameTransform();
     }
 
     @Override
-    public void surfaceDestroyed(SurfaceHolder holder)
+    public boolean onSurfaceTextureDestroyed(final SurfaceTexture surface)
     {
-        Log.i(TAG, "surfaceDestroyed...");
+        Log.i(TAG, "onSurfaceTextureDestroyed...");
         try
         {
             CameraWrapper.getInstance().doStopCamera();
         }
         catch (Exception e)
         {
-            Log.i(TAG, "surfaceDestroyed:EE01:" + e.getMessage());
+            Log.i(TAG, "onSurfaceTextureDestroyed:EE01:" + e.getMessage());
         }
+        return true;
     }
 
-    public SurfaceHolder getSurfaceHolder()
+    @Override
+    public void onSurfaceTextureUpdated(final SurfaceTexture surface)
     {
-        return this.mSurfaceHolder;
+    }
+
+    /** The surface the camera previews into; null until the view is on screen. */
+    public SurfaceTexture getPreviewTexture()
+    {
+        return isAvailable() ? getSurfaceTexture() : null;
     }
 }

@@ -29,6 +29,7 @@ fi
 CLIENT_FILES=(
   design/DESIGN.md
   khandaq-android-trifa/android-refimpl-app/app/src/debug/AndroidManifest.xml
+  khandaq-android-trifa/android-refimpl-app/app/src/debug/java/com/zoffcc/applications/trifa/AirCallStageHarnessActivity.java
   khandaq-android-trifa/android-refimpl-app/app/src/debug/java/com/zoffcc/applications/trifa/AirDemoWorld.java
   khandaq-android-trifa/android-refimpl-app/app/src/debug/java/com/zoffcc/applications/trifa/AirDemoWorldActivity.java
   khandaq-android-trifa/android-refimpl-app/app/src/debug/java/com/zoffcc/applications/trifa/AirDemoWorldInstaller.java
@@ -44,6 +45,8 @@ CLIENT_FILES=(
   khandaq-android-trifa/android-refimpl-app/app/src/main/java/com/zoffcc/applications/trifa/AirBlockList.java
   khandaq-android-trifa/android-refimpl-app/app/src/main/java/com/zoffcc/applications/trifa/AirBlockedActivity.java
   khandaq-android-trifa/android-refimpl-app/app/src/main/java/com/zoffcc/applications/trifa/AirByteSize.java
+  khandaq-android-trifa/android-refimpl-app/app/src/main/java/com/zoffcc/applications/trifa/AirCallStage.java
+  khandaq-android-trifa/android-refimpl-app/app/src/main/java/com/zoffcc/applications/trifa/AirCallStageController.java
   khandaq-android-trifa/android-refimpl-app/app/src/main/java/com/zoffcc/applications/trifa/AirCappedScrollView.java
   khandaq-android-trifa/android-refimpl-app/app/src/main/java/com/zoffcc/applications/trifa/AirChatPanel.java
   khandaq-android-trifa/android-refimpl-app/app/src/main/java/com/zoffcc/applications/trifa/AirComposerNotice.java
@@ -113,7 +116,9 @@ CLIENT_FILES=(
   khandaq-android-trifa/android-refimpl-app/app/src/main/java/com/zoffcc/applications/trifa/SettingsTabFragment.java
   khandaq-android-trifa/android-refimpl-app/app/src/main/java/com/zoffcc/applications/trifa/ToxSaveSummary.java
   khandaq-android-trifa/android-refimpl-app/app/src/main/res/color/air_button_ink_text.xml
+  khandaq-android-trifa/android-refimpl-app/app/src/main/res/color/air_call_chip_ground.xml
   khandaq-android-trifa/android-refimpl-app/app/src/main/res/color/air_call_switch_glyph.xml
+  khandaq-android-trifa/android-refimpl-app/app/src/main/res/color/air_call_tile_border.xml
   khandaq-android-trifa/android-refimpl-app/app/src/main/res/color/air_icon_button_tint.xml
   khandaq-android-trifa/android-refimpl-app/app/src/main/res/color/air_pill_text.xml
   khandaq-android-trifa/android-refimpl-app/app/src/main/res/color/air_pin_key_lock_text.xml
@@ -162,6 +167,9 @@ CLIENT_FILES=(
   khandaq-android-trifa/android-refimpl-app/app/src/main/res/drawable/air_call_ic_mic_off.xml
   khandaq-android-trifa/android-refimpl-app/app/src/main/res/drawable/air_call_ic_speaker.xml
   khandaq-android-trifa/android-refimpl-app/app/src/main/res/drawable/air_call_ic_switch_camera.xml
+  khandaq-android-trifa/android-refimpl-app/app/src/main/res/drawable/air_call_link_chip.xml
+  khandaq-android-trifa/android-refimpl-app/app/src/main/res/drawable/air_call_tile_border.xml
+  khandaq-android-trifa/android-refimpl-app/app/src/main/res/drawable/air_call_tile_ground.xml
   khandaq-android-trifa/android-refimpl-app/app/src/main/res/drawable/air_fg_press_veil.xml
   khandaq-android-trifa/android-refimpl-app/app/src/main/res/drawable/air_file_bar.xml
   khandaq-android-trifa/android-refimpl-app/app/src/main/res/drawable/air_file_photo_ground.xml
@@ -309,6 +317,7 @@ CLIENT_FILES=(
   khandaq-android-trifa/android-refimpl-app/app/src/test/java/com/zoffcc/applications/trifa/AirBandRuleTest.java
   khandaq-android-trifa/android-refimpl-app/app/src/test/java/com/zoffcc/applications/trifa/AirBlockListTest.java
   khandaq-android-trifa/android-refimpl-app/app/src/test/java/com/zoffcc/applications/trifa/AirByteSizeTest.java
+  khandaq-android-trifa/android-refimpl-app/app/src/test/java/com/zoffcc/applications/trifa/AirCallStageTest.java
   khandaq-android-trifa/android-refimpl-app/app/src/test/java/com/zoffcc/applications/trifa/AirCommandPasteTest.java
   khandaq-android-trifa/android-refimpl-app/app/src/test/java/com/zoffcc/applications/trifa/AirContactMarksTest.java
   khandaq-android-trifa/android-refimpl-app/app/src/test/java/com/zoffcc/applications/trifa/AirConversationModelTest.java
@@ -383,6 +392,10 @@ CLIENT_FILES=(
   khandaq-desktop/src/platform/systemappearance_osx.mm
   khandaq-desktop/src/platform/traynotify.cpp
   khandaq-desktop/src/platform/traynotify.h
+  khandaq-desktop/src/video/netcamview.cpp
+  khandaq-desktop/src/video/netcamview.h
+  khandaq-desktop/src/video/videosurface.cpp
+  khandaq-desktop/src/video/videosurface.h
   khandaq-desktop/src/widget/air
   khandaq-desktop/src/widget/chatformheader.cpp
   khandaq-desktop/src/widget/chatformheader.h
@@ -398,8 +411,11 @@ CLIENT_FILES=(
   khandaq-desktop/src/widget/loginscreen.h
   khandaq-desktop/src/widget/tool/chatquotepreview.cpp
   khandaq-desktop/src/widget/tool/chatquotepreview.h
+  khandaq-desktop/src/widget/tool/movablewidget.cpp
+  khandaq-desktop/src/widget/tool/movablewidget.h
   khandaq-desktop/test/chatlog/chatlinecontentproxy_test.cpp
   khandaq-desktop/test/core/networkdiagnostics_test.cpp
+  khandaq-desktop/test/model/aircallstage_test.cpp
   khandaq-desktop/test/model/airconversation_test.cpp
   khandaq-desktop/test/model/airgroup_test.cpp
   khandaq-desktop/test/model/airmedia_test.cpp
@@ -427,6 +443,7 @@ CLIENT_FILES=(
   khandaq-desktop/test/widget/airwidgets_test.cpp
   khandaq-desktop/test/widget/airyoupage_test.cpp
   khandaq-desktop/test/widget/chatquotepreview_test.cpp
+  khandaq-desktop/test/widget/netcamview_test.cpp
   khandaq-desktop/themes/dark/palette.ini
   khandaq-desktop/themes/default/palette.ini
   khandaq-desktop/tools/gen-design-tokens.py

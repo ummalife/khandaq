@@ -55,7 +55,9 @@ class SnapshotBaseTest: FBSnapshotTestCase {
     }
 }
 
-private extension UIView {
+// KHANDAQ (calls stage, 26.11): not private, so the screenshots of the call stage mirror the whole
+// screen the way an Arabic phone does.
+extension UIView {
     func forceRightToLeft() {
         if #available(iOS 9.0, *) {
             semanticContentAttribute = .forceRightToLeft

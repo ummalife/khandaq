@@ -210,6 +210,19 @@ void AirLinkMark::setState(Air::LinkState state_)
     }
 }
 
+void AirLinkMark::setOnDark(bool onDark_)
+{
+    if (onDark != onDark_) {
+        onDark = onDark_;
+        update();
+    }
+}
+
+QColor AirLinkMark::tint(AirTokens::Color role) const
+{
+    return onDark ? AirStyle::darkColor(role) : air().color(role);
+}
+
 QSize AirLinkMark::sizeHint() const
 {
     return QSize(Size::linkMark, Size::linkMark / 3);
@@ -231,7 +244,7 @@ void AirLinkMark::paintEvent(QPaintEvent*)
     const QPointF far(26, 5);
     switch (state) {
     case Air::LinkState::Direct: {
-        const QColor live = air().color(Color::Live);
+        const QColor live = tint(Color::Live);
         painter.setPen(QPen(live, Stroke::strong));
         painter.drawLine(QPointF(7, 5), QPointF(23, 5));
         painter.setPen(Qt::NoPen);
@@ -241,7 +254,7 @@ void AirLinkMark::paintEvent(QPaintEvent*)
         break;
     }
     case Air::LinkState::Relay: {
-        const QColor live = air().color(Color::Live);
+        const QColor live = tint(Color::Live);
         painter.setPen(QPen(live, Stroke::strong));
         painter.drawLine(QPointF(7, 5), QPointF(12, 5));
         painter.drawLine(QPointF(18, 5), QPointF(23, 5));
@@ -254,7 +267,7 @@ void AirLinkMark::paintEvent(QPaintEvent*)
         break;
     }
     case Air::LinkState::None: {
-        const QColor quiet = air().color(Color::Ink3);
+        const QColor quiet = tint(Color::Ink3);
         QPen dashed(quiet, Stroke::strong);
         dashed.setDashPattern({2 / Stroke::strong, 3 / Stroke::strong});
         dashed.setCapStyle(Qt::FlatCap);

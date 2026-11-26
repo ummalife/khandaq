@@ -22,6 +22,9 @@ package com.zoffcc.applications.trifa;
 import org.khandaq.messenger.BuildConfig;
 import org.khandaq.messenger.R;
 
+import android.content.res.Configuration;
+import androidx.annotation.NonNull;
+
 import android.Manifest;
 import android.annotation.TargetApi;
 import android.app.Activity;
@@ -54,7 +57,7 @@ import android.os.PowerManager;
 import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.MotionEvent;
-import android.view.SurfaceHolder;
+import android.graphics.SurfaceTexture;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -76,6 +79,7 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
@@ -174,6 +178,8 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     static boolean trifa_is_MicrophoneMute = false;
     private static final String TAG = "trifa.CallingActivity";
     static CameraSurfacePreview cameraSurfacePreview = null;
+    // KHANDAQ (calls stage, 26.11): the screen's stage (both pictures, the header, the controls), main thread.
+    static AirCallStageController call_stage = null;
     static CameraDrawingOverlay drawingOverlay = null;
     static float mPreviewRate = -1f;
     static AudioRecording audio_thread = null;
@@ -210,13 +216,6 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     static View video_box_self_preview_01 = null;
     static View video_box_left_top_01 = null;
     static View video_box_right_top_01 = null;
-    // KHANDAQ (#130): self-view enlarge toggle state. Base sizes (dp) from activity_calling.xml.
-    static boolean self_view_enlarged = false;
-    private static final float SELF_VIEW_ENLARGE_FACTOR = 2.2f;
-    private static final float SELF_VIEW_CONTAINER_W_DP = 125f;
-    private static final float SELF_VIEW_CONTAINER_H_DP = 166f;
-    private static final float SELF_VIEW_INNER_W_DP = 120f;
-    private static final float SELF_VIEW_INNER_H_DP = 160f;
     final static String MIME_TYPE = "video/avc";   // H.264 Advanced Video Coding
     final static int FRAME_RATE = 30;
     final static int IFRAME_INTERVAL = 2;
@@ -284,12 +283,6 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                 return;
             }
             self_preview_hidden = hidden;
-            // Put an enlarged preview back to its corner size while hiding it, so bringing it back
-            // never drops a half-screen window on the user.
-            if (hidden && self_view_enlarged)
-            {
-                toggleSelfViewEnlarged();
-            }
             final View box = video_box_self_preview_01;
             final Runnable apply = () -> {
                 try
@@ -311,56 +304,6 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         {
             Log.w(TAG, "set_self_preview_hidden:EE:" + e.getMessage());
         }
-    }
-
-    // KHANDAQ (#130): toggle the self-camera preview between its normal corner size and ~2.2x so the user
-    // can see themselves bigger during a video call. Scales the container + inner border frame + the camera
-    // drawing overlay (camera_surfaceview is 0dp; the overlay does the rendering and rescales to its bounds).
-    static void toggleSelfViewEnlarged()
-    {
-        try
-        {
-            if (video_box_self_preview_01 == null)
-            {
-                return;
-            }
-            self_view_enlarged = !self_view_enlarged;
-            final float f = self_view_enlarged ? SELF_VIEW_ENLARGE_FACTOR : 1.0f;
-            setSelfViewSizeDp(video_box_self_preview_01, SELF_VIEW_CONTAINER_W_DP * f, SELF_VIEW_CONTAINER_H_DP * f);
-            if (video_box_self_preview_01 instanceof ViewGroup)
-            {
-                final ViewGroup container = (ViewGroup) video_box_self_preview_01;
-                if (container.getChildCount() > 0)
-                {
-                    setSelfViewSizeDp(container.getChildAt(0), SELF_VIEW_INNER_W_DP * f, SELF_VIEW_INNER_H_DP * f);
-                }
-            }
-            final View overlay = video_box_self_preview_01.findViewById(R.id.camera_drawing_overlay);
-            if (overlay != null)
-            {
-                setSelfViewSizeDp(overlay, SELF_VIEW_INNER_W_DP * f, SELF_VIEW_INNER_H_DP * f);
-            }
-        }
-        catch (Exception e)
-        {
-            Log.w(TAG, "toggleSelfViewEnlarged:EE:" + e.getMessage());
-        }
-    }
-
-    private static void setSelfViewSizeDp(final View v, final float wDp, final float hDp)
-    {
-        if (v == null)
-        {
-            return;
-        }
-        final ViewGroup.LayoutParams lp = v.getLayoutParams();
-        if (lp == null)
-        {
-            return;
-        }
-        lp.width = (int) HelperGeneric.dp2px(wDp);
-        lp.height = (int) HelperGeneric.dp2px(hDp);
-        v.setLayoutParams(lp);
     }
 
     // KHANDAQ (#130): Picture-in-Picture. Pressing Home during a call shrinks the call into a floating
@@ -420,6 +363,10 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
         setControlsHiddenForPip(isInPictureInPictureMode);
+        if (call_stage != null)
+        {
+            call_stage.setPictureInPicture(isInPictureInPictureMode);
+        }
     }
 
     private void setControlsHiddenForPip(final boolean hide)
@@ -454,6 +401,19 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         {
             Log.w(TAG, "setControlsHiddenForPip:EE:" + ex.getMessage());
         }
+    }
+
+    /**
+     * KHANDAQ (calls stage, 26.11): the call screen is dark in both app themes and the same in both (R12): it
+     * takes the night resources whatever the app's theme is, so the ground, the circles and the bars that slide
+     * in are those of the dark theme, as on iOS. Set before AppCompat makes the base context, it applies at
+     * creation and recreates nothing.
+     */
+    @Override
+    protected void attachBaseContext(final Context newBase)
+    {
+        getDelegate().setLocalNightMode(AppCompatDelegate.MODE_NIGHT_YES);
+        super.attachBaseContext(newBase);
     }
 
     @Override
@@ -628,17 +588,12 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         video_box_left_top_01.setVisibility(View.INVISIBLE);
         video_box_right_top_01.setVisibility(View.INVISIBLE);
 
-        // A tap on your own preview puts it away (a tap on the remote video brings it back) — that is
-        // what people expect from the little corner window, and it was reported as "tapping my own
-        // camera shows the other person". Enlarging it (KHANDAQ #130) moves to a long press, so both
-        // are reachable. This listener sits on the container and wins over the child views' own touch
-        // handling, so the hide has to be wired here, not only in CameraSurfacePreview.
-        self_view_enlarged = false;
-        video_box_self_preview_01.setOnClickListener(v -> set_self_preview_hidden(true));
-        video_box_self_preview_01.setOnLongClickListener(v -> {
-            toggleSelfViewEnlarged();
-            return true;
-        });
+        // KHANDAQ (calls stage, 26.11): the stage lays out both pictures, the header and the controls by the
+        // call stage spec. A tap on your own picture swaps it with the other person's (R6) instead of putting
+        // it away (call-screen report, 17 Aug); a drag throws it to a corner, and the long press of #130 still
+        // makes it bigger.
+        self_preview_hidden = false;
+        call_stage = new AirCallStageController(this);
 
         volume_slider_seekbar_01 = (SeekBar) findViewById(R.id.volume_slider_seekbar);
         video_add_delay_slider_seekbar_01 = (SeekBar) findViewById(R.id.video_add_delay_slider_seekbar);
@@ -1452,6 +1407,10 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         // size, then the state of the call and the link (show_call_link above).
         call_name.setText(call_person_name());
         ViewCompat.setAccessibilityHeading(call_name, true);
+        if (call_stage != null)
+        {
+            call_stage.setPerson(call_person_name(), Callstate.friend_pubkey);
+        }
         show_call_state();
 
         // Answer, With video, Decline and End are clicks, so TalkBack's double tap works them too; the old
@@ -1491,21 +1450,12 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
         {
             // In immersive mode a phone with a cutout letterboxes the window below it, and that strip
-            // stayed black over the theme ground. The window now reaches the short edge, and its content
-            // keeps below the cutout, so the strip shows the ground and nothing is drawn under the cutout.
+            // stayed black over the theme ground. The window reaches the short edge. KHANDAQ (calls stage,
+            // 26.11): the other person's picture runs under the cutout too (full bleed, R1), and the header
+            // and the controls keep inside the safe edges (AirCallStageController).
             final WindowManager.LayoutParams attrs = getWindow().getAttributes();
             attrs.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
             getWindow().setAttributes(attrs);
-            final View content = findViewById(android.R.id.content);
-            if (content != null)
-            {
-                ViewCompat.setOnApplyWindowInsetsListener(content, (v, insets) -> {
-                    final androidx.core.graphics.Insets cut = insets.getInsets(
-                            androidx.core.view.WindowInsetsCompat.Type.displayCutout());
-                    v.setPadding(cut.left, cut.top, cut.right, cut.bottom);
-                    return insets;
-                });
-            }
         }
         getWindow().setStatusBarColor(ground);
         getWindow().setNavigationBarColor(ground);
@@ -2125,6 +2075,26 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         openCameraOnUiThreadIfSurfaceReady();
     }
 
+    /**
+     * KHANDAQ (calls stage, 26.11): your camera's frame and the turn its preview takes, from CameraWrapper on any
+     * thread; your own picture takes the frame's aspect as it shows (R2).
+     */
+    static void on_camera_frame_shown(final int width, final int height, final int orientation)
+    {
+        final Handler handler = callactivity_handler_s;
+        if (handler == null)
+        {
+            return;
+        }
+        final int[] shown = AirCallStage.shownFrame(width, height, orientation);
+        handler.post(() -> {
+            if (call_stage != null)
+            {
+                call_stage.onCameraFrame(shown[0], shown[1]);
+            }
+        });
+    }
+
     private void scheduleCameraOpen()
     {
         if (Callstate.audio_call)
@@ -2160,9 +2130,9 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     return;
                 }
 
-                final SurfaceHolder holder = cameraSurfacePreview.getSurfaceHolder();
-
-                if ((holder == null) || !holder.getSurface().isValid())
+                // KHANDAQ (calls stage, 26.11): the preview goes into a TextureView; it is ready once its
+                // texture is (onSurfaceTextureAvailable calls onCameraSurfaceReady).
+                if (cameraSurfacePreview.getPreviewTexture() == null)
                 {
                     return;
                 }
@@ -2712,6 +2682,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             audio_device_icon = null;
             top_text_line = null;
             cameraSurfacePreview = null;
+            call_stage = null;
             drawingOverlay = null;
             right_top_text_1 = null;
             right_top_text_1b = null;
@@ -2842,6 +2813,48 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         on_call_ended_actions();
     }
 
+    /**
+     * KHANDAQ (calls stage, 26.11): the camera stops when the screen goes out of sight, as it did when the old
+     * SurfaceView lost its surface; a TextureView keeps its texture, so nothing else would stop it. onStart
+     * opens it again on an accepted call. Picture in picture keeps it: the other person still sees you there.
+     */
+    @Override
+    protected void onStop()
+    {
+        super.onStop();
+        if ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) && isInPictureInPictureMode())
+        {
+            return;
+        }
+        try
+        {
+            CameraWrapper.getInstance().doStopCamera();
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "onStop:doStopCamera:EE:" + e.getMessage());
+        }
+        if (call_stage != null)
+        {
+            call_stage.onCameraGone();
+        }
+    }
+
+    /**
+     * KHANDAQ (calls stage, 26.11): the screen turned or was resized (a tablet, a window): the camera's preview
+     * turns with the display and the stage lays out again (R11).
+     */
+    @Override
+    public void onConfigurationChanged(@NonNull final Configuration newConfig)
+    {
+        super.onConfigurationChanged(newConfig);
+        CameraWrapper.refreshDisplayOrientation();
+        if (call_stage != null)
+        {
+            call_stage.requestRelayout();
+        }
+    }
+
     // ---------------
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
@@ -2910,9 +2923,12 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                         return;
                     }
 
-                    SurfaceHolder holder = cameraSurfacePreview.getSurfaceHolder();
-                    HelperGeneric.logI(TAG, "cameraHasOpened:holder=" + holder);
-                    CameraWrapper.getInstance().doStartPreview(holder, mPreviewRate);
+                    final SurfaceTexture texture = cameraSurfacePreview.getPreviewTexture();
+                    HelperGeneric.logI(TAG, "cameraHasOpened:texture=" + texture);
+                    if (texture != null)
+                    {
+                        CameraWrapper.getInstance().doStartPreview(texture, mPreviewRate);
+                    }
                 }
                 catch (Exception e)
                 {

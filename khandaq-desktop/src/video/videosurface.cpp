@@ -21,14 +21,18 @@
 #include "src/core/core.h"
 #include "src/model/friend.h"
 #include "src/friendlist.h"
+#include "src/model/air/aircallstage.h"
 #include "src/persistence/settings.h"
 #include "src/video/videoframe.h"
+#include "src/widget/air/airstyle.h"
+#include "src/widget/air/airwidgets.h"
 #include "src/widget/friendwidget.h"
 #include "src/widget/style.h"
 
 #include <QDebug>
 #include <QLabel>
 #include <QPainter>
+#include <QPainterPath>
 #include <QSvgRenderer>
 
 namespace {
@@ -37,9 +41,10 @@ float getSizeRatio(const QSize size)
     return size.width() / static_cast<float>(size.height());
 }
 
-QPixmap loadPlaceholderAvatar(const QSize& bounds)
+QPixmap loadPlaceholderAvatar(const QSize& bounds,
+                              const QString& path = QStringLiteral(":/img/contact_dark.svg"))
 {
-    QSvgRenderer render(QStringLiteral(":/img/contact_dark.svg"));
+    QSvgRenderer render(path);
     QSizeF naturalSize = render.defaultSize();
     if (naturalSize.isEmpty() || naturalSize.width() <= 0 || naturalSize.height() <= 0) {
         naturalSize = QSizeF(1, 1);
@@ -61,6 +66,14 @@ QRect centeredPixmapRect(const QPixmap& pixmap, const QRect& container)
                          container.y() + (container.height() - pixmap.height()) / 2);
     return QRect(topLeft, pixmap.size());
 }
+
+/**
+ * KHANDAQ (calls stage, 26.11): the avatar on the stage until the person's video comes, at the
+ * size of an audio call on the desktop.
+ */
+constexpr int stageAvatarSide = 128;
+/** The share of the white of fixed-white in the hairline round the small video of a call. */
+constexpr qreal boxBorderAlpha = 0.2;
 } // namespace
 
 /**
@@ -74,7 +87,7 @@ VideoSurface::VideoSurface(const QPixmap& avatar_, QWidget* parent, bool expandi
     , hasSubscribed{0}
     , avatar{avatar_}
     , ratio{1.0f}
-    , expanding{expanding_}
+    , scaling{expanding_ ? Scaling::Fill : Scaling::Fit}
 {
     recalulateBounds();
 }
@@ -92,7 +105,7 @@ VideoSurface::~VideoSurface()
 
 bool VideoSurface::isExpanding() const
 {
-    return expanding;
+    return scaling == Scaling::Fill;
 }
 
 /**
@@ -135,6 +148,59 @@ QPixmap VideoSurface::getAvatar() const
     return avatar;
 }
 
+void VideoSurface::setScaling(Scaling scaling_)
+{
+    if (scaling != scaling_) {
+        scaling = scaling_;
+        recalulateBounds();
+        emit boundaryChanged();
+    }
+}
+
+VideoSurface::Scaling VideoSurface::getScaling() const
+{
+    return scaling;
+}
+
+void VideoSurface::setLook(Look look_)
+{
+    if (look != look_) {
+        look = look_;
+        update();
+    }
+}
+
+VideoSurface::Look VideoSurface::getLook() const
+{
+    return look;
+}
+
+void VideoSurface::setMirrored(bool mirrored_)
+{
+    if (mirrored != mirrored_) {
+        mirrored = mirrored_;
+        update();
+    }
+}
+
+bool VideoSurface::isMirrored() const
+{
+    return mirrored;
+}
+
+QSize VideoSurface::getFrameSize() const
+{
+    return frameSize;
+}
+
+bool VideoSurface::hasFrame()
+{
+    lock();
+    const bool has = lastFrame != nullptr;
+    unlock();
+    return has;
+}
+
 void VideoSurface::subscribe()
 {
     if (source && hasSubscribed++ == 0) {
@@ -157,6 +223,7 @@ void VideoSurface::unsubscribe()
     unlock();
 
     ratio = 1.0f;
+    frameSize = QSize();
     recalulateBounds();
     emit ratioChanged();
     emit boundaryChanged();
@@ -175,10 +242,11 @@ void VideoSurface::onNewFrameAvailable(const std::shared_ptr<VideoFrame>& newFra
     newSize = lastFrame->getSourceDimensions().size();
     unlock();
 
-    float newRatio = getSizeRatio(newSize);
-
-    if (!qFuzzyCompare(newRatio, ratio)  && isVisible()) {
-        ratio = newRatio;
+    // KHANDAQ (calls stage, 26.11): the size is followed while the surface is hidden too, so the
+    // box of a call has its shape when it shows again; a new size of the same shape counts too.
+    if (newSize != frameSize && !newSize.isEmpty()) {
+        frameSize = newSize;
+        ratio = getSizeRatio(newSize);
         recalulateBounds();
         emit ratioChanged();
         emit boundaryChanged();
@@ -200,13 +268,103 @@ void VideoSurface::paintEvent(QPaintEvent* event)
     lock();
 
     QPainter painter(this);
-    painter.fillRect(painter.viewport(), Qt::black);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
+    bool painted = false;
     if (lastFrame) {
-        QImage frame = lastFrame->toQImage(rect().size());
-        if (frame.isNull())
-            lastFrame.reset();
-        painter.drawImage(boundingRect, frame, frame.rect(), Qt::NoFormatConversion);
+        // KHANDAQ (calls stage, 26.11): one resample with the aspect kept. The frame used to be
+        // scaled to the whole widget first and then into its rect, unevenly both times and the
+        // second time without smoothing. Now it is converted at the size it is drawn at, but never
+        // above its own (swscale shrinks it), and a frame drawn bigger than it is grows in the
+        // painter, smoothly.
+        const QSize source = lastFrame->getSourceDimensions().size();
+        const QRect area = contentsRect();
+        const QRect drawn = Air::CallStage::videoRect(
+            source, area, fills(source) ? Air::CallStage::Scale::Fill : Air::CallStage::Scale::Fit);
+        const qreal dpr = devicePixelRatioF();
+        QSize pixels(qRound(drawn.width() * dpr), qRound(drawn.height() * dpr));
+        if (pixels.width() > source.width() || pixels.height() > source.height()) {
+            pixels = source;
+        }
+        if (!pixels.isEmpty()) {
+            const QImage frame = lastFrame->toQImage(pixels);
+            if (frame.isNull()) {
+                lastFrame.reset();
+            } else {
+                paintFrame(painter, frame, drawn);
+                painted = true;
+            }
+        }
+    }
+    if (!painted) {
+        paintWithoutFrame(painter);
+    }
+
+    unlock();
+}
+
+bool VideoSurface::fills(const QSize& frame) const
+{
+    switch (scaling) {
+    case Scaling::Fit:
+        return false;
+    case Scaling::Fill:
+        return true;
+    case Scaling::Stage:
+        break;
+    }
+    return Air::CallStage::stageScale(frame, contentsRect().size()) == Air::CallStage::Scale::Fill;
+}
+
+void VideoSurface::paintFrame(QPainter& painter, const QImage& frame, const QRect& drawn)
+{
+    using AirTokens::Color;
+    if (look == Look::Plain) {
+        painter.fillRect(painter.viewport(), Qt::black);
+    } else if (look == Look::Stage) {
+        painter.fillRect(rect(), AirStyle::darkColor(Color::FixedBlack));
+    }
+
+    painter.save();
+    if (mirrored) {
+        // Mirrored round the middle of the surface, where the frame is centred.
+        painter.translate(width(), 0);
+        painter.scale(-1, 1);
+    }
+    if (look == Look::Box) {
+        // The video itself takes the rounded corners: a frame laid on as the brush of the rounded
+        // rect keeps its edge smooth, where a clip path would cut it jagged.
+        QBrush brush(frame);
+        QTransform place;
+        place.translate(drawn.x(), drawn.y());
+        place.scale(drawn.width() / static_cast<qreal>(frame.width()),
+                    drawn.height() / static_cast<qreal>(frame.height()));
+        brush.setTransform(place);
+        const qreal radius = AirTokens::Radius::card;
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(AirStyle::darkColor(Color::LockBottom));
+        painter.drawRoundedRect(QRectF(rect()), radius, radius);
+        // A brush repeats its image, so it fills only where the frame is.
+        painter.setBrush(brush);
+        painter.drawRoundedRect(QRectF(drawn.intersected(rect())), radius, radius);
     } else {
+        painter.drawImage(QRectF(drawn), frame);
+    }
+    painter.restore();
+
+    if (look == Look::Box) {
+        QColor border = AirStyle::darkColor(Color::FixedWhite);
+        border.setAlphaF(boxBorderAlpha);
+        AirPaint::box(painter, rect(), AirTokens::Radius::card, QColor(), border);
+    }
+}
+
+void VideoSurface::paintWithoutFrame(QPainter& painter)
+{
+    using AirTokens::Color;
+    switch (look) {
+    case Look::Plain: {
+        painter.fillRect(painter.viewport(), Qt::black);
         painter.fillRect(boundingRect, Qt::white);
         QPixmap drawnAvatar = avatar;
 
@@ -218,9 +376,61 @@ void VideoSurface::paintEvent(QPaintEvent* event)
         }
 
         painter.drawPixmap(centeredPixmapRect(drawnAvatar, boundingRect), drawnAvatar);
+        return;
     }
-
-    unlock();
+    case Look::Stage: {
+        // KHANDAQ (calls stage, 26.11): the call screen stays dark in both themes; the person's
+        // avatar stands in the middle at the size of an audio call until their video comes.
+        painter.fillRect(rect(), AirStyle::darkColor(Color::LockTop));
+        const int side =
+            qMin(stageAvatarSide, qMin(width(), height()) - 2 * Air::CallStage::selfInset());
+        if (side <= 0) {
+            return;
+        }
+        const QRectF tile((width() - side) / 2.0, (height() - side) / 2.0, side, side);
+        const qreal radius = AirTokens::Radius::card;
+        const qreal dpr = devicePixelRatioF();
+        const int pixels = qRound(side * dpr);
+        QPixmap shown;
+        if (avatar.isNull()) {
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(AirStyle::darkColor(Color::MediaControl));
+            painter.drawRoundedRect(tile, radius, radius);
+            shown = loadPlaceholderAvatar(QSize(pixels, pixels) / 2,
+                                          QStringLiteral(":/img/contact.svg"));
+            shown.setDevicePixelRatio(dpr);
+            const QSizeF logical = QSizeF(shown.size()) / dpr;
+            painter.drawPixmap(QPointF(tile.center().x() - logical.width() / 2.0,
+                                       tile.center().y() - logical.height() / 2.0),
+                               shown);
+            return;
+        }
+        shown = avatar.scaled(pixels, pixels, Qt::KeepAspectRatioByExpanding,
+                              Qt::SmoothTransformation);
+        shown.setDevicePixelRatio(dpr);
+        QPainterPath clip;
+        clip.addRoundedRect(tile, radius, radius);
+        painter.save();
+        painter.setClipPath(clip);
+        const QSizeF logical = QSizeF(shown.size()) / dpr;
+        painter.drawPixmap(QPointF(tile.center().x() - logical.width() / 2.0,
+                                   tile.center().y() - logical.height() / 2.0),
+                           shown);
+        painter.restore();
+        return;
+    }
+    case Look::Box: {
+        // KHANDAQ (calls stage, 26.11): the ground of our camera's tile until its first frame.
+        const qreal radius = AirTokens::Radius::card;
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(AirStyle::darkColor(Color::LockBottom));
+        painter.drawRoundedRect(QRectF(rect()), radius, radius);
+        QColor border = AirStyle::darkColor(Color::FixedWhite);
+        border.setAlphaF(boxBorderAlpha);
+        AirPaint::box(painter, rect(), radius, QColor(), border);
+        return;
+    }
+    }
 }
 
 void VideoSurface::resizeEvent(QResizeEvent* event)
@@ -238,23 +448,14 @@ void VideoSurface::showEvent(QShowEvent* e)
 
 void VideoSurface::recalulateBounds()
 {
-    if (expanding) {
-        boundingRect = contentsRect();
-    } else {
-        QPoint pos;
-        QSize size;
-        QSize usableSize = contentsRect().size();
-        int possibleWidth = usableSize.height() * ratio;
-
-        if (possibleWidth > usableSize.width())
-            size = (QSize(usableSize.width(), usableSize.width() / ratio));
-        else
-            size = (QSize(possibleWidth, usableSize.height()));
-
-        pos.setX(width() / 2 - size.width() / 2);
-        pos.setY(height() / 2 - size.height() / 2);
-        boundingRect.setRect(pos.x(), pos.y(), size.width(), size.height());
-    }
+    // KHANDAQ (calls stage, 26.11): the rect the frame takes, inside the surface; one that fills
+    // keeps its aspect and is cut at the edges instead of stretched. Before the first frame the
+    // shape is a square, as it was.
+    const QRect area = contentsRect();
+    const QSize shape = frameSize.isEmpty() ? QSize(1, 1) : frameSize;
+    const Air::CallStage::Scale scale =
+        fills(shape) ? Air::CallStage::Scale::Fill : Air::CallStage::Scale::Fit;
+    boundingRect = Air::CallStage::videoRect(shape, area, scale).intersected(area);
 
     update();
 }

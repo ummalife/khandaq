@@ -1,793 +1,802 @@
-<!-- KHANDAQ (redesign, stage 3b; stage 5): the call screen (incoming, ours while it calls, a call going
-     on) on the flat lock ground (lock-top), dark in both themes, with white words, as on iOS
-     (AirCallBackdropView; design/DESIGN.md, "Files, voice and calls on the phone"). At the top the head:
-     the person in the display size, the state of the call and the link with its mark. In the middle the
-     video of a video call. At the bottom the controls of the moment, each a 64dp circle with its word under
-     it, in equal columns (CallingActivity.apply_call_controls): the switches translucent white with no
-     outline, Answer in live-fill, Decline and End in danger-fill; a touch shows as a light ripple. The
-     legacy TRIfA views keep their ids for the code that still drives them; they stay hidden as before. -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (redesign, stage 3b; stage 5; calls stage, 26.11): the call screen (incoming, ours while it
+     calls, a call going on) on the flat lock ground (lock-top), dark in both themes, with white words, as
+     on iOS (design/DESIGN.md, "Files, voice and calls on the phone"). The stage is the whole screen: the
+     other person's picture under everything, your own camera in a small box with round corners over it,
+     the TRIfA views in a layer of their own, then the header and the controls inside the safe edges. A tap
+     on the small box swaps the pictures, a drag throws it to a corner, a long press makes it bigger
+     (AirCallStageController, the call stage spec). On an audio call, and on a video call until the other
+     person's picture comes, the header stands in the middle with the person's tile. The legacy TRIfA views
+     keep their ids for the code that still drives them; they stay hidden as before. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/calling_activity_top_viewgroup"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/kq_lock_top"
-    android:orientation="vertical"
     tools:context="com.zoffcc.applications.trifa.CallingActivity">
 
-    <LinearLayout
-        android:id="@+id/air_call_head"
+    <!-- The other person, full bleed under the header and the controls (R1). -->
+    <com.zoffcc.applications.trifa.CustomVideoImageView
+        android:id="@+id/video_view"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_horizontal"
-        android:orientation="vertical"
-        android:paddingStart="@dimen/kq_space_24"
-        android:paddingTop="@dimen/kq_space_40"
-        android:paddingEnd="@dimen/kq_space_24"
-        android:paddingBottom="@dimen/kq_space_16">
+        android:layout_height="match_parent"
+        android:layout_gravity="top|left" />
 
-        <TextView
-            android:id="@+id/air_call_name"
+    <!-- Your own camera: the box takes the camera's aspect, its corners round, a hairline round it
+         (R2 to R4); AirCallStageController gives it its size and corner and swaps it with the stage. -->
+    <FrameLayout
+        android:id="@+id/video_box_self_preview_01"
+        android:layout_width="102dp"
+        android:layout_height="181dp"
+        android:layout_gravity="top|left"
+        android:background="@drawable/air_call_tile_ground"
+        android:contentDescription="@string/air_call_self_view"
+        android:foreground="@drawable/air_call_tile_border"
+        android:visibility="invisible">
+
+        <com.zoffcc.applications.trifa.CameraDrawingOverlay
+            android:id="@+id/camera_drawing_overlay"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:gravity="center"
-            android:maxLines="2"
-            android:textAppearance="@style/TextAppearance.KQ.Display"
-            android:textColor="@color/kq_fixed_white" />
+            android:layout_height="match_parent"
+            android:visibility="invisible" />
 
-        <!-- The state of the call: "Incoming call", "Calling", the timer, "Call ended". -->
-        <TextView
-            android:id="@+id/right_left_text_1"
+        <com.zoffcc.applications.trifa.CameraSurfacePreview
+            android:id="@+id/camera_surfaceview"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/kq_space_8"
-            android:gravity="center"
-            android:textAppearance="@style/TextAppearance.KQ.Body"
-            android:textColor="@color/kq_fixed_white" />
+            android:layout_height="match_parent"
+            android:importantForAccessibility="no" />
+    </FrameLayout>
 
+    <!-- The TRIfA views, hidden in a release build (R10), in a layer of their own over the pictures. -->
+    <FrameLayout
+        android:id="@+id/air_call_legacy_layer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <!-- KHANDAQ (modern call screen): the TRIfA green/yellow/red connection-quality bar looked like
+             a stray coloured line across the top of the call; hide it. -->
         <LinearLayout
-            android:id="@+id/air_call_link_row"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/kq_space_12"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:id="@+id/calling_friend_online_status"
+            android:layout_width="match_parent"
+            android:layout_height="3dp"
+            android:layout_marginLeft="0dp"
+            android:background="#04b431"
+            android:elevation="25dp"
+            android:orientation="vertical"
+            android:visibility="gone">
 
-            <com.zoffcc.applications.trifa.AirLinkMarkView
-                android:id="@+id/air_call_link_mark"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
-
-            <TextView
-                android:id="@+id/air_call_link_text"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="@dimen/kq_space_8"
-                android:textAppearance="@style/TextAppearance.KQ.Label"
-                android:textColor="@color/kq_fixed_white" />
         </LinearLayout>
-    </LinearLayout>
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:orientation="horizontal">
-
+        <!-- Legacy name line, still written by the TRIfA code; the head above shows the name. -->
+        <TextView
+            android:id="@+id/top_text_line"
+            android:layout_width="match_parent"
+            android:layout_height="35dp"
+            android:elevation="25dp"
+            android:gravity="center_vertical"
+            android:text="xxxxxxxx"
+            android:textAlignment="center"
+            android:textColor="@color/md_grey_400"
+            android:textSize="18sp"
+            android:visibility="gone" />
 
         <FrameLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:id="@+id/debug001"
+            android:layout_width="125dp"
+            android:layout_height="125dp"
+            android:layout_gravity="top|left"
+            android:layout_marginLeft="8dp"
+            android:layout_marginTop="30dp"
+            android:background="@null"
+            android:elevation="25dp">
 
-
-            <com.zoffcc.applications.trifa.CustomVideoImageView
-                android:id="@+id/video_view"
-                android:layout_width="fill_parent"
-                android:layout_height="match_parent"
-                android:layout_marginTop="0dp"
-                android:background="@color/kq_lock_top" />
-
-            <!-- KHANDAQ (modern call screen): the TRIfA green/yellow/red connection-quality bar looked like
-                 a stray coloured line across the top of the call; hide it. -->
-            <LinearLayout
-                android:id="@+id/calling_friend_online_status"
-                android:layout_width="match_parent"
-                android:layout_height="3dp"
-                android:layout_marginLeft="0dp"
-                android:background="#04b431"
-                android:elevation="25dp"
-                android:orientation="vertical"
-                android:visibility="gone">
-
-            </LinearLayout>
-
-            <!-- Legacy name line, still written by the TRIfA code; the head above shows the name. -->
             <TextView
-                android:id="@+id/top_text_line"
+                android:id="@+id/debug001_text"
                 android:layout_width="match_parent"
                 android:layout_height="35dp"
-                android:elevation="25dp"
-                android:gravity="center_vertical"
+                android:gravity="center"
                 android:text="xxxxxxxx"
-                android:textAlignment="center"
                 android:textColor="@color/md_grey_400"
-                android:textSize="18sp"
-                android:visibility="gone" />
+                android:textSize="22sp" />
+        </FrameLayout>
 
-            <FrameLayout
-                android:id="@+id/debug001"
-                android:layout_width="125dp"
-                android:layout_height="125dp"
-                android:layout_gravity="top|left"
-                android:layout_marginLeft="8dp"
-                android:layout_marginTop="30dp"
-                android:background="@null"
-                android:elevation="25dp">
+
+        <!-- Held the old timer, which the head carries now; kept empty for the code that shows and
+             hides it. -->
+        <FrameLayout
+            android:id="@+id/video_box_left_top_01"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:background="@null" />
+
+        <FrameLayout
+            android:id="@+id/video_box_right_top_01"
+            android:layout_width="125dp"
+            android:layout_height="245dp"
+            android:layout_gravity="top|right"
+            android:layout_marginTop="30dp"
+            android:alpha="0.5"
+            android:background="@null">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical">
 
                 <TextView
-                    android:id="@+id/debug001_text"
+                    android:id="@+id/right_top_text_1"
                     android:layout_width="match_parent"
-                    android:layout_height="35dp"
-                    android:gravity="center"
-                    android:text="xxxxxxxx"
-                    android:textColor="@color/md_grey_400"
-                    android:textSize="22sp" />
-            </FrameLayout>
+                    android:layout_height="wrap_content"
+                    android:elevation="2dp"
+                    android:text="O:VP8 4000 kbit/s"
+                    android:textColor="@color/md_green_700"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
 
-
-            <!-- Held the old timer, which the head carries now; kept empty for the code that shows and
-                 hides it. -->
-            <FrameLayout
-                android:id="@+id/video_box_left_top_01"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="top|center_horizontal"
-                android:background="@null" />
-
-            <FrameLayout
-                android:id="@+id/video_box_right_top_01"
-                android:layout_width="125dp"
-                android:layout_height="245dp"
-                android:layout_gravity="top|right"
-                android:layout_marginTop="30dp"
-                android:alpha="0.5"
-                android:background="@null">
-
-                <LinearLayout
+                <TextView
+                    android:id="@+id/right_top_text_1b"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:orientation="vertical">
+                    android:layout_height="wrap_content"
+                    android:elevation="2dp"
+                    android:text="I:VP8 4000 kbit/s"
+                    android:textColor="@color/md_green_700"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
 
-                    <TextView
-                        android:id="@+id/right_top_text_1"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:elevation="2dp"
-                        android:text="O:VP8 4000 kbit/s"
-                        android:textColor="@color/md_green_700"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/right_top_text_2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:elevation="2dp"
+                    android:text="A 350 kbit/s"
+                    android:textColor="@color/md_red_700"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
 
-                    <TextView
-                        android:id="@+id/right_top_text_1b"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:elevation="2dp"
-                        android:text="I:VP8 4000 kbit/s"
-                        android:textColor="@color/md_green_700"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/right_top_text_3"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:elevation="2dp"
+                    android:text="IN   0 fps"
+                    android:textColor="@color/md_green_700"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
 
-                    <TextView
-                        android:id="@+id/right_top_text_2"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:elevation="2dp"
-                        android:text="A 350 kbit/s"
-                        android:textColor="@color/md_red_700"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/right_top_text_4"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:elevation="2dp"
+                    android:text="Out 0 fps"
+                    android:textColor="@color/md_red_700"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
 
-                    <TextView
-                        android:id="@+id/right_top_text_3"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:elevation="2dp"
-                        android:text="IN   0 fps"
-                        android:textColor="@color/md_green_700"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
+                <ImageView
+                    android:id="@+id/audio_device_icon"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_gravity="right"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginRight="5dp"
+                    android:elevation="10dp"
+                    android:src="@null" />
 
-                    <TextView
-                        android:id="@+id/right_top_text_4"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:elevation="2dp"
-                        android:text="Out 0 fps"
-                        android:textColor="@color/md_red_700"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
+            </LinearLayout>
+        </FrameLayout>
 
-                    <ImageView
-                        android:id="@+id/audio_device_icon"
-                        android:layout_width="40dp"
-                        android:layout_height="40dp"
-                        android:layout_gravity="right"
-                        android:layout_marginTop="6dp"
-                        android:layout_marginRight="5dp"
-                        android:elevation="10dp"
-                        android:src="@null" />
+        <FrameLayout
+            android:id="@+id/video_box_right_volumeslider_01"
+            android:layout_width="300dp"
+            android:layout_height="50dp"
+            android:layout_gravity="center|right"
+            android:layout_marginTop="10dp"
+            android:layout_marginRight="45dp"
+            android:background="@null"
+            android:elevation="2dp">
 
-                </LinearLayout>
-            </FrameLayout>
-
-            <FrameLayout
-                android:id="@+id/video_box_right_volumeslider_01"
-                android:layout_width="300dp"
-                android:layout_height="50dp"
-                android:layout_gravity="center|right"
-                android:layout_marginTop="10dp"
-                android:layout_marginRight="45dp"
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_gravity="center"
                 android:background="@null"
-                android:elevation="2dp">
+                android:elevation="2dp"
+                android:orientation="vertical">
 
-                <LinearLayout
+                <SeekBar
+                    android:id="@+id/volume_slider_seekbar"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:layout_gravity="center"
                     android:background="@null"
-                    android:elevation="2dp"
-                    android:orientation="vertical">
+                    android:elevation="8dp"
+                    android:indeterminate="false"
+                    android:max="100"
+                    android:progress="5" />
 
-                    <SeekBar
-                        android:id="@+id/volume_slider_seekbar"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:layout_gravity="center"
-                        android:background="@null"
-                        android:elevation="8dp"
-                        android:indeterminate="false"
-                        android:max="100"
-                        android:progress="5" />
+            </LinearLayout>
+        </FrameLayout>
 
-                </LinearLayout>
-            </FrameLayout>
+        <FrameLayout
+            android:id="@+id/video_box_right_video_add_delay_slider_01"
+            android:layout_width="300dp"
+            android:layout_height="60dp"
+            android:layout_gravity="center|right"
+            android:layout_marginTop="70dp"
+            android:layout_marginRight="45dp"
+            android:background="@null"
+            android:elevation="2dp">
 
-            <FrameLayout
-                android:id="@+id/video_box_right_video_add_delay_slider_01"
-                android:layout_width="300dp"
-                android:layout_height="60dp"
-                android:layout_gravity="center|right"
-                android:layout_marginTop="70dp"
-                android:layout_marginRight="45dp"
+            <TextView
+                android:id="@+id/video_add_delay_slider_infotext"
+                android:layout_width="match_parent"
+                android:layout_height="20dp"
+                android:layout_gravity="bottom"
+                android:elevation="8dp"
+                android:gravity="center_horizontal"
+                android:text="Video delay: 0 ms"
+                android:textColor="@color/md_green_600"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_gravity="center"
                 android:background="@null"
-                android:elevation="2dp">
+                android:elevation="2dp"
+                android:orientation="vertical">
+
+                <SeekBar
+                    android:id="@+id/video_add_delay_slider_seekbar"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="center"
+                    android:background="@null"
+                    android:elevation="8dp"
+                    android:indeterminate="false"
+                    android:max="100"
+                    android:progress="5" />
+
+            </LinearLayout>
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/video_box_aec"
+            android:layout_width="110dp"
+            android:layout_height="50dp"
+            android:layout_gravity="center|left"
+            android:layout_marginLeft="10dp"
+            android:layout_marginTop="150dp"
+            android:background="@null"
+            android:elevation="2dp">
+
+            <Button
+                android:id="@+id/video_box_aec_button"
+                android:layout_width="70dp"
+                android:layout_height="50dp"
+                android:background="#300000FF"
+                android:elevation="8dp"
+                android:gravity="center"
+                android:text="- AEC -"
+                android:textColor="#4046BD46"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+        </FrameLayout>
+
+        <!-- KHANDAQ (#246): hidden. This was the ORIGINAL speaker toggle, sized and placed for the
+             video overlay; in audio calls the caller avatar used to cover it. #F2a added a speaker
+             button to the bottom control row (always reachable, both call types), so on a plain
+             dark audio-call screen this one simply showed up again as a second, bigger, floating
+             copy of the same control. The bottom-row button is now the only speaker toggle. -->
+        <FrameLayout
+            android:id="@+id/video_speaker_aec"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_gravity="top|right"
+            android:layout_marginTop="40dp"
+            android:layout_marginRight="16dp"
+            android:background="@null"
+            android:visibility="gone"
+            android:elevation="2dp">
+
+            <!-- KHANDAQ (modern call screen): speaker toggle as a clean round icon (was an ugly
+                 "- Speaker -" / "SPEAKER: ON" blue text box). Icon set from java. -->
+            <Button
+                android:id="@+id/video_box_speaker_button"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="@drawable/circle_blue"
+                android:elevation="8dp"
+                android:gravity="center"
+                android:padding="0dp"
+                android:text=""
+                android:textColor="@android:color/white"
+                android:textSize="1sp" />
+
+        </FrameLayout>
+
+
+        <!-- KHANDAQ (calls stage, 26.11): the level meters' columns with their "O" and "I" stay away (R10). -->
+        <LinearLayout
+            android:layout_width="5dp"
+            android:layout_height="match_parent"
+            android:layout_marginLeft="0dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="30dp"
+                android:gravity="center_horizontal|bottom"
+                android:text="O"
+                android:textColor="@color/md_white_1000"
+                android:textSize="5sp" />
+
+            <com.google.speech.levelmeter.BarLevelDrawable
+                android:id="@+id/audio_bar_in_v"
+                android:layout_width="5dp"
+                android:layout_height="match_parent"
+                android:layout_marginTop="10dp"
+                android:layout_marginBottom="30dp"
+                android:elevation="10dp" />
+        </LinearLayout>
+
+        <!-- The full-screen initials of the old call screen; the head carries the person now, as on
+             iOS, so it stays hidden. -->
+        <ImageView
+            android:id="@+id/caller_avatar_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginLeft="2dp"
+            android:layout_marginTop="2dp"
+            android:layout_marginRight="2dp"
+            android:layout_marginBottom="2dp"
+            android:background="@color/kq_lock_top"
+            android:elevation="20dp"
+            android:importantForAccessibility="no"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:layout_width="5dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="end"
+            android:layout_marginRight="0dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="30dp"
+                android:gravity="center_horizontal|bottom"
+                android:text="I"
+                android:textColor="@color/md_white_1000"
+                android:textSize="5sp" />
+
+            <com.google.speech.levelmeter.BarLevelDrawable
+                android:id="@+id/audio_bar_out_v"
+                android:layout_width="5dp"
+                android:layout_height="match_parent"
+                android:layout_marginTop="10dp"
+                android:layout_marginBottom="30dp"
+                android:elevation="10dp" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- The header and the controls, padded to the safe edges by AirCallStageController. The layer takes
+         no touch of its own, so the pictures under it still get theirs. -->
+    <LinearLayout
+        android:id="@+id/air_call_chrome"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:id="@+id/air_call_head_zone"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <!-- The person in the display size, the state of the call, the link as a chip (R8); in the
+                 middle with the person's tile over them on an audio call (R9). -->
+            <LinearLayout
+                android:id="@+id/air_call_head"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="@dimen/kq_space_24"
+                android:paddingTop="@dimen/kq_space_16"
+                android:paddingEnd="@dimen/kq_space_24"
+                android:paddingBottom="@dimen/kq_space_16">
+
+                <!-- The person's tile of an audio call; AirCallStageController puts it in (R9). -->
+                <FrameLayout
+                    android:id="@+id/air_call_avatar_slot"
+                    android:layout_width="112dp"
+                    android:layout_height="112dp"
+                    android:layout_marginBottom="@dimen/kq_space_16"
+                    android:importantForAccessibility="no"
+                    android:visibility="gone" />
 
                 <TextView
-                    android:id="@+id/video_add_delay_slider_infotext"
+                    android:id="@+id/air_call_name"
                     android:layout_width="match_parent"
-                    android:layout_height="20dp"
-                    android:layout_gravity="bottom"
-                    android:elevation="8dp"
-                    android:gravity="center_horizontal"
-                    android:text="Video delay: 0 ms"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:gravity="center"
+                    android:maxLines="2"
+                    android:textAppearance="@style/TextAppearance.KQ.Display"
+                    android:textColor="@color/kq_fixed_white" />
+
+                <!-- The state of the call: "Incoming call", "Calling", the timer, "Call ended". -->
+                <TextView
+                    android:id="@+id/right_left_text_1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/kq_space_6"
+                    android:gravity="center"
+                    android:textAppearance="@style/TextAppearance.KQ.Body"
+                    android:textColor="@color/kq_fixed_white" />
+
+                <!-- The link as a chip on the dark scrim, its mark and its words (R8). -->
+                <LinearLayout
+                    android:id="@+id/air_call_link_row"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/kq_space_12"
+                    android:background="@drawable/air_call_link_chip"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="@dimen/kq_space_10"
+                    android:paddingTop="@dimen/kq_space_4"
+                    android:paddingEnd="@dimen/kq_space_10"
+                    android:paddingBottom="@dimen/kq_space_4">
+
+                    <com.zoffcc.applications.trifa.AirLinkMarkView
+                        android:id="@+id/air_call_link_mark"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+
+                    <TextView
+                        android:id="@+id/air_call_link_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="@dimen/kq_space_6"
+                        android:textAppearance="@style/TextAppearance.KQ.Label"
+                        android:textColor="@color/kq_fixed_white" />
+                </LinearLayout>
+            </LinearLayout>
+        </FrameLayout>
+
+        <LinearLayout
+            android:id="@+id/quality_slider_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:layout_marginBottom="5dp"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:id="@+id/text_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="0dp"
+                android:layout_marginBottom="0dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/text_vq_low"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="left"
+                    android:elevation="2dp"
+                    android:gravity="left"
+                    android:paddingLeft="30dp"
+                    android:text="low"
                     android:textColor="@color/md_green_600"
                     android:textSize="14sp"
                     android:textStyle="bold" />
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:layout_gravity="center"
-                    android:background="@null"
+                <TextView
+                    android:id="@+id/text_vq_med"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:elevation="2dp"
-                    android:orientation="vertical">
-
-                    <SeekBar
-                        android:id="@+id/video_add_delay_slider_seekbar"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:layout_gravity="center"
-                        android:background="@null"
-                        android:elevation="8dp"
-                        android:indeterminate="false"
-                        android:max="100"
-                        android:progress="5" />
-
-                </LinearLayout>
-            </FrameLayout>
-
-            <FrameLayout
-                android:id="@+id/video_box_aec"
-                android:layout_width="110dp"
-                android:layout_height="50dp"
-                android:layout_gravity="center|left"
-                android:layout_marginLeft="10dp"
-                android:layout_marginTop="150dp"
-                android:background="@null"
-                android:elevation="2dp">
-
-                <Button
-                    android:id="@+id/video_box_aec_button"
-                    android:layout_width="70dp"
-                    android:layout_height="50dp"
-                    android:background="#300000FF"
-                    android:elevation="8dp"
-                    android:gravity="center"
-                    android:text="- AEC -"
-                    android:textColor="#4046BD46"
+                    android:gravity="center_horizontal"
+                    android:text="Video Quality"
+                    android:textColor="@color/md_green_600"
                     android:textSize="14sp"
                     android:textStyle="bold" />
 
-            </FrameLayout>
-
-            <!-- KHANDAQ (#246): hidden. This was the ORIGINAL speaker toggle, sized and placed for the
-                 video overlay; in audio calls the caller avatar used to cover it. #F2a added a speaker
-                 button to the bottom control row (always reachable, both call types), so on a plain
-                 dark audio-call screen this one simply showed up again as a second, bigger, floating
-                 copy of the same control. The bottom-row button is now the only speaker toggle. -->
-            <FrameLayout
-                android:id="@+id/video_speaker_aec"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:layout_gravity="top|right"
-                android:layout_marginTop="40dp"
-                android:layout_marginRight="16dp"
-                android:background="@null"
-                android:visibility="gone"
-                android:elevation="2dp">
-
-                <!-- KHANDAQ (modern call screen): speaker toggle as a clean round icon (was an ugly
-                     "- Speaker -" / "SPEAKER: ON" blue text box). Icon set from java. -->
-                <Button
-                    android:id="@+id/video_box_speaker_button"
-                    android:layout_width="56dp"
-                    android:layout_height="56dp"
-                    android:background="@drawable/circle_blue"
-                    android:elevation="8dp"
-                    android:gravity="center"
-                    android:padding="0dp"
-                    android:text=""
-                    android:textColor="@android:color/white"
-                    android:textSize="1sp" />
-
-            </FrameLayout>
-
-
-            <LinearLayout
-                android:layout_width="5dp"
-                android:layout_height="match_parent"
-                android:layout_marginLeft="0dp"
-                android:orientation="vertical">
-
                 <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="30dp"
-                    android:gravity="center_horizontal|bottom"
-                    android:text="O"
-                    android:textColor="@color/md_white_1000"
-                    android:textSize="5sp" />
+                    android:id="@+id/text_vq_high"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="right"
+                    android:elevation="2dp"
+                    android:gravity="right"
+                    android:paddingRight="30dp"
+                    android:text="high"
+                    android:textColor="@color/md_green_600"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
 
-                <com.google.speech.levelmeter.BarLevelDrawable
-                    android:id="@+id/audio_bar_in_v"
-                    android:layout_width="5dp"
-                    android:layout_height="match_parent"
-                    android:layout_marginTop="10dp"
-                    android:layout_marginBottom="30dp"
-                    android:elevation="10dp" />
             </LinearLayout>
 
-            <!-- The full-screen initials of the old call screen; the head carries the person now, as on
-                 iOS, so it stays hidden. -->
-            <ImageView
-                android:id="@+id/caller_avatar_view"
+            <com.etiennelawlor.discreteslider.library.ui.DiscreteSlider
+                android:id="@+id/quality_slider"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginLeft="2dp"
-                android:layout_marginTop="2dp"
-                android:layout_marginRight="2dp"
+                android:layout_height="20dp"
+                android:layout_gravity="bottom"
                 android:layout_marginBottom="2dp"
-                android:background="@color/kq_lock_top"
-                android:elevation="20dp"
-                android:importantForAccessibility="no"
-                android:visibility="gone" />
-
-            <LinearLayout
-                android:layout_width="5dp"
-                android:layout_height="match_parent"
-                android:layout_gravity="end"
-                android:layout_marginRight="0dp"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="30dp"
-                    android:gravity="center_horizontal|bottom"
-                    android:text="I"
-                    android:textColor="@color/md_white_1000"
-                    android:textSize="5sp" />
-
-                <com.google.speech.levelmeter.BarLevelDrawable
-                    android:id="@+id/audio_bar_out_v"
-                    android:layout_width="5dp"
-                    android:layout_height="match_parent"
-                    android:layout_marginTop="10dp"
-                    android:layout_marginBottom="30dp"
-                    android:elevation="10dp" />
-            </LinearLayout>
+                android:background="@color/md_black_1000"
+                android:paddingLeft="20dp"
+                android:paddingRight="20dp"
+                app:backdropFillColor="@color/md_green_A400"
+                app:backdropStrokeColor="@color/md_black_1000"
+                app:backdropStrokeWidth="2dp"
+                app:horizontalBarThickness="4dp"
+                app:position="0"
+                app:tickMarkCount="3"
+                app:tickMarkRadius="8dp" />
+        </LinearLayout>
 
 
-            <FrameLayout
-                android:id="@+id/video_box_self_preview_01"
-                android:layout_width="125dp"
-                android:layout_height="166dp"
-                android:layout_gravity="bottom|right"
-                android:layout_marginRight="5dp"
-                android:layout_marginBottom="5dp">
-
-                <FrameLayout
-                    android:layout_width="120dp"
-                    android:layout_height="160dp"
-                    android:layout_gravity="center"
-                    android:background="@drawable/border_001"
-                    android:padding="5dp">
-
-                    <com.zoffcc.applications.trifa.CameraDrawingOverlay
-                        android:id="@+id/camera_drawing_overlay"
-                        android:layout_width="120dp"
-                        android:layout_height="160dp"
-                        android:layout_gravity="center"
-                        android:layout_margin="0dp"
-                        android:elevation="13dp"
-                        android:gravity="center"
-                        android:padding="0dp" />
-
-                    <com.zoffcc.applications.trifa.CameraSurfacePreview
-                        android:id="@+id/camera_surfaceview"
-                        android:layout_width="0dp"
-                        android:layout_height="0dp"
-                        android:layout_gravity="center"
-                        android:layout_margin="0dp"
-                        android:elevation="12dp"
-                        android:gravity="center"
-                        android:padding="0dp" />
-                </FrameLayout>
-            </FrameLayout>
-
-        </FrameLayout>
-
-    </LinearLayout>
-
-
-    <LinearLayout
-        android:id="@+id/quality_slider_container"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="1dp"
-        android:layout_marginBottom="5dp"
-        android:orientation="vertical">
-
+        <!-- The controls in the thumb zone, each a column of the same width: Microphone, Speaker, Flip and
+             End on a call; Decline, With video and Answer while it rings (the Decline column moves to the
+             start then). The words under the circles stay on one line, smaller where a language needs it
+             (calls stage, R7), and TalkBack reads each button by the same words. -->
         <LinearLayout
-            android:id="@+id/text_container"
+            android:id="@+id/bottom"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="0dp"
-            android:layout_marginBottom="0dp"
-            android:orientation="horizontal">
+            android:layout_gravity="center_horizontal"
+            android:baselineAligned="false"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/kq_space_16"
+            android:paddingTop="@dimen/kq_space_16"
+            android:paddingEnd="@dimen/kq_space_16"
+            android:paddingBottom="@dimen/kq_space_24">
 
-            <TextView
-                android:id="@+id/text_vq_low"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="left"
-                android:elevation="2dp"
-                android:gravity="left"
-                android:paddingLeft="30dp"
-                android:text="low"
-                android:textColor="@color/md_green_600"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/text_vq_med"
+            <LinearLayout
+                android:id="@+id/air_call_mic_column"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:elevation="2dp"
                 android:gravity="center_horizontal"
-                android:text="Video Quality"
-                android:textColor="@color/md_green_600"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/text_vq_high"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="right"
-                android:elevation="2dp"
-                android:gravity="right"
-                android:paddingRight="30dp"
-                android:text="high"
-                android:textColor="@color/md_green_600"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                <ImageButton
+                    android:id="@+id/mute_button"
+                    android:layout_width="@dimen/kq_space_64"
+                    android:layout_height="@dimen/kq_space_64"
+                    android:background="@drawable/air_call_bg_switch"
+                    android:contentDescription="@string/air_call_mic"
+                    android:foreground="@drawable/air_ripple_on_lock"
+                    android:keepScreenOn="true"
+                    android:scaleType="center"
+                    android:src="@drawable/kq_ic_mic"
+                    app:tint="@color/air_call_switch_glyph" />
 
-        </LinearLayout>
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/kq_space_8"
+                    android:ellipsize="end"
+                    android:gravity="center"
+                    android:importantForAccessibility="no"
+                    android:maxLines="1"
+                    android:text="@string/air_call_mic"
+                    android:textAppearance="@style/TextAppearance.KQ.Caption"
+                    android:textColor="@color/kq_fixed_white" />
+            </LinearLayout>
 
-        <com.etiennelawlor.discreteslider.library.ui.DiscreteSlider
-            android:id="@+id/quality_slider"
-            android:layout_width="match_parent"
-            android:layout_height="20dp"
-            android:layout_gravity="bottom"
-            android:layout_marginBottom="2dp"
-            android:background="@color/md_black_1000"
-            android:paddingLeft="20dp"
-            android:paddingRight="20dp"
-            app:backdropFillColor="@color/md_green_A400"
-            app:backdropStrokeColor="@color/md_black_1000"
-            app:backdropStrokeWidth="2dp"
-            app:horizontalBarThickness="4dp"
-            app:position="0"
-            app:tickMarkCount="3"
-            app:tickMarkRadius="8dp" />
-    </LinearLayout>
-
-
-    <!-- The controls in the thumb zone, each a column of the same width: Microphone, Speaker, Switch
-         camera and End on a call; Decline, With video and Answer while it rings (the Decline column moves
-         to the start then). The words under the circles are the buttons' names to TalkBack too. -->
-    <LinearLayout
-        android:id="@+id/bottom"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:baselineAligned="false"
-        android:orientation="horizontal"
-        android:paddingStart="@dimen/kq_space_16"
-        android:paddingTop="@dimen/kq_space_16"
-        android:paddingEnd="@dimen/kq_space_16"
-        android:paddingBottom="@dimen/kq_space_32">
-
-        <LinearLayout
-            android:id="@+id/air_call_mic_column"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
-
-            <ImageButton
-                android:id="@+id/mute_button"
-                android:layout_width="@dimen/kq_space_64"
-                android:layout_height="@dimen/kq_space_64"
-                android:background="@drawable/air_call_bg_switch"
-                android:contentDescription="@string/air_call_mic"
-                android:foreground="@drawable/air_ripple_on_lock"
-                android:keepScreenOn="true"
-                android:scaleType="center"
-                android:src="@drawable/kq_ic_mic"
-                app:tint="@color/air_call_switch_glyph" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/kq_space_8"
-                android:breakStrategy="balanced"
-                android:gravity="center"
-                android:hyphenationFrequency="normal"
-                android:importantForAccessibility="no"
-                android:maxLines="2"
-                android:text="@string/air_call_mic"
-                android:textAppearance="@style/TextAppearance.KQ.Caption"
-                android:textColor="@color/kq_fixed_white" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/air_call_speaker_column"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
-
-            <!-- KHANDAQ (#F2a): the loudspeaker toggle of the bottom row, reachable in both call types; the
-                 floating one of the video overlay stays hidden (#246). -->
-            <ImageButton
-                android:id="@+id/audio_speaker_button"
-                android:layout_width="@dimen/kq_space_64"
-                android:layout_height="@dimen/kq_space_64"
-                android:background="@drawable/air_call_bg_switch"
-                android:contentDescription="@string/air_call_speaker"
-                android:foreground="@drawable/air_ripple_on_lock"
-                android:keepScreenOn="true"
-                android:scaleType="center"
-                android:src="@drawable/air_call_ic_speaker"
-                app:tint="@color/air_call_switch_glyph" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/kq_space_8"
-                android:breakStrategy="balanced"
-                android:gravity="center"
-                android:hyphenationFrequency="normal"
-                android:importantForAccessibility="no"
-                android:maxLines="2"
-                android:text="@string/air_call_speaker"
-                android:textAppearance="@style/TextAppearance.KQ.Caption"
-                android:textColor="@color/kq_fixed_white" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/air_call_camera_column"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
-
-            <ImageButton
-                android:id="@+id/camera_toggle_button"
-                android:layout_width="@dimen/kq_space_64"
-                android:layout_height="@dimen/kq_space_64"
-                android:background="@drawable/air_call_bg_switch"
-                android:contentDescription="@string/air_call_switch_camera"
-                android:foreground="@drawable/air_ripple_on_lock"
-                android:keepScreenOn="true"
-                android:scaleType="center"
-                android:src="@drawable/air_call_ic_switch_camera"
-                app:tint="@color/air_call_switch_glyph" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/kq_space_8"
-                android:breakStrategy="balanced"
-                android:gravity="center"
-                android:hyphenationFrequency="normal"
-                android:importantForAccessibility="no"
-                android:maxLines="2"
-                android:text="@string/air_call_switch_camera"
-                android:textAppearance="@style/TextAppearance.KQ.Caption"
-                android:textColor="@color/kq_fixed_white" />
-        </LinearLayout>
-
-        <!-- The expert "misc" button (Settings, X_misc_button_enabled); off by default. -->
-        <LinearLayout
-            android:id="@+id/air_call_misc_column"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center_horizontal"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <ImageButton
-                android:id="@+id/misc_button"
-                android:layout_width="@dimen/kq_space_64"
-                android:layout_height="@dimen/kq_space_64"
-                android:background="@drawable/air_call_bg_switch"
-                android:clickable="true"
-                android:foreground="@drawable/air_ripple_on_lock"
-                android:keepScreenOn="true"
-                android:padding="@dimen/kq_space_16"
-                android:scaleType="fitCenter" />
-
-            <TextView
-                android:id="@+id/misc_button_pad"
+            <LinearLayout
+                android:id="@+id/air_call_speaker_column"
                 android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:importantForAccessibility="no" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/air_call_video_column"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center_horizontal"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <ImageButton
-                android:id="@+id/air_call_answer_video_button"
-                android:layout_width="@dimen/kq_space_64"
-                android:layout_height="@dimen/kq_space_64"
-                android:background="@drawable/air_call_bg_answer"
-                android:contentDescription="@string/air_call_answer_video"
-                android:foreground="@drawable/air_ripple_on_lock"
-                android:keepScreenOn="true"
-                android:scaleType="center"
-                android:src="@drawable/kq_ic_video"
-                app:tint="@color/kq_fixed_white" />
-
-            <TextView
-                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/kq_space_8"
-                android:breakStrategy="balanced"
-                android:gravity="center"
-                android:hyphenationFrequency="normal"
-                android:importantForAccessibility="no"
-                android:maxLines="2"
-                android:text="@string/air_call_answer_video"
-                android:textAppearance="@style/TextAppearance.KQ.Caption"
-                android:textColor="@color/kq_fixed_white" />
-        </LinearLayout>
+                android:layout_weight="1"
+                android:gravity="center_horizontal"
+                android:orientation="vertical">
 
-        <LinearLayout
-            android:id="@+id/air_call_answer_column"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
+                <!-- KHANDAQ (#F2a): the loudspeaker toggle of the bottom row, reachable in both call types; the
+                     floating one of the video overlay stays hidden (#246). -->
+                <ImageButton
+                    android:id="@+id/audio_speaker_button"
+                    android:layout_width="@dimen/kq_space_64"
+                    android:layout_height="@dimen/kq_space_64"
+                    android:background="@drawable/air_call_bg_switch"
+                    android:contentDescription="@string/air_call_speaker"
+                    android:foreground="@drawable/air_ripple_on_lock"
+                    android:keepScreenOn="true"
+                    android:scaleType="center"
+                    android:src="@drawable/air_call_ic_speaker"
+                    app:tint="@color/air_call_switch_glyph" />
 
-            <ImageButton
-                android:id="@+id/accept_button"
-                android:layout_width="@dimen/kq_space_64"
-                android:layout_height="@dimen/kq_space_64"
-                android:background="@drawable/air_call_bg_answer"
-                android:contentDescription="@string/air_call_answer"
-                android:foreground="@drawable/air_ripple_on_lock"
-                android:keepScreenOn="true"
-                android:scaleType="center"
-                android:src="@drawable/kq_ic_phone"
-                app:tint="@color/kq_fixed_white" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/kq_space_8"
+                    android:ellipsize="end"
+                    android:gravity="center"
+                    android:importantForAccessibility="no"
+                    android:maxLines="1"
+                    android:text="@string/air_call_speaker"
+                    android:textAppearance="@style/TextAppearance.KQ.Caption"
+                    android:textColor="@color/kq_fixed_white" />
+            </LinearLayout>
 
-            <TextView
-                android:layout_width="match_parent"
+            <LinearLayout
+                android:id="@+id/air_call_camera_column"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/kq_space_8"
-                android:breakStrategy="balanced"
-                android:gravity="center"
-                android:hyphenationFrequency="normal"
-                android:importantForAccessibility="no"
-                android:maxLines="2"
-                android:text="@string/air_call_answer"
-                android:textAppearance="@style/TextAppearance.KQ.Caption"
-                android:textColor="@color/kq_fixed_white" />
-        </LinearLayout>
+                android:layout_weight="1"
+                android:gravity="center_horizontal"
+                android:orientation="vertical">
 
-        <LinearLayout
-            android:id="@+id/air_call_decline_column"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
+                <ImageButton
+                    android:id="@+id/camera_toggle_button"
+                    android:layout_width="@dimen/kq_space_64"
+                    android:layout_height="@dimen/kq_space_64"
+                    android:background="@drawable/air_call_bg_switch"
+                    android:contentDescription="@string/air_call_flip_camera"
+                    android:foreground="@drawable/air_ripple_on_lock"
+                    android:keepScreenOn="true"
+                    android:scaleType="center"
+                    android:src="@drawable/air_call_ic_switch_camera"
+                    app:tint="@color/air_call_switch_glyph" />
 
-            <!-- Decline while it rings, End on a call: CallingActivity.apply_call_controls sets the word. -->
-            <ImageButton
-                android:id="@+id/decline_button"
-                android:layout_width="@dimen/kq_space_64"
-                android:layout_height="@dimen/kq_space_64"
-                android:background="@drawable/air_bg_call_decline"
-                android:contentDescription="@string/air_call_end"
-                android:foreground="@drawable/air_ripple_on_lock"
-                android:keepScreenOn="true"
-                android:scaleType="center"
-                android:src="@drawable/air_call_ic_end"
-                app:tint="@color/kq_fixed_white" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/kq_space_8"
+                    android:ellipsize="end"
+                    android:gravity="center"
+                    android:importantForAccessibility="no"
+                    android:maxLines="1"
+                    android:text="@string/air_call_flip"
+                    android:textAppearance="@style/TextAppearance.KQ.Caption"
+                    android:textColor="@color/kq_fixed_white" />
+            </LinearLayout>
 
-            <TextView
-                android:id="@+id/air_call_decline_label"
-                android:layout_width="match_parent"
+            <!-- The expert "misc" button (Settings, X_misc_button_enabled); off by default. -->
+            <LinearLayout
+                android:id="@+id/air_call_misc_column"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/kq_space_8"
-                android:breakStrategy="balanced"
-                android:gravity="center"
-                android:hyphenationFrequency="normal"
-                android:importantForAccessibility="no"
-                android:maxLines="2"
-                android:text="@string/air_call_end"
-                android:textAppearance="@style/TextAppearance.KQ.Caption"
-                android:textColor="@color/kq_fixed_white" />
+                android:layout_weight="1"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <ImageButton
+                    android:id="@+id/misc_button"
+                    android:layout_width="@dimen/kq_space_64"
+                    android:layout_height="@dimen/kq_space_64"
+                    android:background="@drawable/air_call_bg_switch"
+                    android:clickable="true"
+                    android:foreground="@drawable/air_ripple_on_lock"
+                    android:keepScreenOn="true"
+                    android:padding="@dimen/kq_space_16"
+                    android:scaleType="fitCenter" />
+
+                <TextView
+                    android:id="@+id/misc_button_pad"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:importantForAccessibility="no" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/air_call_video_column"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <ImageButton
+                    android:id="@+id/air_call_answer_video_button"
+                    android:layout_width="@dimen/kq_space_64"
+                    android:layout_height="@dimen/kq_space_64"
+                    android:background="@drawable/air_call_bg_answer"
+                    android:contentDescription="@string/air_call_answer_video"
+                    android:foreground="@drawable/air_ripple_on_lock"
+                    android:keepScreenOn="true"
+                    android:scaleType="center"
+                    android:src="@drawable/kq_ic_video"
+                    app:tint="@color/kq_fixed_white" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/kq_space_8"
+                    android:ellipsize="end"
+                    android:gravity="center"
+                    android:importantForAccessibility="no"
+                    android:maxLines="1"
+                    android:text="@string/air_call_answer_video"
+                    android:textAppearance="@style/TextAppearance.KQ.Caption"
+                    android:textColor="@color/kq_fixed_white" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/air_call_answer_column"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center_horizontal"
+                android:orientation="vertical">
+
+                <ImageButton
+                    android:id="@+id/accept_button"
+                    android:layout_width="@dimen/kq_space_64"
+                    android:layout_height="@dimen/kq_space_64"
+                    android:background="@drawable/air_call_bg_answer"
+                    android:contentDescription="@string/air_call_answer"
+                    android:foreground="@drawable/air_ripple_on_lock"
+                    android:keepScreenOn="true"
+                    android:scaleType="center"
+                    android:src="@drawable/kq_ic_phone"
+                    app:tint="@color/kq_fixed_white" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/kq_space_8"
+                    android:ellipsize="end"
+                    android:gravity="center"
+                    android:importantForAccessibility="no"
+                    android:maxLines="1"
+                    android:text="@string/air_call_answer"
+                    android:textAppearance="@style/TextAppearance.KQ.Caption"
+                    android:textColor="@color/kq_fixed_white" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/air_call_decline_column"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center_horizontal"
+                android:orientation="vertical">
+
+                <!-- Decline while it rings, End on a call: CallingActivity.apply_call_controls sets the word. -->
+                <ImageButton
+                    android:id="@+id/decline_button"
+                    android:layout_width="@dimen/kq_space_64"
+                    android:layout_height="@dimen/kq_space_64"
+                    android:background="@drawable/air_bg_call_decline"
+                    android:contentDescription="@string/air_call_end"
+                    android:foreground="@drawable/air_ripple_on_lock"
+                    android:keepScreenOn="true"
+                    android:scaleType="center"
+                    android:src="@drawable/air_call_ic_end"
+                    app:tint="@color/kq_fixed_white" />
+
+                <TextView
+                    android:id="@+id/air_call_decline_label"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/kq_space_8"
+                    android:ellipsize="end"
+                    android:gravity="center"
+                    android:importantForAccessibility="no"
+                    android:maxLines="1"
+                    android:text="@string/air_call_end"
+                    android:textAppearance="@style/TextAppearance.KQ.Caption"
+                    android:textColor="@color/kq_fixed_white" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
-
-
-</LinearLayout>
+</FrameLayout>

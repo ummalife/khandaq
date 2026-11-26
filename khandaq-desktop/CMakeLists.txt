@@ -304,6 +304,8 @@ set(${PROJECT_NAME}_SOURCES
   src/model/about/aboutfriend.h
   src/model/about/iaboutfriend.cpp
   src/model/about/iaboutfriend.h
+  src/model/air/aircallstage.cpp
+  src/model/air/aircallstage.h
   src/model/air/aircommunity.cpp
   src/model/air/aircommunity.h
   src/model/air/airconversation.cpp
@@ -479,6 +481,8 @@ set(${PROJECT_NAME}_SOURCES
   src/widget/about/aboutfriendform.h
   src/widget/air/airband.cpp
   src/widget/air/airband.h
+  src/widget/air/aircallparts.cpp
+  src/widget/air/aircallparts.h
   src/widget/air/airchatparts.cpp
   src/widget/air/airchatparts.h
   src/widget/air/aircomposer.cpp

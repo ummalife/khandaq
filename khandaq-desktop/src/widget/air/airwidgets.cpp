@@ -117,13 +117,13 @@ void AirPaint::scrollWhenLong(QMenu& menu)
     QCoreApplication::sendEvent(&menu, &styleChange);
 }
 
-void AirPaint::focusRing(QPainter& painter, const QRectF& rect, qreal radius)
+void AirPaint::focusRing(QPainter& painter, const QRectF& rect, qreal radius, const QColor& color)
 {
     const qreal half = Stroke::focus / 2.0;
     const QRectF ring = rect.adjusted(half, half, -half, -half);
     painter.save();
     painter.setRenderHint(QPainter::Antialiasing);
-    painter.setPen(QPen(air().color(Color::Focus), Stroke::focus));
+    painter.setPen(QPen(color.isValid() ? color : air().color(Color::Focus), Stroke::focus));
     painter.setBrush(Qt::NoBrush);
     const qreal clamped = std::min(radius, std::min(ring.width(), ring.height()) / 2.0);
     painter.drawRoundedRect(ring, clamped, clamped);

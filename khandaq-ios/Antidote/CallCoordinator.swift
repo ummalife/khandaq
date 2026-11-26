@@ -142,6 +142,8 @@ class CallCoordinator: NSObject {
             let controller = CallActiveController(theme: theme, callerName: nickname)
             controller.delegate = self
             controller.link = AirLinkState(friend: chat.friends.lastObject() as? OCTFriend)
+            // KHANDAQ (calls stage, 26.11): their photo or initials on a call without video (R9).
+            controller.person = AirCallPerson(name: nickname, friend: chat.friends.lastObject() as? OCTFriend)
 
             // CALL:
             print("cc:controler:callToChat:02")
@@ -573,6 +575,9 @@ extension CallCoordinator {
             let nickname = activeCall.call.caller?.nickname ?? ""
             activeController = CallActiveController(theme: theme, callerName: nickname)
             activeController!.delegate = self
+            // KHANDAQ (calls stage, 26.11): once per screen; the photo is not decoded again each update.
+            activeController!.person = AirCallPerson(name: nickname,
+                                                     friend: activeCall.call.caller ?? activeCall.call.chat.friends.firstObject() as? OCTFriend)
 
             activeCall.navigation.setViewControllers([activeController!], animated: false)
         }

@@ -577,6 +577,14 @@ const Source sources[] = {
     {Text::CallAnswerFailedTitle, QT_TRANSLATE_NOOP3("Air", "Couldn't answer the call", "title of the dialog when a call could not be answered")},
     {Text::CallAlreadyOn, QT_TRANSLATE_NOOP3("Air", "A call with this person is already on.", "why a call could not start")},
     {Text::CallNotCalling, QT_TRANSLATE_NOOP3("Air", "%1 is no longer calling.", "why a call could not be answered: the person hung up first")},
+    {Text::CallMicrophone, QT_TRANSLATE_NOOP3("Air", "Microphone", "the video call stage: the switch of our microphone, under its circle")},
+    {Text::CallSound, QT_TRANSLATE_NOOP3("Air", "Sound", "the video call stage: the switch of the other person's voice, under its circle")},
+    {Text::CallSelfView, QT_TRANSLATE_NOOP3("Air", "Self view", "the video call stage: shows or hides the small box with our own video, under its circle")},
+    {Text::CallMessages, QT_TRANSLATE_NOOP3("Air", "Messages", "the video call stage: shows or hides the conversation under the video, under its circle")},
+    {Text::CallFullScreen, QT_TRANSLATE_NOOP3("Air", "Full screen", "the video call stage: the switch between the window and the full screen, under its circle")},
+    {Text::CallLinkDirect, QT_TRANSLATE_NOOP3("Air", "Direct link", "the video call stage in full screen: the link under the timer")},
+    {Text::CallLinkRelay, QT_TRANSLATE_NOOP3("Air", "Via a relay", "the video call stage in full screen: the link under the timer")},
+    {Text::CallLinkNone, QT_TRANSLATE_NOOP3("Air", "No link right now", "the video call stage in full screen: the link under the timer")},
     {Text::YouQr, QT_TRANSLATE_NOOP3("Air", "QR code of your ID", "You: what a screen reader says for the QR code")},
     {Text::YouQrHint, QT_TRANSLATE_NOOP3("Air", "Scanned in New contact on a phone", "You: under the QR code")},
     {Text::YouCopyId, QT_TRANSLATE_NOOP3("Air", "Copy ID", "You: copies your whole ID")},
@@ -1366,6 +1374,19 @@ QString linkText(Air::LinkState link)
         break;
     }
     return text(Text::LinkNone);
+}
+
+QString callLinkText(Air::LinkState link)
+{
+    switch (link) {
+    case Air::LinkState::Direct:
+        return text(Text::CallLinkDirect);
+    case Air::LinkState::Relay:
+        return text(Text::CallLinkRelay);
+    case Air::LinkState::None:
+        break;
+    }
+    return text(Text::CallLinkNone);
 }
 
 QString composeHintText(const Air::ComposeHint& hint, const QString& name)

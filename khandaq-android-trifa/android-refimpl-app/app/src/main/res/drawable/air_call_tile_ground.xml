@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (calls stage, 26.11): the ground of the small picture until its first frame, lock-bottom with
+     the card's round corners (R4); the box clips its picture to the same corners. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="@dimen/kq_radius_card" />
+    <solid android:color="@color/kq_lock_bottom" />
+</shape>

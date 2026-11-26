@@ -74,6 +74,7 @@ auto_test(persistence profileremove "" "")
 if(NOT "${SMILEYS}" STREQUAL "DISABLED")
   auto_test(persistence smileypack "${SMILEY_RESOURCES}" "") # needs emojione
 endif()
+auto_test(model aircallstage "" "")
 auto_test(model aircommunity "" "")
 auto_test(model airconversation "" "")
 auto_test(model airgroup "" "")
@@ -123,6 +124,7 @@ auto_test(widget airoverlay "" "")
 auto_test(widget airwidgets "" "")
 auto_test(widget airtray "res/air.qrc" "") # the Plex faces
 auto_test(widget airmediaparts "" "")
+auto_test(widget netcamview "${${PROJECT_NAME}_RESOURCES}" "") # the Plex faces, the icons, the contact
 auto_test(widget airvoicerecorder "" "")
 auto_test(widget airyoupage "" "")
 auto_test(widget chatquotepreview "res/air.qrc" "") # the x icon

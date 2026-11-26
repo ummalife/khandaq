@@ -32,6 +32,17 @@
             android:noHistory="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- KHANDAQ (calls stage, 26.11): the real call screen on made-up pictures, for the screenshots of the
+             call stage (AirCallStageHarnessActivity). It opens no camera and no microphone and starts no call.
+             Not in a release build. -->
+        <activity
+            android:name="com.zoffcc.applications.trifa.AirCallStageHarnessActivity"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|locale|touchscreen|navigation|orientation|fontScale|keyboard|keyboardHidden"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:resizeableActivity="true"
+            android:theme="@style/FullscreenTheme" />
+
         <provider
             android:name="com.zoffcc.applications.trifa.AirDemoWorldInstaller"
             android:authorities="${applicationId}.airdemoworld"

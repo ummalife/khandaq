@@ -260,6 +260,14 @@ void friendMessageCallback(void *cTox, uint32_t friendNumber, uint32_t cType, co
 - (void)tox:(OCTTox *)tox sendFriendHighlevelACK:(NSString *)message friendNumber:(OCTToxFriendNumber)friendNumber msgv3HashHex:(NSString *)msgv3HashHex sendTimestamp:(uint32_t)sendTimestamp;
 @end
 
+// KHANDAQ (calls stage, 26.11): objcTox's view of the remote video, declared here so the tests can feed it frames
+// and read the size it takes from them. objcTox is unchanged by these declarations.
+#import <CoreVideo/CoreVideo.h>
+@interface OCTVideoView : UIView
++ (instancetype)view;
+- (void)enqueuePixelBuffer:(CVPixelBufferRef)pixelBuffer;
+@end
+
 #undef LOG_INFO
 #undef LOG_DEBUG
 #import "DDLog.h"

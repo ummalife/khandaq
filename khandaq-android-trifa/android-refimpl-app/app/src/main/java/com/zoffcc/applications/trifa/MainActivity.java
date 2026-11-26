@@ -609,6 +609,11 @@ public class MainActivity extends AppCompatActivity
     static RenderScript rs_video = null;   // KHANDAQ (audit #22): held so it can be destroyed on the next re-alloc
     static Bitmap video_frame_image = null;
     static boolean video_frame_image_valid = false;
+    // KHANDAQ (calls stage, 26.11): the picture's own size inside video_frame_image, which is as wide as the
+    // decoder's stride; the call screen draws only this much (the rest came out as a green stripe). Both are
+    // written and read under semaphore_videoout_bitmap, as the bitmap is.
+    static int video_frame_picture_w = 0;
+    static int video_frame_picture_h = 0;
     static int buffer_size_in_bytes = 0;
     // KHANDAQ (#6): incoming video is decoded + delivered on the ToxAV *iterate* thread, which ALSO
     // runs the audio-receive callback. Doing the RenderScript YUV->RGB conversion inline there
@@ -4643,6 +4648,8 @@ public class MainActivity extends AppCompatActivity
             Type.Builder rgbaType = new Type.Builder(rs_video, Element.RGBA_8888(rs_video)).setX(frame_width_px).setY(frame_height_px);
             alloc_out = Allocation.createTyped(rs_video, rgbaType.create(), Allocation.USAGE_SCRIPT);
             video_frame_image = Bitmap.createBitmap(frame_width_px, frame_height_px, Bitmap.Config.ARGB_8888);
+            video_frame_picture_w = frame_width_px1;
+            video_frame_picture_h = frame_height_px1;
             video_frame_image_valid = (video_frame_image != null);
             if (video_frame_image == null)
             {
@@ -5684,7 +5691,8 @@ public class MainActivity extends AppCompatActivity
                         if (video_frame_image_valid && CallingActivity.mContentView != null
                             && video_frame_image != null && !video_frame_image.isRecycled())
                         {
-                            CallingActivity.mContentView.setBitmap(video_frame_image);
+                            CallingActivity.mContentView.setBitmap(video_frame_image, video_frame_picture_w,
+                                                                   video_frame_picture_h);
                             Callstate.java_video_play_delay = System.currentTimeMillis() - incoming_video_frame_ts;
                         }
                     }

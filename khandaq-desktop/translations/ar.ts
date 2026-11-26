@@ -2803,6 +2803,46 @@
         <translation>%1 لم يعد يتصل.</translation>
     </message>
     <message>
+        <source>Microphone</source>
+        <comment>the video call stage: the switch of our microphone, under its circle</comment>
+        <translation>الميكروفون</translation>
+    </message>
+    <message>
+        <source>Sound</source>
+        <comment>the video call stage: the switch of the other person&apos;s voice, under its circle</comment>
+        <translation>الصوت</translation>
+    </message>
+    <message>
+        <source>Self view</source>
+        <comment>the video call stage: shows or hides the small box with our own video, under its circle</comment>
+        <translation>العرض الذاتي</translation>
+    </message>
+    <message>
+        <source>Messages</source>
+        <comment>the video call stage: shows or hides the conversation under the video, under its circle</comment>
+        <translation>الرسائل</translation>
+    </message>
+    <message>
+        <source>Full screen</source>
+        <comment>the video call stage: the switch between the window and the full screen, under its circle</comment>
+        <translation>ملء الشاشة</translation>
+    </message>
+    <message>
+        <source>Direct link</source>
+        <comment>the video call stage in full screen: the link under the timer</comment>
+        <translation>اتصال مباشر</translation>
+    </message>
+    <message>
+        <source>Via a relay</source>
+        <comment>the video call stage in full screen: the link under the timer</comment>
+        <translation>عبر مُرحِّل</translation>
+    </message>
+    <message>
+        <source>No link right now</source>
+        <comment>the video call stage in full screen: the link under the timer</comment>
+        <translation>لا اتصال الآن</translation>
+    </message>
+    <message>
         <source>No calls in groups</source>
         <comment>group header, where the call buttons of a conversation stand</comment>
         <translation>لا مكالمات في المجموعات</translation>

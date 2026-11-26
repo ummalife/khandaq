@@ -85,6 +85,11 @@ public:
     explicit AirLinkMark(QWidget* parent = nullptr);
 
     void setState(Air::LinkState state);
+    /**
+     * KHANDAQ (calls stage, 26.11): the mark on the call screen, which is dark in both themes,
+     * takes the colours of the dark palette.
+     */
+    void setOnDark(bool onDark);
 
     QSize sizeHint() const override;
 
@@ -92,7 +97,10 @@ protected:
     void paintEvent(QPaintEvent* event) override;
 
 private:
+    QColor tint(AirTokens::Color role) const;
+
     Air::LinkState state = Air::LinkState::None;
+    bool onDark = false;
 };
 
 /**

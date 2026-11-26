@@ -18,241 +18,131 @@
 */
 
 #include "movablewidget.h"
-#include <QGraphicsOpacityEffect>
+#include <QApplication>
 #include <QMouseEvent>
-#include <cmath>
+#include <QPropertyAnimation>
+
+namespace {
+/** The speed of a release is measured over the last stretch of the drag. */
+constexpr ulong velocityWindowMs = 100;
+/** A drag held still this long before the release lets go without speed. */
+constexpr ulong stillMs = 60;
+} // namespace
 
 MovableWidget::MovableWidget(QWidget* parent)
     : QWidget(parent)
 {
-    setMinimumHeight(64);
     setSizePolicy(QSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored));
-    actualSize = minimumSize();
+    setCursor(Qt::PointingHandCursor);
     boundaryRect = QRect(0, 0, 0, 0);
-    setRatio(1.0f);
-    resize(minimumSize());
-    actualPos = QPoint(0, 0);
 }
 
 void MovableWidget::resetBoundary(QRect newBoundary)
 {
     boundaryRect = newBoundary;
-    resize(QSize(round(actualSize.width()), round(actualSize.height())));
-
-    QPoint moveTo = QPoint(round(actualPos.x()), round(actualPos.y()));
+    QPoint moveTo = pos();
     checkBoundary(moveTo);
     move(moveTo);
-    actualPos = moveTo;
 }
 
-void MovableWidget::setBoundary(QRect newBoundary)
+void MovableWidget::slideTo(const QPoint& topLeft, int duration, const QEasingCurve& curve)
 {
-    if (boundaryRect.isNull()) {
-        boundaryRect = newBoundary;
+    stopSlide();
+    if (duration <= 0 || topLeft == pos()) {
+        move(topLeft);
         return;
     }
-
-    qreal changeX = newBoundary.width() / static_cast<qreal>(boundaryRect.width());
-    qreal changeY = newBoundary.height() / static_cast<qreal>(boundaryRect.height());
-
-    qreal percentageX = (x() - boundaryRect.x()) / static_cast<qreal>(boundaryRect.width() - width());
-    qreal percentageY =
-        (y() - boundaryRect.y()) / static_cast<qreal>(boundaryRect.height() - height());
-
-    actualSize.setWidth(actualSize.width() * changeX);
-    actualSize.setHeight(actualSize.height() * changeY);
-
-    if (actualSize.width() == 0)
-        actualSize.setWidth(1);
-
-    if (actualSize.height() == 0)
-        actualSize.setHeight(1);
-
-    resize(QSize(round(actualSize.width()), round(actualSize.height())));
-
-    actualPos = QPointF(percentageX * (newBoundary.width() - width()),
-                        percentageY * (newBoundary.height() - height()));
-    actualPos += QPointF(newBoundary.topLeft());
-
-    QPoint moveTo = QPoint(round(actualPos.x()), round(actualPos.y()));
-    move(moveTo);
-
-    boundaryRect = newBoundary;
+    auto* const animation = new QPropertyAnimation(this, "pos", this);
+    animation->setStartValue(pos());
+    animation->setEndValue(topLeft);
+    animation->setDuration(duration);
+    animation->setEasingCurve(curve);
+    slide = animation;
+    animation->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
-float MovableWidget::getRatio() const
+void MovableWidget::stopSlide()
 {
-    return ratio;
-}
-
-void MovableWidget::setRatio(float r)
-{
-    ratio = r;
-    resize(width(), width() / ratio);
-    QPoint position = QPoint(actualPos.x(), actualPos.y());
-    checkBoundary(position);
-    move(position);
-
-    actualPos = pos();
-    actualSize = size();
+    if (slide) {
+        slide->stop();
+    }
 }
 
 void MovableWidget::mousePressEvent(QMouseEvent* event)
 {
-    if (event->buttons() & Qt::LeftButton) {
-        if (!(mode & Resize))
-            mode |= Moving;
-
-        lastPoint = event->globalPos();
+    if (!(event->buttons() & Qt::LeftButton)) {
+        return;
     }
+    stopSlide();
+    pressed = true;
+    dragging = false;
+    pressPoint = event->globalPos();
+    lastPoint = event->globalPos();
+    samples.clear();
+    sample(event->timestamp(), pos());
 }
 
 void MovableWidget::mouseMoveEvent(QMouseEvent* event)
 {
-    if (mode & Moving) {
-        QPoint moveTo = pos() - (lastPoint - event->globalPos());
-        checkBoundary(moveTo);
-
-        move(moveTo);
-        lastPoint = event->globalPos();
-
-        actualPos = pos();
-    } else {
-        if (!(event->buttons() & Qt::LeftButton)) {
-            if (event->x() < 6)
-                mode |= ResizeLeft;
-            else
-                mode &= ~ResizeLeft;
-
-            if (event->y() < 6)
-                mode |= ResizeUp;
-            else
-                mode &= ~ResizeUp;
-
-            if (event->x() > width() - 6)
-                mode |= ResizeRight;
-            else
-                mode &= ~ResizeRight;
-
-            if (event->y() > height() - 6)
-                mode |= ResizeDown;
-            else
-                mode &= ~ResizeDown;
-        }
-
-        if (mode & Resize) {
-            const Modes ResizeUpRight = ResizeUp | ResizeRight;
-            const Modes ResizeUpLeft = ResizeUp | ResizeLeft;
-            const Modes ResizeDownRight = ResizeDown | ResizeRight;
-            const Modes ResizeDownLeft = ResizeDown | ResizeLeft;
-
-            if ((mode & ResizeUpRight) == ResizeUpRight || (mode & ResizeDownLeft) == ResizeDownLeft)
-                setCursor(Qt::SizeBDiagCursor);
-            else if ((mode & ResizeUpLeft) == ResizeUpLeft || (mode & ResizeDownRight) == ResizeDownRight)
-                setCursor(Qt::SizeFDiagCursor);
-            else if (mode & (ResizeLeft | ResizeRight))
-                setCursor(Qt::SizeHorCursor);
-            else
-                setCursor(Qt::SizeVerCursor);
-
-            if (event->buttons() & Qt::LeftButton) {
-                QPoint lastPosition = pos();
-                QPoint displacement = lastPoint - event->globalPos();
-                QSize lastSize = size();
-
-
-                if (mode & ResizeUp) {
-                    lastSize.setHeight(height() + displacement.y());
-
-                    if (lastSize.height() > maximumHeight())
-                        lastPosition.setY(y() - displacement.y()
-                                          + (lastSize.height() - maximumHeight()));
-                    else
-                        lastPosition.setY(y() - displacement.y());
-                }
-
-                if (mode & ResizeLeft) {
-                    lastSize.setWidth(width() + displacement.x());
-                    if (lastSize.width() > maximumWidth())
-                        lastPosition.setX(x() - displacement.x() + (lastSize.width() - maximumWidth()));
-                    else
-                        lastPosition.setX(x() - displacement.x());
-                }
-
-                if (mode & ResizeRight)
-                    lastSize.setWidth(width() - displacement.x());
-
-                if (mode & ResizeDown)
-                    lastSize.setHeight(height() - displacement.y());
-
-                if (lastSize.height() > maximumHeight())
-                    lastSize.setHeight(maximumHeight());
-
-                if (lastSize.width() > maximumWidth())
-                    lastSize.setWidth(maximumWidth());
-
-                if (mode & (ResizeLeft | ResizeRight)) {
-                    if (mode & (ResizeUp | ResizeDown)) {
-                        int height = lastSize.width() / getRatio();
-
-                        if (!(mode & ResizeDown))
-                            lastPosition.setY(lastPosition.y() - (height - lastSize.height()));
-
-                        resize(lastSize.width(), height);
-
-                        if (lastSize.width() < minimumWidth())
-                            lastPosition.setX(pos().x());
-
-                        if (height < minimumHeight())
-                            lastPosition.setY(pos().y());
-                    } else {
-                        resize(lastSize.width(), lastSize.width() / getRatio());
-                    }
-                } else {
-                    resize(lastSize.height() * getRatio(), lastSize.height());
-                }
-
-                updateGeometry();
-
-                checkBoundary(lastPosition);
-
-                move(lastPosition);
-
-                lastPoint = event->globalPos();
-                actualSize = size();
-                actualPos = pos();
-            }
-        } else {
-            unsetCursor();
-        }
+    if (!pressed) {
+        return;
     }
+    const int moved = (event->globalPos() - pressPoint).manhattanLength();
+    if (!dragging && moved >= QApplication::startDragDistance()) {
+        dragging = true;
+    }
+    if (!dragging) {
+        return;
+    }
+    QPoint moveTo = pos() - (lastPoint - event->globalPos());
+    checkBoundary(moveTo);
+    move(moveTo);
+    lastPoint = event->globalPos();
+    sample(event->timestamp(), pos());
 }
 
 void MovableWidget::mouseReleaseEvent(QMouseEvent* event)
 {
-    if (!(event->buttons() & Qt::LeftButton))
-        mode = 0;
+    if (!pressed || event->button() != Qt::LeftButton) {
+        return;
+    }
+    pressed = false;
+    if (!dragging) {
+        emit clicked();
+        return;
+    }
+    dragging = false;
+    emit dropped(velocityAt(event->timestamp()));
 }
 
-void MovableWidget::mouseDoubleClickEvent(QMouseEvent* event)
+void MovableWidget::sample(ulong time, const QPointF& position)
 {
-    if (!(event->buttons() & Qt::LeftButton))
-        return;
-
-    if (!graphicsEffect()) {
-        QGraphicsOpacityEffect* opacityEffect = new QGraphicsOpacityEffect(this);
-        opacityEffect->setOpacity(0.5);
-        setGraphicsEffect(opacityEffect);
-    } else {
-        setGraphicsEffect(nullptr);
+    samples.append(Sample{time, position});
+    // Only the last stretch counts.
+    while (samples.size() > 2 && time - samples.first().time > velocityWindowMs) {
+        samples.removeFirst();
     }
+}
+
+QPointF MovableWidget::velocityAt(ulong time) const
+{
+    if (samples.size() < 2) {
+        return QPointF();
+    }
+    const Sample& last = samples.last();
+    if (time > last.time && time - last.time > stillMs) {
+        return QPointF();
+    }
+    const Sample& first = samples.first();
+    const ulong span = last.time - first.time;
+    if (last.time <= first.time || span == 0) {
+        return QPointF();
+    }
+    return (last.position - first.position) * (1000.0 / span);
 }
 
 void MovableWidget::checkBoundary(QPoint& point) const
 {
-    int x1, y1, x2, y2;
-    boundaryRect.getCoords(&x1, &y1, &x2, &y2);
-
     if (point.x() < boundaryRect.left())
         point.setX(boundaryRect.left());
 

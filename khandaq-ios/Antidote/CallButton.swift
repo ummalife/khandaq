@@ -57,11 +57,17 @@ class CallButton: UIButton {
                 setImage(UIImage.templateNamed("end-call"), for: .normal)
             case .answerAudio:
                 setImage(UIImage.templateNamed("start-call-30"), for: .normal)
-            case .answerVideo, .video:
+            case .answerVideo:
                 setImage(UIImage.templateNamed("video-call-30"), for: .normal)
+            case .video:
+                // KHANDAQ (calls stage, 26.11): the camera off is the camera crossed out, as the muted
+                // microphone is (R7); on, the plain camera on the white fill.
+                let camera = UIImage.templateNamed("video-call-30")
+                setImage(CallButton.crossedOut(camera), for: .normal)
+                setSelectedImage(camera)
             case .mute:
                 setImage(UIImage.templateNamed("mute"), for: .normal)
-                setImage(UIImage.templateNamed("mute-selected"), for: .selected)
+                setSelectedImage(UIImage.templateNamed("mute-selected"))
             case .speaker:
                 setImage(UIImage.templateNamed("speaker"), for: .normal)
         }
@@ -98,6 +104,50 @@ class CallButton: UIButton {
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         applyState()
+    }
+
+    /// KHANDAQ (calls stage, 26.11): a switch that is on keeps the glyph of its state while pressed and
+    /// while disabled at the end of a call; UIButton takes the normal image for those mixed states.
+    private func setSelectedImage(_ image: UIImage) {
+        setImage(image, for: .selected)
+        setImage(image, for: [.selected, .highlighted])
+        setImage(image, for: [.selected, .disabled])
+    }
+
+    /// KHANDAQ (calls stage, 26.11): a glyph crossed out corner to corner, drawn as mute-selected crosses
+    /// the microphone: a slash with a gap cut along its upper side, so off reads at a glance (R7).
+    static func crossedOut(_ glyph: UIImage) -> UIImage {
+        let size = glyph.size
+        // The proportions of mute-selected: the slash about a ninth of the side thick, the gap a twelfth,
+        // its ends a twelfth in from the corners.
+        let slash = size.width / 9
+        let cut = size.width / 12
+        let end = size.width / 12
+        let start = CGPoint(x: end, y: end)
+        let finish = CGPoint(x: size.width - end, y: size.height - end)
+        // Towards the upper right of the slash, across it.
+        let normal = CGPoint(x: sqrt(0.5), y: -sqrt(0.5))
+
+        return UIGraphicsImageRenderer(size: size).image { context in
+            glyph.draw(in: CGRect(origin: .zero, size: size))
+            let cg = context.cgContext
+            cg.setLineCap(.round)
+
+            // The gap: the slash and the cut beside it cleared, then the slash drawn back.
+            let shift = cut / 2
+            cg.setBlendMode(.clear)
+            cg.setLineWidth(slash + cut)
+            cg.move(to: CGPoint(x: start.x + normal.x * shift, y: start.y + normal.y * shift))
+            cg.addLine(to: CGPoint(x: finish.x + normal.x * shift, y: finish.y + normal.y * shift))
+            cg.strokePath()
+
+            cg.setBlendMode(.normal)
+            cg.setStrokeColor(UIColor.black.cgColor)
+            cg.setLineWidth(slash)
+            cg.move(to: start)
+            cg.addLine(to: finish)
+            cg.strokePath()
+        }.withRenderingMode(.alwaysTemplate)
     }
 
     private var isSwitch: Bool {

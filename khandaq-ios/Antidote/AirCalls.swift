@@ -68,6 +68,233 @@ enum AirCallText {
     }
 }
 
+// MARK: - Stage
+
+/// KHANDAQ (calls stage, 26.11): the geometry of a video call as plain values, by the rules Android and
+/// the desktop follow too (calls stage SPEC, R1 to R6): how a video takes its place without being
+/// stretched, the size and the corner of your own picture, where it lands when let go, and which video
+/// is the big one. AirCallTests checks it with exact numbers.
+enum AirCallStage {
+    /// How a frame takes a place: covering it with a centred crop, or whole inside it with bars.
+    enum ScaleMode {
+        case fill
+        case fit
+    }
+
+    /// A corner of the stage as it is on the screen; your picture starts bottom trailing.
+    enum Corner {
+        case topLeft
+        case topRight
+        case bottomLeft
+        case bottomRight
+
+        static let all: [Corner] = [.topLeft, .topRight, .bottomLeft, .bottomRight]
+
+        var isTop: Bool {
+            return self == .topLeft || self == .topRight
+        }
+
+        var isLeft: Bool {
+            return self == .topLeft || self == .bottomLeft
+        }
+
+        /// Bottom right, or bottom left in a right-to-left language.
+        static func bottomTrailing(rightToLeft: Bool) -> Corner {
+            return rightToLeft ? .bottomLeft : .bottomRight
+        }
+    }
+
+    /// The two videos of a call: the other person's and your own camera.
+    enum Video {
+        case remote
+        case own
+    }
+
+    /// R3: the short side of your picture is this share of the stage's short side, within the limits.
+    static let ownShortSideShare: CGFloat = 0.26
+    static let ownShortSideMin: CGFloat = 88
+    static let ownShortSideMax: CGFloat = 168
+    /// R2: the shape of your picture until the camera says its own: 3:4, upright.
+    static let unknownOwnFrame = CGSize(width: 3, height: 4)
+    /// R5: the gap around your picture, from the safe edges, the head and the row of controls.
+    static let gap = KQSpace.x16
+    /// R6: a release carries your picture on at the speed it was let go with for this long, in seconds.
+    static let releaseProjection: CGFloat = 0.15
+    /// R7: the row of controls is four columns of 96 at most, in the middle of a wider stage.
+    static let rowMaxWidth: CGFloat = 4 * 96
+    /// R9: the person's tile on a call without video.
+    static let avatarSidePhone: CGFloat = 112
+    static let avatarSideTablet: CGFloat = 128
+
+    /// Portrait is taller than wide; a square counts as landscape.
+    static func isPortrait(_ size: CGSize) -> Bool {
+        return size.height > size.width
+    }
+
+    /// R1: a frame fills the stage while both are portrait or both landscape, and fits it otherwise.
+    static func scaleMode(frame: CGSize, stage: CGSize) -> ScaleMode {
+        return isPortrait(frame) == isPortrait(stage) ? .fill : .fit
+    }
+
+    /// The rect a frame takes in `bounds`, centred and in the frame's own shape: covering the bounds
+    /// (fill) or inside them (fit). A frame of no size takes the bounds.
+    static func contentRect(frame: CGSize, in bounds: CGRect, mode: ScaleMode) -> CGRect {
+        guard frame.width > 0, frame.height > 0, bounds.width > 0, bounds.height > 0 else {
+            return bounds
+        }
+        let scaleX = bounds.width / frame.width
+        let scaleY = bounds.height / frame.height
+        let scale = mode == .fill ? max(scaleX, scaleY) : min(scaleX, scaleY)
+        let width = frame.width * scale
+        let height = frame.height * scale
+        return CGRect(x: bounds.midX - width / 2, y: bounds.midY - height / 2, width: width, height: height)
+    }
+
+    /// R2: a camera frame as its preview shows it. Turned a quarter (90 or 270 degrees) it stands
+    /// upright: 1280x720 becomes 720x1280.
+    static func shownFrame(_ frame: CGSize, rotationAngle: CGFloat) -> CGSize {
+        let quarters = Int((rotationAngle / 90).rounded())
+        return quarters % 2 == 0 ? frame : CGSize(width: frame.height, height: frame.width)
+    }
+
+    /// R2, R3: the size of your picture. Its short side comes from the stage's short side, its long side
+    /// from the shape of the frame (3:4 upright while unknown).
+    static func ownSize(frame: CGSize?, stage: CGSize) -> CGSize {
+        var shape = unknownOwnFrame
+        if let frame = frame, frame.width > 0, frame.height > 0 {
+            shape = frame
+        }
+        let share = (ownShortSideShare * min(stage.width, stage.height)).rounded()
+        let short = min(max(share, ownShortSideMin), ownShortSideMax)
+        let long = (short * max(shape.width, shape.height) / min(shape.width, shape.height)).rounded()
+        return isPortrait(shape) ? CGSize(width: short, height: long) : CGSize(width: long, height: short)
+    }
+
+    /// R5: where your picture may stand: the stage within its safe edges (the notch, the status bar,
+    /// the home indicator), 16 in from them.
+    static func ownArea(stage: CGRect, safeInsets: UIEdgeInsets) -> CGRect {
+        return CGRect(x: stage.minX + safeInsets.left + gap,
+                      y: stage.minY + safeInsets.top + gap,
+                      width: stage.width - safeInsets.left - safeInsets.right - 2 * gap,
+                      height: stage.height - safeInsets.top - safeInsets.bottom - 2 * gap)
+    }
+
+    /// R5: your picture in a corner of the area, 16 clear of what it would cross on the stage. Crossing
+    /// the head sends a top corner down below it; crossing the row of controls sends a bottom corner up
+    /// above it. With no room left it stays inside the area all the same.
+    static func ownRect(size: CGSize, corner: Corner, area: CGRect, obstacles: [CGRect]) -> CGRect {
+        var rect = CGRect(x: corner.isLeft ? area.minX : area.maxX - size.width,
+                          y: corner.isTop ? area.minY : area.maxY - size.height,
+                          width: size.width,
+                          height: size.height)
+        let clearances = obstacles.filter { !$0.isEmpty }.map { $0.insetBy(dx: -gap, dy: -gap) }
+        if corner.isTop {
+            for clearance in clearances.sorted(by: { $0.minY < $1.minY }) where rect.intersects(clearance) {
+                rect.origin.y = clearance.maxY
+            }
+        }
+        else {
+            for clearance in clearances.sorted(by: { $0.maxY > $1.maxY }) where rect.intersects(clearance) {
+                rect.origin.y = clearance.minY - size.height
+            }
+        }
+        rect.origin.y = max(area.minY, min(rect.origin.y, area.maxY - size.height))
+        return rect
+    }
+
+    /// R6: where a release carries a point, at the speed it was let go with.
+    static func projected(_ point: CGPoint, velocity: CGPoint) -> CGPoint {
+        return CGPoint(x: point.x + velocity.x * releaseProjection, y: point.y + velocity.y * releaseProjection)
+    }
+
+    /// R6: the corner your picture snaps to on release: the one whose place lies nearest to where the
+    /// release carries its centre.
+    static func snapCorner(center: CGPoint, velocity: CGPoint, size: CGSize, area: CGRect, obstacles: [CGRect]) -> Corner {
+        let target = projected(center, velocity: velocity)
+        func distance(_ corner: Corner) -> CGFloat {
+            let rect = ownRect(size: size, corner: corner, area: area, obstacles: obstacles)
+            return hypot(rect.midX - target.x, rect.midY - target.y)
+        }
+        var nearest = Corner.all[0]
+        for corner in Corner.all.dropFirst() where distance(corner) < distance(nearest) {
+            nearest = corner
+        }
+        return nearest
+    }
+
+    /// R2, R6: which video takes the stage and which the box. Your picture stands in the box while it is
+    /// sent; a tap swaps the two, which needs both.
+    static func placement(remote: Bool, own: Bool, swapped: Bool) -> (stage: Video?, box: Video?) {
+        switch (remote, own) {
+            case (true, true):
+                return swapped ? (.own, .remote) : (.remote, .own)
+            case (true, false):
+                return (.remote, nil)
+            case (false, true):
+                return (nil, .own)
+            case (false, false):
+                return (nil, nil)
+        }
+    }
+}
+
+/// KHANDAQ (calls stage, 26.11): the size of the frame a layer of a call shows (R2): your camera's
+/// format turned as its preview turns it, or the image a layer holds. Nil while nothing says.
+enum AirCallCamera {
+    static func shownFrame(of layer: CALayer) -> CGSize? {
+        if let preview = layer as? AVCaptureVideoPreviewLayer {
+            return shownFrame(ofPreview: preview)
+        }
+        guard let contents = layer.contents, CFGetTypeID(contents as CFTypeRef) == CGImage.typeID else {
+            return nil
+        }
+        let image = contents as! CGImage
+        guard image.width > 0, image.height > 0 else {
+            return nil
+        }
+        return CGSize(width: image.width, height: image.height)
+    }
+
+    private static func shownFrame(ofPreview preview: AVCaptureVideoPreviewLayer) -> CGSize? {
+        let devices = (preview.session?.inputs ?? []).compactMap { ($0 as? AVCaptureDeviceInput)?.device }
+        guard let camera = devices.first(where: { $0.hasMediaType(.video) }), let connection = preview.connection else {
+            return nil
+        }
+        let dimensions = CMVideoFormatDescriptionGetDimensions(camera.activeFormat.formatDescription)
+        guard dimensions.width > 0, dimensions.height > 0 else {
+            return nil
+        }
+        let frame = CGSize(width: CGFloat(dimensions.width), height: CGFloat(dimensions.height))
+        return AirCallStage.shownFrame(frame, rotationAngle: rotationAngle(of: connection))
+    }
+
+    /// The turn of the preview: its angle on iOS 17 and later, its orientation before.
+    private static func rotationAngle(of connection: AVCaptureConnection) -> CGFloat {
+        if #available(iOS 17.0, *) {
+            return connection.videoRotationAngle
+        }
+        switch connection.videoOrientation {
+            case .landscapeLeft, .landscapeRight:
+                return 0
+            default:
+                return 90
+        }
+    }
+}
+
+/// KHANDAQ (calls stage, 26.11): the person on a call without video (R9), as the conversation's header
+/// shows them: their photo, else their initials in their tone.
+struct AirCallPerson {
+    let tile: AirTileView.Style
+    let photo: UIImage?
+
+    init(name: String, friend: OCTFriend?) {
+        let live = friend.flatMap { $0.isInvalidated ? nil : $0 }
+        tile = .person(initials: AirInitials.from(name), tone: AirTone.index(for: live?.publicKey ?? name))
+        photo = live?.avatarData.flatMap { UIImage(data: $0) }
+    }
+}
+
 extension AirLinkState {
     /// The link to the other person of a call right now.
     init(friend: OCTFriend?) {
@@ -187,11 +414,13 @@ final class AirCallControl: UIView {
         addSubview(button)
 
         caption.text = title
-        caption.font = KQFont.font(.caption)
+        // KHANDAQ (calls stage, 26.11): one line in the label style that shrinks to 80 % before it would
+        // wrap (R7); a second line ("Switch camera" in Russian on Android) pushed its circle out of line.
+        caption.font = KQFont.font(.label)
         caption.adjustsFontForContentSizeCategory = true
         caption.textColor = KQColor.fixedWhite
         caption.textAlignment = .center
-        caption.numberOfLines = 2
+        caption.numberOfLines = 1
         caption.adjustsFontSizeToFitWidth = true
         caption.minimumScaleFactor = 0.8
         caption.isAccessibilityElement = false
@@ -224,6 +453,165 @@ final class AirCallControl: UIView {
             caption.text = newValue
             button.accessibilityLabel = newValue
         }
+    }
+}
+
+/// KHANDAQ (calls stage, 26.11): a place on the call stage with one video in it, cut to its bounds: the
+/// whole stage, or the box of the picture in picture (R1, R2, R4). The video keeps the shape of its
+/// frame. A view says that shape as its intrinsic size (objcTox's feed does, from its frames); a layer
+/// through `layerFrame`.
+final class AirCallVideoSlot: UIView {
+    /// The box: rounded, with a hairline, the video always covering it. On the stage a frame of the
+    /// other orientation fits instead, between black bars.
+    var isBox = false {
+        didSet {
+            guard isBox != oldValue else {
+                return
+            }
+            applyLook()
+            setNeedsLayout()
+        }
+    }
+
+    /// The size of the frame `videoLayer` shows; nil while unknown.
+    var layerFrame: CGSize? {
+        didSet {
+            if layerFrame != oldValue {
+                setNeedsLayout()
+            }
+        }
+    }
+
+    private(set) var video: UIView?
+    private(set) var videoLayer: CALayer?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        clipsToBounds = true
+        applyLook()
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// Puts a view of video in, in place of the one there was.
+    func show(_ newVideo: UIView?) {
+        guard newVideo !== video else {
+            return
+        }
+        if video?.superview === self {
+            video?.removeFromSuperview()
+        }
+        video = newVideo
+        if let newVideo = newVideo {
+            // Placed by its frame here; a feed that was pinned with constraints before lets them go.
+            newVideo.translatesAutoresizingMaskIntoConstraints = true
+            insertSubview(newVideo, at: 0)
+        }
+        setNeedsLayout()
+    }
+
+    /// Puts a layer of video in, in place of the one there was.
+    func show(layer newLayer: CALayer?) {
+        guard newLayer !== videoLayer else {
+            return
+        }
+        if videoLayer?.superlayer === layer {
+            videoLayer?.removeFromSuperlayer()
+        }
+        videoLayer = newLayer
+        if let newLayer = newLayer {
+            layer.insertSublayer(newLayer, at: 0)
+        }
+        setNeedsLayout()
+    }
+
+    /// The size of the frame shown, once known.
+    var frameSize: CGSize? {
+        if let video = video {
+            let size = video.intrinsicContentSize
+            return size.width > 0 && size.height > 0 ? size : nil
+        }
+        return videoLayer == nil ? nil : layerFrame
+    }
+
+    /// R1 on the stage; the box is always covered.
+    var scaleMode: AirCallStage.ScaleMode {
+        guard !isBox, let frame = frameSize else {
+            return .fill
+        }
+        return AirCallStage.scaleMode(frame: frame, stage: bounds.size)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let rect = frameSize.map { AirCallStage.contentRect(frame: $0, in: bounds, mode: scaleMode) } ?? bounds
+        video?.frame = rect
+        if let videoLayer = videoLayer {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            videoLayer.frame = rect
+            CATransaction.commit()
+        }
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        applyLook()
+    }
+
+    /// R4: the box has the card's corners, a hairline of white at 20 % and the lock-bottom ground until
+    /// the first frame. R1: the stage shows black bars around a frame that fits.
+    private func applyLook() {
+        backgroundColor = isBox ? KQColor.lockBottom : KQColor.fixedBlack
+        layer.cornerRadius = isBox ? KQRadius.card : 0
+        layer.borderWidth = isBox ? KQStroke.hairline : 0
+        layer.borderColor = airCGColor(KQColor.fixedWhite.withAlphaComponent(0.2))
+    }
+}
+
+/// KHANDAQ (calls stage, 26.11): the link on the call screen as a chip under the state (R8): a pill of
+/// the dark scrim with the link mark and its words in white, legible over any video. It was a bare line.
+final class AirCallLinkChip: UIView {
+    let label = UILabel()
+    private let mark = AirLinkMarkView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = KQColor.scrim
+
+        label.font = KQFont.font(.label)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = KQColor.fixedWhite
+        label.numberOfLines = 0
+        label.isAccessibilityElement = true
+        // Short of room on the call screen the person's tile gives way before the words.
+        label.setContentCompressionResistancePriority(UILayoutPriority(rawValue: 999), for: .vertical)
+
+        let row = UIStackView(arrangedSubviews: [mark, label])
+        row.axis = .horizontal
+        row.alignment = .center
+        row.spacing = KQSpace.x8
+        addSubview(row)
+        row.snp.makeConstraints {
+            $0.top.bottom.equalToSuperview().inset(KQSpace.x4)
+            $0.leading.trailing.equalToSuperview().inset(KQSpace.x10)
+        }
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(_ link: AirLinkState) {
+        mark.configure(link)
+        label.text = AirCallText.line(link)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layer.cornerRadius = min(KQRadius.round, bounds.height / 2)
     }
 }
 

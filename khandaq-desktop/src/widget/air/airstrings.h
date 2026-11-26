@@ -1030,7 +1030,7 @@ QString dayHintText(const Air::DayStrip& strip, bool hasBest, int bestFrom, int 
 QString groupRoleText(Air::GroupRole role);
 /** Your role in the dossier: what it may do, in one or two sentences. */
 QString groupRoleExplanation(Air::GroupRole role);
-/** "9 members, 4 online now", "nobody online now" or "not connected to the group". */
+/** "9 members, 4 online now", "only you online now" or "not connected to the group". */
 QString groupHeaderText(const Air::GroupReach& reach);
 /** The line under the field: who gets a message sent now. */
 QString groupHintText(const Air::GroupHint& hint, const Air::GroupReach& reach);

@@ -1044,7 +1044,7 @@
 "air_group_you_observer" = "Вы наблюдатель: читаете группу, но писать не можете. Право писать может дать модератор.";
 "air_group_members_count" = "%d участника";
 "air_group_header_format" = "%1$@, %2$d в сети сейчас";
-"air_group_header_none_format" = "%@, сейчас никого в сети";
+"air_group_header_none_format" = "%@, сейчас в сети только вы";
 "air_group_header_offline_format" = "%@, нет связи с группой";
 "air_group_hint_offline" = "Нет связи с группой: сообщения подождут на этом устройстве и уйдут, когда связь появится";
 "air_group_hint_alone" = "В группе пока только вы: пригласите людей из досье группы";

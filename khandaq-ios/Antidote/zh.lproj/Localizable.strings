@@ -1031,7 +1031,7 @@
 "air_group_you_observer" = "你是旁观者：可以阅读群组，但不能发言。管理员可以授予你发言权。";
 "air_group_members_count" = "%d 位成员";
 "air_group_header_format" = "%1$@，%2$d 人在线";
-"air_group_header_none_format" = "%@，当前无人在线";
+"air_group_header_none_format" = "%@，当前仅你在线";
 "air_group_header_offline_format" = "%@，未连接到群组";
 "air_group_hint_offline" = "未连接到群组：消息会留在本设备，连接后发出";
 "air_group_hint_alone" = "群组里目前只有你：可在群组资料中邀请他人";

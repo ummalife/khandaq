@@ -1698,9 +1698,9 @@
         <translation>%1，%2 人在线</translation>
     </message>
     <message>
-        <source>%1, nobody online now</source>
+        <source>%1, only you online now</source>
         <comment>group header: %1 is the member count</comment>
-        <translation>%1，当前无人在线</translation>
+        <translation>%1，当前仅你在线</translation>
     </message>
     <message>
         <source>%1, not connected to the group</source>

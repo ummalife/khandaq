@@ -1758,9 +1758,9 @@
         <translation>%1، المتصلون الآن: %2</translation>
     </message>
     <message>
-        <source>%1, nobody online now</source>
+        <source>%1, only you online now</source>
         <comment>group header: %1 is the member count</comment>
-        <translation>%1، لا أحد متصل الآن</translation>
+        <translation>%1، لا أحد غيرك متصل الآن</translation>
     </message>
     <message>
         <source>%1, not connected to the group</source>

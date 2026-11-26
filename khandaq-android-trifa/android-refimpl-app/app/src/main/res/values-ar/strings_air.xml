@@ -334,7 +334,7 @@
         <item quantity="other">%1$d عضو</item>
     </plurals>
     <string name="air_group_header_format">%1$s، %2$d متصلون الآن</string>
-    <string name="air_group_header_none_format">%1$s، لا أحد متصل الآن</string>
+    <string name="air_group_header_none_format">%1$s، لا أحد غيرك متصل الآن</string>
     <string name="air_group_header_offline_format">%1$s، لا اتصال بالمجموعة</string>
     <string name="air_group_hint_offline">لا اتصال بالمجموعة: تنتظر الرسائل على هذا الجهاز وتُرسل عند الاتصال</string>
     <string name="air_group_hint_alone">أنت وحدك في المجموعة حتى الآن: ادعُ آخرين من ملف المجموعة</string>

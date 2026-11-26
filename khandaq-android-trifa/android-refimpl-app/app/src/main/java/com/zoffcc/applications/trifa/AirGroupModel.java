@@ -293,7 +293,7 @@ final class AirGroupModel
         {
             /** "9 members, not connected to the group". */
             OFFLINE,
-            /** "9 members, nobody online now". */
+            /** "9 members, only you online now": none of the others is online, and connected means you are. */
             NOBODY,
             /** "9 members, 4 online now". */
             SOME

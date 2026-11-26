@@ -284,7 +284,7 @@
         <item quantity="other">%1$d 位成员</item>
     </plurals>
     <string name="air_group_header_format">%1$s，%2$d 人在线</string>
-    <string name="air_group_header_none_format">%1$s，当前无人在线</string>
+    <string name="air_group_header_none_format">%1$s，当前仅你在线</string>
     <string name="air_group_header_offline_format">%1$s，未连接到群组</string>
     <string name="air_group_hint_offline">未连接到群组：消息会留在本设备，连接后发出</string>
     <string name="air_group_hint_alone">群组里目前只有你：可在群组资料中邀请他人</string>

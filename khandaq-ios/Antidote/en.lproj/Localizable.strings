@@ -1042,7 +1042,7 @@
 "air_group_you_observer" = "You are an observer. You read the group but cannot write; a moderator can give you the right to write.";
 "air_group_members_count" = "%d members";
 "air_group_header_format" = "%1$@, %2$d online now";
-"air_group_header_none_format" = "%@, nobody online now";
+"air_group_header_none_format" = "%@, only you online now";
 "air_group_header_offline_format" = "%@, not connected to the group";
 "air_group_hint_offline" = "No connection to the group: messages wait on this device and go once it connects";
 "air_group_hint_alone" = "Only you are in the group so far: invite people from the group dossier";

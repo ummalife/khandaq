@@ -457,6 +457,13 @@ private:
     QDir groupDownloadDir(const Group* g) const;
     void dispatchGroupFileToChatLog(const GroupId& groupId, const ToxPk& sender, ToxFile file);
     void updateGroupFileInChatLog(const GroupId& groupId, const ToxPk& sender, const ToxFile& file);
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): whether author deleted that text or file of the group
+     * (ChatHistory::isDeleted): a copy that comes again is dropped before anything shows, alerts
+     * or is written.
+     */
+    bool deletedInGroup(const GroupId& groupId, const ToxPk& author,
+                        Air::MessageEffect::Anchor anchor, const QByteArray& anchorId) const;
     void saveWindowGeometry();
     void saveSplitterGeometry();
     /**

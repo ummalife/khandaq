@@ -136,7 +136,9 @@ class ChatGenericFileCell: ChatMovableDateCell {
         personOnline = fileModel.personOnline
 
         let isVoice = fileModel.isVoiceMessage
-        let previewSize = isVoice ? nil : fileModel.previewSize
+        // KHANDAQ (tester 8263): a voice note, or an audio file, which keeps its name row under the player.
+        let playsInline = fileModel.playsInline
+        let previewSize = playsInline ? nil : fileModel.previewSize
 
         // The preview: sized now, the image comes with setButtonImage.
         loadingView.imageButton.setImage(nil, for: UIControlState())
@@ -167,7 +169,7 @@ class ChatGenericFileCell: ChatMovableDateCell {
                           incoming: isIncoming,
                           showsHead: showsHead)
 
-        voiceMessageView.isHidden = !isVoice
+        voiceMessageView.isHidden = !playsInline
         configureVoiceMessagePresentation(fileModel: fileModel, theme: theme)
 
         // KHANDAQ: the caption sent with a photo; none for a voice note.
@@ -191,7 +193,7 @@ class ChatGenericFileCell: ChatMovableDateCell {
         if previewSize != nil {
             firstLine = ceil(KQFont.lineHeight(.caption))
         }
-        else if isVoice {
+        else if playsInline {
             firstLine = KQSize.targetIos
         }
         else {
@@ -357,7 +359,7 @@ class ChatGenericFileCell: ChatMovableDateCell {
     }
 
     func configureVoiceMessagePresentation(fileModel: ChatGenericFileCellModel, theme: Theme) {
-        guard fileModel.isVoiceMessage else {
+        guard fileModel.playsInline else {
             return
         }
 
@@ -393,7 +395,7 @@ class ChatGenericFileCell: ChatMovableDateCell {
     }
 
     func refreshVoiceMessagePresentation(theme: Theme, fileModel: ChatGenericFileCellModel) {
-        guard fileModel.isVoiceMessage else {
+        guard fileModel.playsInline else {
             return
         }
 
@@ -511,6 +513,10 @@ private extension ChatGenericFileCell {
         let row = fileRow.isHidden ? "" : fileRow.spokenText
         if !row.isEmpty {
             value.append(row)
+        }
+        // KHANDAQ (tester 8263): an audio file: its name and size, then its length or how far it has played.
+        if model.isAudioFile {
+            value.append(voiceMessageView.spokenText)
         }
         if let caption = captionLabel.text, !captionLabel.isHidden {
             value.append(caption)

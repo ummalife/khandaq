@@ -111,6 +111,10 @@ private slots:
     void aFileWeSentTheGroupIsFoundAfterARestart();
     void aRelayedGroupTextIsKnownByItsAuthorAndWords();
     void entriesKeptWithoutANameTakeTheNameTheGroupGivesTheirAuthor();
+    void aDeletionInAGroupIsKeptAfterARestart();
+    void anOldDeletionIsDroppedAtTheNextStart();
+    void aFileNotLoadedIsErasedForItsSenderOnly();
+    void theTextsOfAnAuthorThatHaveWordsComeNewestFirst();
 
 private:
     /** The one file of the chat, as a later start reads it. */
@@ -640,6 +644,140 @@ void TestHistory::entriesKeptWithoutANameTakeTheNameTheGroupGivesTheirAuthor()
     history->nameUnnamedEntries(elsewhere, author, QStringLiteral("Maryam E"));
     QCOMPARE(names(family).first(), QStringLiteral("Maryam B"));
     QCOMPARE(names(elsewhere), QStringList{QStringLiteral("Maryam E")});
+}
+
+/**
+ * @brief KHANDAQ (beta feedback 2026-11-22): a member's deletion of a text or a file of theirs in a
+ * group is kept by the chat, the author, what it points at and its id, after a restart too: a copy
+ * a member relays later is known by it. It goes with the history of the chat, and with all of it.
+ */
+void TestHistory::aDeletionInAGroupIsKeptAfterARestart()
+{
+    using Anchor = Air::MessageEffect::Anchor;
+    const QByteArray textId("\x00\x00\x01\x02", 4);
+    QVERIFY(!history->isDeleted(family, maryam, Anchor::Text, textId));
+    history->addDeletion(family, maryam, Anchor::Text, textId);
+    history->addDeletion(family, maryam, Anchor::File, fileId);
+    // Kept once.
+    history->addDeletion(family, maryam, Anchor::Text, textId);
+    QVERIFY(history->isDeleted(family, maryam, Anchor::Text, textId));
+    QVERIFY(history->isDeleted(family, maryam, Anchor::File, fileId));
+
+    // Another author, chat, kind or id is not that deletion.
+    QVERIFY(!history->isDeleted(family, self, Anchor::Text, textId));
+    const GroupId elsewhere{QByteArray(GroupId::size, 'h')};
+    QVERIFY(!history->isDeleted(elsewhere, maryam, Anchor::Text, textId));
+    QVERIFY(!history->isDeleted(family, maryam, Anchor::File, textId));
+    QVERIFY(!history->isDeleted(family, maryam, Anchor::Text, QByteArray("\x00\x00\x01\x03", 4)));
+    QVERIFY(!history->isDeleted(family, maryam, Anchor::Text, QByteArray()));
+
+    restart();
+    QVERIFY(history->isDeleted(family, maryam, Anchor::Text, textId));
+    QVERIFY(history->isDeleted(family, maryam, Anchor::File, fileId));
+    QVERIFY(!history->isDeleted(family, self, Anchor::Text, textId));
+
+    // Leaving the group takes its history, and the deletions of the group with it.
+    const GroupId other{QByteArray(GroupId::size, 'o')};
+    history->addDeletion(other, maryam, Anchor::Text, textId);
+    history->removeChatHistory(family);
+    QVERIFY(!history->isDeleted(family, maryam, Anchor::Text, textId));
+    QVERIFY(history->isDeleted(other, maryam, Anchor::Text, textId));
+    restart();
+    QVERIFY(!history->isDeleted(family, maryam, Anchor::File, fileId));
+    QVERIFY(history->isDeleted(other, maryam, Anchor::Text, textId));
+
+    history->eraseHistory();
+    QVERIFY(!history->isDeleted(other, maryam, Anchor::Text, textId));
+    restart();
+    QVERIFY(!history->isDeleted(other, maryam, Anchor::Text, textId));
+}
+
+/**
+ * @brief KHANDAQ (beta feedback 2026-11-22): a deletion is kept for History::deletionKeepMs; an
+ * older one is dropped at the next start, and a newer one stays.
+ */
+void TestHistory::anOldDeletionIsDroppedAtTheNextStart()
+{
+    using Anchor = Air::MessageEffect::Anchor;
+    const QByteArray textId("\x00\x00\x01\x02", 4);
+    history->addDeletion(family, maryam, Anchor::Text, textId);
+    history->sync();
+    history.reset();
+    {
+        RawDatabase db(file->fileName(), QString(), QByteArray());
+        const qint64 old = QDateTime::currentMSecsSinceEpoch() - History::deletionKeepMs - 60000;
+        QVERIFY(db.execNow(RawDatabase::Query(
+            QStringLiteral("INSERT INTO deleted_messages (chat_uuid, author, anchor, anchor_id, "
+                           "deleted_at) VALUES (?, ?, 1, ?, %1);")
+                .arg(old),
+            {family.getByteArray(), maryam.getByteArray(), fileId})));
+    }
+    auto db = std::make_shared<RawDatabase>(file->fileName(), QString(), QByteArray());
+    history = std::make_shared<History>(db, *settings, messageBoxes);
+    QVERIFY(history->isValid());
+
+    QVERIFY(history->isDeleted(family, maryam, Anchor::Text, textId));
+    QVERIFY(!history->isDeleted(family, maryam, Anchor::File, fileId));
+}
+
+/**
+ * @brief KHANDAQ (beta feedback 2026-11-22): a deletion of a file the conversation has not loaded
+ * names who sent it, which nothing has checked: only a file of that sender is erased.
+ */
+void TestHistory::aFileNotLoadedIsErasedForItsSenderOnly()
+{
+    history->addNewFileMessage(family, fileId, QStringLiteral("photo.jpg"), filePath, 1234, maryam,
+                               QDateTime::currentDateTime(), QStringLiteral("Maryam"),
+                               ToxFile::RECEIVING);
+    letRowsIn();
+    history->setFileFinished(fileId, true, filePath, QByteArray("hash"));
+    QTRY_COMPARE(storedFile().filePath, filePath);
+
+    history->eraseFileEntry(family, fileId, self);
+    QCOMPARE(storedFile().fileName, QStringLiteral("photo.jpg"));
+    QCOMPARE(storedFile().filePath, filePath);
+
+    history->eraseFileEntry(family, fileId, maryam);
+    QVERIFY(storedFile().fileName.isEmpty());
+    QVERIFY(storedFile().filePath.isEmpty());
+    restart();
+    QVERIFY(storedFile().fileName.isEmpty());
+    QVERIFY(storedFile().filePath.isEmpty());
+}
+
+/**
+ * @brief KHANDAQ (beta feedback 2026-11-22): what a deletion of a text not loaded is looked for
+ * among: the author's texts in the chat with words, as kept (an action with its prefix), the
+ * newest first, as many as asked.
+ */
+void TestHistory::theTextsOfAnAuthorThatHaveWordsComeNewestFirst()
+{
+    const QDateTime start = QDateTime::fromMSecsSinceEpoch(1700000000000);
+    history->addNewMessage(family, QStringLiteral("first"), maryam, start, true, ExtensionSet(),
+                           QStringLiteral("Maryam"));
+    history->addNewMessage(family, QStringLiteral("/me waves"), maryam, start.addSecs(1), true,
+                           ExtensionSet(), QStringLiteral("Maryam"));
+    history->addNewMessage(family, QStringLiteral("mine"), self, start.addSecs(2), true,
+                           ExtensionSet(), QStringLiteral("Me"));
+    const GroupId elsewhere{QByteArray(GroupId::size, 'h')};
+    history->addNewMessage(elsewhere, QStringLiteral("elsewhere"), maryam, start.addSecs(3), true,
+                           ExtensionSet(), QStringLiteral("Maryam"));
+    history->addNewMessage(family, QStringLiteral("deleted"), maryam, start.addSecs(4), true,
+                           ExtensionSet(), QStringLiteral("Maryam"));
+    history->setMessageText(family, maryam, start.addSecs(4), QStringLiteral("deleted"), QString());
+
+    const QVector<History::KeptText> texts = history->textsOf(family, maryam, 10);
+    QCOMPARE(texts.size(), 2);
+    QCOMPARE(texts[0].time, start.addSecs(1));
+    QCOMPARE(texts[0].text, QStringLiteral("/me waves"));
+    QCOMPARE(texts[1].time, start);
+    QCOMPARE(texts[1].text, QStringLiteral("first"));
+
+    const QVector<History::KeptText> newest = history->textsOf(family, maryam, 1);
+    QCOMPARE(newest.size(), 1);
+    QCOMPARE(newest[0].text, QStringLiteral("/me waves"));
+    QVERIFY(history->textsOf(family, maryam, 0).isEmpty());
+    QVERIFY(history->textsOf(family, ToxPk(QByteArray(ToxPk::size, 'y')), 10).isEmpty());
 }
 
 int main(int argc, char* argv[])

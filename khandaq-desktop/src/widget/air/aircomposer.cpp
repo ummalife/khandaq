@@ -108,6 +108,10 @@ AirComposer::AirComposer(QTextEdit* field_, QWidget* parent)
     cancelVoice = new AirIconButton(QStringLiteral("x"), frame);
     cancelVoice->setObjectName(QStringLiteral("composerVoiceCancel"));
     cancelVoice->hide();
+    // KHANDAQ (beta feedback 2026-11-22): the pause of the note, where the microphone was.
+    pauseVoice = new AirPlayButton(frame);
+    pauseVoice->setObjectName(QStringLiteral("composerVoicePause"));
+    pauseVoice->hide();
     recording = new QWidget(frame);
     recording->setObjectName(QStringLiteral("composerRecording"));
     recording->setFocusPolicy(Qt::NoFocus);
@@ -143,6 +147,7 @@ AirComposer::AirComposer(QTextEdit* field_, QWidget* parent)
     row->addWidget(recording, 1, Qt::AlignVCenter);
     row->addWidget(emoji, 0, Qt::AlignBottom);
     row->addWidget(voice, 0, Qt::AlignBottom);
+    row->addWidget(pauseVoice, 0, Qt::AlignBottom);
     row->addWidget(send, 0, Qt::AlignBottom);
     column->addWidget(frame);
     // The field joins the frame after the buttons were made, so Tab would reach Send before it:
@@ -151,7 +156,8 @@ AirComposer::AirComposer(QTextEdit* field_, QWidget* parent)
     QWidget::setTabOrder(attach, field);
     QWidget::setTabOrder(field, emoji);
     QWidget::setTabOrder(emoji, voice);
-    QWidget::setTabOrder(voice, send);
+    QWidget::setTabOrder(voice, pauseVoice);
+    QWidget::setTabOrder(pauseVoice, send);
 
     hintLine = new QWidget(writing);
     auto* const hintRow = new QHBoxLayout(hintLine);
@@ -215,6 +221,8 @@ AirComposer::AirComposer(QTextEdit* field_, QWidget* parent)
     });
     connect(voice, &AirIconButton::clicked, this, &AirComposer::voiceRequested);
     connect(cancelVoice, &AirIconButton::clicked, this, &AirComposer::voiceCancelRequested);
+    connect(pauseVoice, &AirPlayButton::clicked, this,
+            [this] { emit voicePauseRequested(!recordingPaused); });
     connect(attach, &AirIconButton::clicked, this,
             [this] { emit attachRequested(attach->mapToGlobal(QPoint(0, attach->height()))); });
     connect(emoji, &AirIconButton::clicked, this,
@@ -250,6 +258,8 @@ void AirComposer::setRecording(bool on)
     const bool hadFocus = frame->isAncestorOf(QApplication::focusWidget());
     recording->setVisible(on);
     cancelVoice->setVisible(on);
+    pauseVoice->setVisible(on);
+    setRecordingPaused(false);
     field->setVisible(!on);
     attach->setVisible(attachShown && !on);
     emoji->setVisible(emojiShown && !on);
@@ -274,8 +284,19 @@ void AirComposer::setRecordingTime(qint64 ms, double share)
     recordedMs = std::max<qint64>(0, ms);
     recordingTime->setText(Air::clockText(recordedMs / 1000));
     recordingBar->setProgress(std::min(1.0, std::max(0.0, share)));
-    recording->setAccessibleName(AirStrings::text(Text::ComposeRecording) + QStringLiteral(", ")
+    recording->setAccessibleName(recordingTitle->text() + QStringLiteral(", ")
                                  + recordingTime->text());
+}
+
+void AirComposer::setRecordingPaused(bool paused, bool pausable)
+{
+    pauseVoice->setEnabled(pausable);
+    // Two bars while the note records, as while a note plays; the triangle lets it go on.
+    pauseVoice->setPlaying(!paused);
+    if (recordingPaused != paused) {
+        recordingPaused = paused;
+        restyle();
+    }
 }
 
 void AirComposer::setAttachNote(const QString& note)
@@ -369,9 +390,18 @@ void AirComposer::setSendBlocked(bool blocked)
     send->setEnabled(!blocked);
 }
 
+void AirComposer::setSaving(bool saving_)
+{
+    if (saving == saving_) {
+        return;
+    }
+    saving = saving_;
+    restyle();
+}
+
 void AirComposer::restyle()
 {
-    send->setText(AirStrings::text(Text::ComposeSend));
+    send->setText(AirStrings::text(saving ? Text::ComposeSave : Text::ComposeSend));
     const QString attachName = AirStrings::text(Text::ComposeAttach);
     attach->setToolTip(attachNote.isEmpty() ? attachName : attachName + QLatin1Char('\n') + attachNote);
     attach->setAccessibleName(attachName);
@@ -385,7 +415,14 @@ void AirComposer::restyle()
     const QString cancelName = AirStrings::text(Text::ComposeVoiceCancel);
     cancelVoice->setToolTip(cancelName);
     cancelVoice->setAccessibleName(cancelName);
-    recordingTitle->setText(AirStrings::text(Text::ComposeRecording));
+    // A voice note's play button draws no words: they are its name and its tooltip.
+    const QString pauseName =
+        AirStrings::text(recordingPaused ? Text::ComposeVoiceResume : Text::ComposeVoicePause);
+    pauseVoice->setText(pauseName);
+    pauseVoice->setToolTip(pauseName);
+    pauseVoice->setAccessibleName(pauseName);
+    recordingTitle->setText(
+        AirStrings::text(recordingPaused ? Text::ComposeRecordingPaused : Text::ComposeRecording));
     recordingTitle->setFont(air().font(TextRole::Label));
     AirPaint::textColor(recordingTitle, air().color(Color::Ink));
     recordingTime->setFont(air().font(TextRole::Caption));

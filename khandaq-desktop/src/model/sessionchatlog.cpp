@@ -495,6 +495,27 @@ bool SessionChatLog::toggleOwnReaction(ChatLogIdx idx, const QString& emoji, QSt
     return true;
 }
 
+bool SessionChatLog::editOwnMessage(ChatLogIdx idx, bool isAction, const QString& content,
+                                    quint32 time)
+{
+    const auto it = items.find(idx);
+    if (it == items.end() || hiddenItems.count(idx) != 0
+        || it->second.getContentType() != ChatLogItem::ContentType::message
+        || it->second.getSender() != coreIdHandler.getSelfPublicKey()) {
+        return false;
+    }
+    ChatLogMessage& entry = it->second.getContentAsMessage();
+    if (entry.message.content == content && entry.message.isAction == isAction) {
+        return false;
+    }
+    entry.message.content = content;
+    entry.message.isAction = isAction;
+    entry.marks.edited = true;
+    entry.marks.editedAt = time;
+    emit itemUpdated(idx);
+    return true;
+}
+
 void SessionChatLog::addSystemMessage(const SystemMessage& message)
 {
     auto messageIdx = nextIdx++;

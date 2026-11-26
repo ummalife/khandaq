@@ -310,6 +310,13 @@ extern NSString *const kOCTNgcSignedHistoryVerdictStoredNotification;
 - (void)deleteGroupMessageForBoth:(OCTMessageAbstract *)message inChat:(OCTChat *)chat;
 
 /**
+ * KHANDAQ (tester 21.11, 8256/8261): delete messages of the group on this device only, for good: a copy that comes
+ * again (the members serve the last 130 minutes in the history sync at every join, a sender resends) is not stored
+ * again. -deleteGroupMessageForBoth:inChat: and a retraction by the author keep it the same way.
+ */
+- (void)removeGroupMessages:(NSArray<OCTMessageAbstract *> *)messages inChat:(OCTChat *)chat;
+
+/**
  * KHANDAQ (#208): edit an OWN group TEXT message in place and broadcast the new text to the group
  * (KQ NGC packet 0x41, byte-parity with Android). Own text only; addressed by message_id + frozen
  * author name. Applied to Realm immediately.

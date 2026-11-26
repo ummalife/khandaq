@@ -315,7 +315,10 @@ class BubbleView: UIView {
             $0.leading.equalTo(self).offset(horizontalInset)
             if isTranscript {
                 $0.trailing.lessThanOrEqualTo(self)
-                $0.width.equalTo(Constants.TextViewMaxWidth)
+                // KHANDAQ (tester 21.11, 8255): the map gives way where its column is narrower than it, as the
+                // preview of a photo does (LoadingImageView): beside the tile of a group member's entry, and on a
+                // narrow phone. A required width made Auto Layout break whichever constraint it liked.
+                $0.width.equalTo(Constants.TextViewMaxWidth).priority(999)
             }
             else {
                 $0.trailing.equalTo(self).offset(-horizontalInset)

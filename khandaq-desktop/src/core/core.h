@@ -36,6 +36,7 @@
 #include "src/model/air/airgroupfilequeue.h"
 #include "src/model/air/airgroupfilerepair.h"
 #include "src/model/air/airgroupleave.h"
+#include "src/model/air/airgroupselfname.h"
 #include "src/model/air/airhistorysync.h"
 #include "src/model/status.h"
 #include <tox/tox.h>
@@ -118,6 +119,11 @@ public:
     ToxPk getGroupPeerPk(int groupId, int peerId) const override;
     /** Our own key in a group, which the members know us by; empty when the group is unknown. */
     ToxPk getGroupSelfPublicKey(int groupId) const override;
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): our name in the group, as its members see it
+     * (tox_group_self_get_name); empty when the group is unknown.
+     */
+    QString getGroupSelfName(int groupId) const;
     bool isGroupPeerPresent(int groupId, const ToxPk& peerPk) const;
     QStringList getGroupPeerNames(int groupId) const override;
     QString getGroupName(int groupId) const;
@@ -165,6 +171,14 @@ public:
     void rejoinStoredGroups(const QString& stored);
     /** 0.2.56: what the profile keeps of the groups joined by their ID that did not sync yet. */
     QString getUnsyncedGroupJoins() const;
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): the groups with a name of our own that the profile kept
+     * (getGroupSelfNames). Called before rejoinStoredGroups and start(), so that the groups are
+     * joined and loaded with the right name.
+     */
+    void restoreGroupSelfNames(const QString& stored);
+    /** What the profile keeps of the groups with a name of our own (Air::GroupSelfNames::store). */
+    QString getGroupSelfNames() const;
     /**
      * QA live F11: every leave that waits for its notice is done now, and toxcore lets go of the
      * groups: the profile closes. Returns once that is done on the thread of the node.
@@ -246,6 +260,14 @@ public slots:
     bool setGroupPrivacyState(int groupId, Tox_Group_Privacy_State privacyState);
     /** A message only that peer of the group gets; false when toxcore refused it. */
     bool sendGroupPrivateMessage(int groupId, int peerId, const QString& message);
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): our name in this group only (tox_group_self_set_name),
+     * which the save of the profile keeps. Any name but the profile name is the group's own, which
+     * a rename of the profile leaves as it is; the profile name makes the group follow the profile
+     * again (Air::GroupSelfNames). False when toxcore refused it, or the group is unknown or being
+     * left.
+     */
+    bool setGroupSelfName(int groupId, const QString& name);
 
     void removeFriend(uint32_t friendId);
     void removeGroup(int groupId);
@@ -347,6 +369,11 @@ signals:
     void pendingGroupLeavesChanged(const QString& stored);
     /** 0.2.56: what the profile keeps of our unsynced joins changed (getUnsyncedGroupJoins). */
     void unsyncedGroupJoinsChanged(const QString& stored);
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): what the profile keeps of the groups with a name of our
+     * own changed (getGroupSelfNames).
+     */
+    void groupSelfNamesChanged(const QString& stored);
 
     /**
      * @deprecated prefer signals using ToxPk
@@ -581,6 +608,9 @@ private:
     void maintainGroups();
     void requestGroupInviteFromFriends(const QByteArray& chatId);
     void forgetUnsyncedGroupJoin(const QByteArray& chatId);
+    std::vector<uint32_t> heldGroupNumbers() const;
+    QString groupSelfNameFor(const QByteArray& chatId) const;
+    bool applyGroupSelfName(uint32_t groupNumber);
     void resendPendingGroupInviteRequests(uint32_t friendId);
     void handleGroupInviteRequestPacket(uint32_t friendId, const uint8_t* data, size_t length);
     bool autoAcceptRequestedGroupInvite(const GroupInvite& inviteInfo);
@@ -639,6 +669,9 @@ private:
     // a group only once it has its shared state (gc_group_is_valid), so the profile keeps them
     // until then. Under coreLoopLock.
     QList<QByteArray> unsyncedGroupJoins;
+    // KHANDAQ (beta feedback 2026-11-22): the groups with a name of our own, which the profile
+    // keeps (groupSelfNamesChanged). Under coreLoopLock.
+    Air::GroupSelfNames groupSelfNames;
     // 0.2.56: a file we send into a group whose chunks have yet to go (Air::GroupFileQueue).
     struct OutgoingGroupFile
     {

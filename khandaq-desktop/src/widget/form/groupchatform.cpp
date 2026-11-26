@@ -233,6 +233,7 @@ GroupChatForm::GroupChatForm(Core& core_, Group* chatGroup, IChatLog& chatLog_,
             });
     connect(dossier, &AirGroupDossier::inviteRequested, this, &GroupChatForm::inviteContacts);
     connect(dossier, &AirGroupDossier::privacyChangeRequested, this, &GroupChatForm::setPrivacy);
+    connect(dossier, &AirGroupDossier::selfNameRequested, this, &GroupChatForm::setNameInGroup);
     connect(privateThread, &AirPrivateThread::sendRequested, this, &GroupChatForm::sendPrivate);
     connect(composer, &AirComposer::readOnlyActionRequested, this, &GroupChatForm::askToWrite);
     connect(chatWidget, &ChatWidget::heldFileAccepted, this,
@@ -552,6 +553,11 @@ AirGroupInfo GroupChatForm::dossierInfo() const
     info.selfRole = selfRole;
     info.voice = voice;
     const int groupNumber = static_cast<int>(group->getId());
+    // KHANDAQ (beta feedback 2026-11-22): the name toxcore gives the members, as our row says it.
+    info.selfName = core.getGroupSelfName(groupNumber);
+    if (info.selfName.isEmpty()) {
+        info.selfName = core.getUsername();
+    }
     info.privacy = core.getGroupPrivacyState(groupNumber) == TOX_GROUP_PRIVACY_STATE_PRIVATE
                        ? Air::GroupPrivacy::InviteOnly
                        : Air::GroupPrivacy::Open;
@@ -662,6 +668,24 @@ void GroupChatForm::setPrivacy(Air::GroupPrivacy privacy)
         AirDialog::notice(this, AirStrings::text(AirText::ErrorPrivacyTitle),
                           AirStrings::text(AirText::GroupChangeFailed));
     }
+}
+
+void GroupChatForm::setNameInGroup(const QString& name)
+{
+    const int groupNumber = static_cast<int>(group->getId());
+    const bool done = core.setGroupSelfName(groupNumber, name);
+    if (done) {
+        // Tab completion leaves our own name in the group out (TabCompleter::buildCompletionList).
+        group->setSelfName(core.getGroupSelfName(groupNumber));
+    }
+    // Our row and the field show the name toxcore holds now.
+    refreshMembers();
+    if (!done) {
+        AirDialog::notice(this, AirStrings::text(AirText::ErrorGroupSelfNameTitle),
+                          AirStrings::text(AirText::GroupChangeFailed));
+        return;
+    }
+    AirToast::post(this, AirStrings::text(AirText::YouSaved));
 }
 
 void GroupChatForm::inviteContacts(const QVector<Air::InviteCandidate>& chosen)

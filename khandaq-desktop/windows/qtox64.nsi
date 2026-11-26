@@ -15,8 +15,9 @@ Unicode True
 !define REG_ROOT "HKLM"
 !define REG_APP_PATH "Software\Microsoft\Windows\CurrentVersion\App Paths\Khandaq.exe"
 !define UNINSTALL_PATH "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
-!define REG_START_MENU "Start Menu Folder"
-var SM_Folder
+; KHANDAQ (0.2.68 installer review): Khandaq.exe as a command line, quoted: the install folder has a
+; space in it, and an unquoted path is tried as "C:\Program" first.
+!define MAIN_APP_COMMAND "$\"$INSTDIR\${MAIN_APP_EXE}$\""
 ; KHANDAQ (0.2.66): 1 when the app runs this installer to update itself:
 ; /S /UPDATE /WAITPID=<the app's process> /D=<the install folder>
 var UpdateMode
@@ -165,16 +166,15 @@ VIAddVersionKey "FileVersion" "${VERSION}"
 
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_NOAUTOCLOSE
+; KHANDAQ (0.2.68 installer review): the installer and the uninstaller carry the app's icon, not
+; NSIS's. The build copies windows/* beside this script, so khandaq.ico is found next to it.
+!define MUI_ICON "khandaq.ico"
+!define MUI_UNICON "khandaq.ico"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
-!ifdef REG_START_MENU
-  !define MUI_STARTMENUPAGE_NODISABLE
-  !define MUI_STARTMENUPAGE_DEFAULTFOLDER "Khandaq"
-  !define MUI_STARTMENUPAGE_REGISTRY_ROOT "${REG_ROOT}"
-  !define MUI_STARTMENUPAGE_REGISTRY_KEY "${UNINSTALL_PATH}"
-  !define MUI_STARTMENUPAGE_REGISTRY_VALUENAME "${REG_START_MENU}"
-  !insertmacro MUI_PAGE_STARTMENU Application $SM_Folder
-!endif
+; KHANDAQ (0.2.68 installer review): no Start menu folder page. It asked for a folder name that the
+; Install section never used (the shortcuts always go to "$SMPROGRAMS\Khandaq", which the
+; uninstaller removes by that name), so whatever the person typed there was ignored.
 !insertmacro MUI_PAGE_INSTFILES
 
 Function finishpageaction
@@ -364,20 +364,26 @@ Section "Install"
   ${WriteRegStr} ${REG_ROOT} "${UNINSTALL_PATH}" "DisplayName" "Khandaq"
   ${WriteRegStr} ${REG_ROOT} "${UNINSTALL_PATH}" "DisplayVersion" "0.2.68"
   ${WriteRegStr} ${REG_ROOT} "${UNINSTALL_PATH}" "Publisher" "Khandaq Project"
-  ${WriteRegStr} ${REG_ROOT} "${UNINSTALL_PATH}" "UninstallString" "$INSTDIR\uninstall.exe"
+  ; KHANDAQ (0.2.68 installer review): quoted, like every command line below, and with the app's
+  ; icon in Settings > Apps instead of a blank one.
+  ${WriteRegStr} ${REG_ROOT} "${UNINSTALL_PATH}" "UninstallString" "$\"$INSTDIR\uninstall.exe$\""
+  ${WriteRegStr} ${REG_ROOT} "${UNINSTALL_PATH}" "DisplayIcon" "$INSTDIR\${MAIN_APP_EXE}"
   ${WriteRegStr} ${REG_ROOT} "${UNINSTALL_PATH}" "URLInfoAbout" "https://khandaq.org"
 
   # Register the tox: protocol
   ${WriteRegStr} HKCR "tox" "" "URL:tox Protocol"
   ${WriteRegStr} HKCR "tox" "URL Protocol" ""
-  ${WriteRegStr} HKCR "tox\shell\open\command" "" "$INSTDIR\${MAIN_APP_EXE} %1"
+  ${WriteRegStr} HKCR "tox\shell\open\command" "" "${MAIN_APP_COMMAND} $\"%1$\""
 
   # Register the .tox file associations
+  ; KHANDAQ (0.2.68 installer review): "%1" quoted. Unquoted, a profile under a folder with a space
+  ; in its name (C:\Users\Jane Doe\...) reached the app as two arguments, and the app took the first
+  ; half for its argument and quit with "Invalid argument".
   ${WriteRegStr} "HKCR" "Applications\Khandaq.exe\SupportedTypes" ".tox" ""
   ${WriteRegStr} HKCR ".tox" "" "toxsave"
   ${WriteRegStr} HKCR "toxsave" "" "Tox save file"
   ${WriteRegStr} HKCR "toxsave\DefaultIcon" "" "$INSTDIR\${MAIN_APP_EXE}"
-  ${WriteRegStr} HKCR "toxsave\shell\open\command" "" "$INSTDIR\${MAIN_APP_EXE} %1"
+  ${WriteRegStr} HKCR "toxsave\shell\open\command" "" "${MAIN_APP_COMMAND} $\"%1$\""
 SectionEnd
 
 
@@ -397,9 +403,14 @@ Section Uninstall
   FileOpen $UninstLog "$INSTDIR\${UninstLog}" r
   StrCpy $R1 -1
 
+  ; KHANDAQ (0.2.68 installer review): the log is written UTF-16LE (FileWriteUTF16LE above), so it
+  ; is read the same way, as qtox.nsi does. FileRead read it as ANSI and stopped at the zero byte
+  ; after each character, so every "line" was one character, which the -2 below left empty: nothing
+  ; the log names was ever removed, and the desktop shortcut the Finish page makes, which only the
+  ; log names, stayed behind after an uninstall.
   GetLineCount:
     ClearErrors
-    FileRead $UninstLog $R0
+    FileReadUTF16LE $UninstLog $R0
     IntOp $R1 $R1 + 1
     StrCpy $R0 $R0 -2
     Push $R0

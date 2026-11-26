@@ -78,6 +78,17 @@ public class GroupMessageListFragment extends Fragment
     {
         // HelperGeneric.logI(TAG, "onCreateView");
         View view = inflater.inflate(R.layout.group_message_list_layout, container, false);
+        // KHANDAQ (Khandaq Testers 8251): the list dragged down takes the keyboard down with it. Over the emoji
+        // panel the keyboard only goes down, and the panel closes with it.
+        if (view instanceof ChatKeyboardPullLayout)
+        {
+            ((ChatKeyboardPullLayout) view).setFollowsFinger(() -> {
+                final android.app.Activity host = getActivity();
+                final com.vanniktech.emoji.EmojiPopup panel = (host instanceof GroupMessageListActivity)
+                                                              ? ((GroupMessageListActivity) host).emojiPopup : null;
+                return (panel == null) || !panel.isShowing();
+            });
+        }
 
         unread_messages_notice_button = view.findViewById(R.id.unread_messages_notice_button);
         unread_messages_notice_button.setAnimation(null);

@@ -32,6 +32,7 @@ import org.khandaq.messenger.R;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
@@ -815,6 +816,141 @@ final class AirTranscript
         }
     }
 
+    // ---- the author's tile beside a group entry (tester 21.11, 8255) ----
+
+    /**
+     * From this system text size on, the entries of a group leave the column of the author's tile out so that their
+     * text keeps the width, as iOS does at the accessibility sizes; the threshold the redesign's stacked layouts take
+     * (AirDossier, AirFileEntry). The name over the first entry of a run still says who wrote it.
+     */
+    static final float TILE_COLUMN_FONT_SCALE = 1.3f;
+
+    /** Where an entry stands to the column of its author's tile. */
+    enum TileSlot
+    {
+        /** No column: our own entries, a service line, the conversation with one person, the large text sizes. */
+        NONE,
+        /** The column with the tile in it: the last entry of a run. */
+        SHOWN,
+        /** The column kept empty, so that the entries of a run keep one line: every other entry of the run. */
+        EMPTY
+    }
+
+    /**
+     * KHANDAQ (tester 21.11, 8255): the tile of the member who wrote a group entry, as Telegram has it. Every entry
+     * of another member keeps a column for it between the time and the text, and the last entry of a run shows it,
+     * level with the bottom of the entry, while the name stays over the first one. It is the member's tile of the
+     * band and the dossier (initials in their tone), or the plain one of an author nobody confirmed. The holder
+     * works it out, as it does the author.
+     */
+    static final class AuthorTile
+    {
+        /** The message it was worked out for: a recycled row never shows another message's tile. */
+        final long messageId;
+        /** The plain tile: neither initials nor a tone, and no tap. */
+        final boolean plain;
+        final String name;
+        final int tone;
+        /** What a tap does, the same as a tap on the name; null leaves the tile a picture. */
+        @Nullable
+        final View.OnClickListener open;
+
+        AuthorTile(final long messageId, final boolean plain, @Nullable final String name, final int tone,
+                   @Nullable final View.OnClickListener open)
+        {
+            this.messageId = messageId;
+            this.plain = plain;
+            this.name = name == null ? "" : name;
+            this.tone = tone;
+            this.open = open;
+        }
+    }
+
+    /** The slot of an entry: without a tile no column, the tile on the end of a run, the column kept empty before it. */
+    static TileSlot tileSlot(final boolean hasTile, final boolean endsRun, final float fontScale)
+    {
+        if (!hasTile || fontScale >= TILE_COLUMN_FONT_SCALE)
+        {
+            return TileSlot.NONE;
+        }
+        return endsRun ? TileSlot.SHOWN : TileSlot.EMPTY;
+    }
+
+    /**
+     * Draws {@code model} in the tile of a group entry ({@code null} for an entry without one: ours, a service line)
+     * and puts it in its slot ({@link #placeAuthorTile}). A tap on the tile opens the member, as the name does
+     * ({@link #bindAuthorTap}), and a long press on it is the entry's (the message's actions). The plain tile, and
+     * one without a tap, take no touch: it goes to the entry. TalkBack passes the tile by: the entry says who wrote
+     * it, and the name over the first entry of the run is the member's button.
+     */
+    static void bindAuthorTile(@Nullable final AirTileView tile, @Nullable final View body, @Nullable final View row,
+                               @Nullable final GroupMessage m, final int position, @Nullable final AuthorTile model)
+    {
+        if (tile == null || m == null)
+        {
+            return;
+        }
+        tile.setTag(R.id.air_entry_tile_model, model);
+        if (model != null)
+        {
+            tile.bind(model.plain ? AirTileView.Kind.UNCONFIRMED : AirTileView.Kind.PERSON, model.plain ? "" : model.name,
+                      model.tone);
+        }
+        final View.OnClickListener open = (model == null || model.plain) ? null : model.open;
+        tile.setOnClickListener(open);
+        tile.setOnLongClickListener(open != null && row != null ? v -> {
+            row.performLongClick();
+            return true;
+        } : null);
+        // Null listeners leave the flags as they were: a recycled tile that opened a member must not stay a button.
+        tile.setClickable(open != null);
+        tile.setLongClickable(open != null && row != null);
+        placeAuthorTile(tile, body, m, position);
+    }
+
+    /**
+     * Puts the tile of a group entry in its slot by the entry's place in its run, again whenever a neighbour comes or
+     * goes and moves the end of the run. The empty column keeps its width and takes no height: only an entry that
+     * shows the tile is at least as tall as the tile. A tile the holder worked out for another message (a recycled
+     * row it has not bound again) stands for nobody here, so the entry has none.
+     */
+    static void placeAuthorTile(@Nullable final AirTileView tile, @Nullable final View body,
+                                @Nullable final GroupMessage m, final int position)
+    {
+        if (tile == null || m == null)
+        {
+            return;
+        }
+        final Object tag = tile.getTag(R.id.air_entry_tile_model);
+        final AuthorTile model = (tag instanceof AuthorTile && ((AuthorTile) tag).messageId == m.id) ? (AuthorTile) tag
+                                                                                                       : null;
+        final Context context = tile.getContext();
+        final Resources res = context.getResources();
+        final TileSlot slot = tileSlot(model != null, model != null && endsGroupRun(context, m, position),
+                                       res.getConfiguration().fontScale);
+        tile.setVisibility(slot == TileSlot.SHOWN ? View.VISIBLE : slot == TileSlot.EMPTY ? View.INVISIBLE : View.GONE);
+        final ViewGroup.LayoutParams params = tile.getLayoutParams();
+        final int height = slot == TileSlot.SHOWN ? res.getDimensionPixelSize(R.dimen.kq_size_tile_compact) : 0;
+        if (params != null && params.height != height)
+        {
+            params.height = height;
+            tile.setLayoutParams(params);
+        }
+        setMarginStart(body, res.getDimensionPixelSize(slot == TileSlot.NONE ? R.dimen.kq_space_10
+                                                                             : R.dimen.kq_space_8));
+    }
+
+    /** The width the column of the tile takes from the content of an entry: the tile and the gap after it, or none. */
+    static int authorTileRoom(@Nullable final View tile)
+    {
+        if (tile == null || tile.getVisibility() == View.GONE)
+        {
+            return 0;
+        }
+        final Resources res = tile.getResources();
+        return res.getDimensionPixelSize(R.dimen.kq_size_tile_compact) + res.getDimensionPixelSize(R.dimen.kq_space_8);
+    }
+
     private static void bindGroupState(final Views views, final GroupMessage m, final int position,
                                        final boolean selected, final GroupEntry entry)
     {
@@ -822,7 +958,7 @@ final class AirTranscript
         final Resources res = context.getResources();
 
         final String shownAuthor = (!entry.system && !TextUtils.isEmpty(entry.author)
-                                    && startsGroupRun(m, position)) ? entry.author : null;
+                                    && startsGroupRun(context, m, position)) ? entry.author : null;
         if (views.author != null)
         {
             views.author.setText(shownAuthor);
@@ -962,9 +1098,10 @@ final class AirTranscript
 
     /**
      * An entry opens a run unless the entry before it is a text by the same member on the same day,
-     * under five minutes earlier. Rows the list hides (connection noise) do not break a run.
+     * under five minutes earlier. Rows the list hides (connection noise) do not break a run, and a text the
+     * photo before it shows as its caption is that file's, as in a conversation with one person (startsRun).
      */
-    private static boolean startsGroupRun(final GroupMessage m, final int position)
+    private static boolean startsGroupRun(final Context context, final GroupMessage m, final int position)
     {
         final GroupMessageListFragment fragment = MainActivity.group_message_list_fragment;
         if (position <= 0 || fragment == null || fragment.adapter == null)
@@ -989,18 +1126,78 @@ final class AirTranscript
             {
                 continue;
             }
-            return AirConversationModel.startsRun(groupRunKey(m), groupRunKey(previous), TimeZone.getDefault());
+            return AirConversationModel.startsRun(groupRunKey(m, false),
+                                                  groupRunKey(previous, isMergedCaption(context, adapter, i)),
+                                                  TimeZone.getDefault());
         }
         return true;
     }
 
-    /** Hidden rows skipped while looking for the entry before; past this many the author shows again. */
+    /**
+     * KHANDAQ (tester 21.11, 8255): an entry closes its run, and shows its author's tile, unless the entry after it
+     * goes on with the run (AirConversationModel.endsRun, the rule of {@link #startsGroupRun} seen from the other
+     * side). Rows the list hides are passed over, as there.
+     */
+    private static boolean endsGroupRun(final Context context, final GroupMessage m, final int position)
+    {
+        final GroupMessageListFragment fragment = MainActivity.group_message_list_fragment;
+        if (position < 0 || fragment == null || fragment.adapter == null)
+        {
+            return true;
+        }
+        final GroupMessagelistAdapter adapter = fragment.adapter;
+        final GroupMessage current = adapter.get_item(position);
+        if (current == null || current.id != m.id)
+        {
+            // Bound off the list (a stale position): show the tile rather than hide it wrongly.
+            return true;
+        }
+        final AirConversationModel.RunKey entry = groupRunKey(m, isMergedCaption(context, adapter, position));
+        final int count = adapter.getItemCount();
+        for (int i = position + 1, looked = 0; i < count && looked < GROUP_RUN_LOOKBACK; i++, looked++)
+        {
+            final GroupMessage next = adapter.get_item(i);
+            if (next == null)
+            {
+                return true;
+            }
+            if (!GroupMessageLayoutHelper.isRenderableMessage(null, next))
+            {
+                continue;
+            }
+            return AirConversationModel.endsRun(entry, groupRunKey(next, false), TimeZone.getDefault());
+        }
+        return true;
+    }
+
+    /**
+     * A text that the row of the photo or the video before it shows as its caption (ChatCaptionHelper): it belongs
+     * to that file's entry, and its own row is folded away.
+     */
+    private static boolean isMergedCaption(final Context context, final GroupMessagelistAdapter adapter,
+                                           final int position)
+    {
+        if (context == null || position < 1)
+        {
+            return false;
+        }
+        final GroupMessage file = adapter.get_item(position - 1);
+        final GroupMessage text = adapter.get_item(position);
+        return file != null && text != null
+               && ChatCaptionHelper.is_merged_group_caption(context, Arrays.asList(file, text), 1);
+    }
+
+    /** Hidden rows skipped while looking for the entry before or after; past this many the author, or the tile, shows. */
     private static final int GROUP_RUN_LOOKBACK = 20;
 
-    private static AirConversationModel.RunKey groupRunKey(final GroupMessage m)
+    /**
+     * Who wrote a group entry, when, and whether a run goes on from it. {@code caption}: a text the photo before it
+     * shows as its caption, which stands in that file's entry, and a file breaks the run after it.
+     */
+    static AirConversationModel.RunKey groupRunKey(final GroupMessage m, final boolean caption)
     {
         final boolean system = TRIFA_SYSTEM_MESSAGE_PEER_PUBKEY.equals(m.tox_group_peer_pubkey);
-        final boolean isText = m.TRIFA_MESSAGE_TYPE == TRIFA_MSG_TYPE_TEXT.value && !system;
+        final boolean isText = m.TRIFA_MESSAGE_TYPE == TRIFA_MSG_TYPE_TEXT.value && !system && !caption;
         final String author = m.direction == 1 ? ""
                               : (m.tox_group_peer_pubkey == null ? "" : m.tox_group_peer_pubkey.toUpperCase(Locale.ROOT));
         // A private message stands apart from the group's run: its line says to whom it went.
@@ -1043,9 +1240,9 @@ final class AirTranscript
     }
 
     /** Whether a file entry of a group opens a run, by the rule of a text. */
-    static boolean startsGroupRunFor(final GroupMessage m, final int position)
+    static boolean startsGroupRunFor(final Context context, final GroupMessage m, final int position)
     {
-        return startsGroupRun(m, position);
+        return startsGroupRun(context, m, position);
     }
 
     private static AirConversationModel.RunKey runKey(final Message m, final boolean isText)
@@ -1134,6 +1331,21 @@ final class AirTranscript
         if (params.topMargin != top)
         {
             params.topMargin = top;
+            view.setLayoutParams(params);
+        }
+    }
+
+    /** The margin on the side the text starts from, so that it follows a right-to-left layout. */
+    private static void setMarginStart(@Nullable final View view, final int start)
+    {
+        if (view == null || !(view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams))
+        {
+            return;
+        }
+        final ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) view.getLayoutParams();
+        if (params.getMarginStart() != start)
+        {
+            params.setMarginStart(start);
             view.setLayoutParams(params);
         }
     }

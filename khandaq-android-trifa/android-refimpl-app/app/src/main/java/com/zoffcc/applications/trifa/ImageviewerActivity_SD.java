@@ -67,6 +67,12 @@ public class ImageviewerActivity_SD extends AppCompatActivity
             return;
         }
 
+        // KHANDAQ (Khandaq Testers 8263): Share and Open in another app, in the More button of the top bar.
+        final String shared_filename = image_filename;
+        final boolean shared_storage_frame_work = storage_frame_work.equals("1");
+        ChatFileShare.bindMoreButton(this, () -> new ChatFileShare.Source(shared_filename, shared_storage_frame_work,
+                                                                          null, null), null);
+
         final PhotoView photoView = (PhotoView) findViewById(R.id.big_image);
         photoView.setImageResource(R.drawable.round_loading_animation);
 

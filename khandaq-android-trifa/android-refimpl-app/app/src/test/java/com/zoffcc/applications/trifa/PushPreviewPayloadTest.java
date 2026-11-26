@@ -4,6 +4,7 @@ import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
 
+import static com.zoffcc.applications.trifa.PushPreviewCryptoTest.PEER_PK;
 import static com.zoffcc.applications.trifa.PushPreviewCryptoTest.PLAINTEXT;
 import static com.zoffcc.applications.trifa.PushPreviewCryptoTest.VECTOR_TEXT;
 import static com.zoffcc.applications.trifa.PushPreviewCryptoTest.repeat;
@@ -97,6 +98,67 @@ public class PushPreviewPayloadTest
         // A file id that is not 32 bytes of hex gives no event key, and an unknown kind is a file.
         assertNull(PushPreviewPayload.file(PushPreviewPayload.KIND_FILE, "a", "cd", null, 2L).eventKey);
         assertEquals(PushPreviewPayload.KIND_FILE, PushPreviewPayload.file("audio", "a", id, null, 2L).kind);
+    }
+
+    @Test
+    public void a_group_text_is_a_text_with_its_group_and_its_group_event_key()
+    {
+        // KHANDAQ (0.2.69, group message wakes): k and b as for a direct text, n, g and gid, and h = gt:.
+        final String sender = PEER_PK.toLowerCase(java.util.Locale.ROOT);
+        final PushPreviewPayload p = PushPreviewPayload.groupText("hi all", 0xABCDL, sender, "Isa", 7L)
+                                                       .inGroup("Team", CHAT_ID);
+        assertEquals("{\"v\":1,\"k\":\"text\",\"b\":\"hi all\",\"n\":\"Isa\",\"g\":\"Team\",\"gid\":\""
+                     + repeat("0F", 32) + "\",\"ts\":7,\"h\":\"gt:0000ABCD:" + PEER_PK + "\"}",
+                     new String(p.toJson(), StandardCharsets.UTF_8));
+        final PushPreviewPayload read = PushPreviewPayload.parse(p.toJson());
+        assertEquals(PushPreviewPayload.KIND_TEXT, read.kind);
+        assertEquals("hi all", read.body);
+        assertEquals("Team", read.groupName);
+        assertEquals("gt:0000ABCD:" + PEER_PK, read.eventKey);
+        assertTrue(read.isGroupEvent());
+        // The first 140 whole characters, as a direct text keeps.
+        assertEquals(repeat(WAVE, 140), PushPreviewPayload.groupText(repeat(WAVE, 141), 1L, PEER_PK, null, 0L).body);
+    }
+
+    @Test
+    public void a_group_text_that_waits_has_no_event_key_and_names_its_sender_in_the_group()
+    {
+        // KHANDAQ (0.2.69, group message wakes): toxcore gives a text that has to wait its id only when it goes, so
+        // its preview has no h, and gp, the sender's key in the group, instead.
+        final PushPreviewPayload p = PushPreviewPayload.waitingGroupText(
+                "hi all", PEER_PK.toLowerCase(java.util.Locale.ROOT), "Isa", 7L).inGroup("Team", CHAT_ID);
+        assertEquals("{\"v\":1,\"k\":\"text\",\"b\":\"hi all\",\"n\":\"Isa\",\"g\":\"Team\",\"gid\":\""
+                     + repeat("0F", 32) + "\",\"gp\":\"" + PEER_PK + "\",\"ts\":7}",
+                     new String(p.toJson(), StandardCharsets.UTF_8));
+        final PushPreviewPayload read = PushPreviewPayload.parse(p.toJson());
+        assertEquals(PEER_PK, read.groupPeerKey);
+        assertNull(read.eventKey);
+        assertEquals("hi all", read.body);
+        assertTrue(read.isGroupEvent());
+        // Anything but a 64-hex key is no key: not written, and not read.
+        assertNull(PushPreviewPayload.waitingGroupText("hi", "abcd", null, 1L).groupPeerKey);
+        assertNull(PushPreviewPayload.waitingGroupText("hi", null, null, 1L).groupPeerKey);
+        assertNull(PushPreviewPayload.parse(("{\"v\":1,\"k\":\"text\",\"gp\":\"" + repeat("zz", 32) + "\",\"ts\":1}")
+                                                    .getBytes(StandardCharsets.UTF_8)).groupPeerKey);
+        // Any other preview says none.
+        assertNull(PushPreviewPayload.groupText("hi", 1L, PEER_PK, null, 1L).groupPeerKey);
+    }
+
+    @Test
+    public void a_group_file_is_a_file_with_its_group_and_its_group_event_key()
+    {
+        final String fileHash = repeat("cd", 32);
+        final PushPreviewPayload file = PushPreviewPayload.groupFile(PushPreviewPayload.KIND_FILE, "report.pdf",
+                                                                     fileHash, "Isa", 2L).inGroup("Team", CHAT_ID);
+        assertEquals("{\"v\":1,\"k\":\"file\",\"b\":\"report.pdf\",\"n\":\"Isa\",\"g\":\"Team\",\"gid\":\""
+                     + repeat("0F", 32) + "\",\"ts\":2,\"h\":\"gf:" + repeat("CD", 32) + "\"}",
+                     new String(file.toJson(), StandardCharsets.UTF_8));
+        // A photo, a video or a voice message names no file, as in a direct chat.
+        final PushPreviewPayload photo = PushPreviewPayload.groupFile(PushPreviewPayload.KIND_PHOTO, "IMG_1.jpg",
+                                                                      fileHash, "Isa", 2L);
+        assertNull(photo.body);
+        assertEquals("gf:" + repeat("CD", 32), photo.eventKey);
+        assertNull(PushPreviewPayload.groupFile(PushPreviewPayload.KIND_FILE, "a", "cd", null, 2L).eventKey);
     }
 
     // ---- whole characters ----
@@ -266,6 +328,19 @@ public class PushPreviewPayloadTest
         assertNull(PushPreviewPayload.textEventKey(null));
         assertEquals("f:" + repeat("AB", 32), PushPreviewPayload.fileEventKey(HASH));
         assertEquals("r:00FF:" + THUMBS_UP, PushPreviewPayload.reactionEventKey("00ff", THUMBS_UP));
+        // KHANDAQ (0.2.69, group message wakes): the vector of the spec, and the ends of a 32-bit message id.
+        assertEquals("gt:0000ABCD:A1A2A3A4A5A6A7A8A9AAABACADAEAFB0B1B2B3B4B5B6B7B8B9BABBBCBDBEBFC0",
+                     PushPreviewPayload.groupTextEventKey(0x0000ABCDL, PEER_PK.toLowerCase(java.util.Locale.ROOT)));
+        assertEquals("gt:00000000:" + PEER_PK, PushPreviewPayload.groupTextEventKey(0L, PEER_PK));
+        assertEquals("gt:FFFFFFFF:" + PEER_PK, PushPreviewPayload.groupTextEventKey(0xFFFFFFFFL, PEER_PK));
+        assertNull(PushPreviewPayload.groupTextEventKey(0x100000000L, PEER_PK));
+        assertNull(PushPreviewPayload.groupTextEventKey(-1L, PEER_PK));
+        assertNull(PushPreviewPayload.groupTextEventKey(1L, PEER_PK.substring(2)));
+        assertNull(PushPreviewPayload.groupTextEventKey(1L, repeat("zz", 32)));
+        assertNull(PushPreviewPayload.groupTextEventKey(1L, null));
+        assertEquals("gf:" + repeat("AB", 32), PushPreviewPayload.groupFileEventKey(HASH));
+        assertNull(PushPreviewPayload.groupFileEventKey(HASH.substring(2)));
+        assertNull(PushPreviewPayload.groupFileEventKey(null));
         assertNull(PushPreviewPayload.reactionEventKey("00fg", THUMBS_UP));
         assertNull(PushPreviewPayload.reactionEventKey("", THUMBS_UP));
         assertNull(PushPreviewPayload.reactionEventKey("00ff", ""));

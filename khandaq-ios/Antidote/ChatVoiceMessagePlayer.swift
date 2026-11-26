@@ -53,6 +53,9 @@ final class ChatVoiceMessagePlayer: NSObject, AVAudioPlayerDelegate {
     private(set) var activeMessageId: String?
     private var player: AVAudioPlayer?
     private var progressTimer: Timer?
+    /// KHANDAQ (tester 8263): what plays is an audio file, not a voice note: at its own speed, whatever the
+    /// speed of the notes, and with none shown.
+    private var activePlaysAtOwnSpeed = false
 
     // KHANDAQ (Android parity): per-message resume positions — pausing (or being displaced by
     // another voice) remembers the spot for the session; the bubble renders it and the next play
@@ -75,7 +78,7 @@ final class ChatVoiceMessagePlayer: NSObject, AVAudioPlayerDelegate {
     func cycleSpeed() {
         let next = VoicePlaybackSpeed.next(after: speed)
         UserDefaultsManager().voicePlaybackSpeed = next
-        guard let messageId = activeMessageId, let player = player else {
+        guard let messageId = activeMessageId, let player = player, !activePlaysAtOwnSpeed else {
             return
         }
         player.rate = next
@@ -83,9 +86,10 @@ final class ChatVoiceMessagePlayer: NSObject, AVAudioPlayerDelegate {
     }
 
     /// The speed the note with `messageId` shows: while it plays, or waits paused part of the way through.
-    /// Nil on every other note, and once it has played to the end.
+    /// Nil on every other note, once it has played to the end, and on an audio file.
     func speedShown(for messageId: String) -> Float? {
-        guard activeMessageId == messageId, let player = player, player.isPlaying || player.currentTime > 0 else {
+        guard activeMessageId == messageId, !activePlaysAtOwnSpeed, let player = player,
+              player.isPlaying || player.currentTime > 0 else {
             return nil
         }
         return speed
@@ -124,7 +128,11 @@ final class ChatVoiceMessagePlayer: NSObject, AVAudioPlayerDelegate {
         )
     }
 
-    func togglePlayback(messageId: String, filePath: String) {
+    /// Plays or pauses the note or the audio file with `messageId`. An audio file (`atOwnSpeed`) plays at 1x
+    /// whatever the speed of the notes. False when there is nothing to play: no file, or one the player
+    /// does not read; whatever played before has stopped then.
+    @discardableResult
+    func togglePlayback(messageId: String, filePath: String, atOwnSpeed: Bool = false) -> Bool {
         if activeMessageId == messageId, let player = player {
             if player.isPlaying {
                 player.pause()
@@ -135,13 +143,13 @@ final class ChatVoiceMessagePlayer: NSObject, AVAudioPlayerDelegate {
             }
             postState(for: messageId, player: player)
             updateTimer(for: player)
-            return
+            return true
         }
 
         stop()
 
         guard FileManager.default.fileExists(atPath: filePath) else {
-            return
+            return false
         }
 
         // NB: `.defaultToSpeaker` is only valid for `.playAndRecord`; combining it with `.playback`
@@ -157,14 +165,14 @@ final class ChatVoiceMessagePlayer: NSObject, AVAudioPlayerDelegate {
         }
 
         guard let audioPlayer = try? AVAudioPlayer(contentsOf: URL(fileURLWithPath: filePath)) else {
-            return
+            return false
         }
 
         audioPlayer.delegate = self
         // KHANDAQ (ideas 1): a player takes a new rate only when told so before it is prepared.
         audioPlayer.enableRate = true
         audioPlayer.prepareToPlay()
-        audioPlayer.rate = speed
+        audioPlayer.rate = atOwnSpeed ? 1 : speed
         // UI tests play the notes of the demo world without a sound: the walks run on a Mac someone uses.
         if ProcessInfo.processInfo.arguments.contains("UI_TESTING") {
             audioPlayer.volume = 0
@@ -181,8 +189,10 @@ final class ChatVoiceMessagePlayer: NSObject, AVAudioPlayerDelegate {
 
         player = audioPlayer
         activeMessageId = messageId
+        activePlaysAtOwnSpeed = atOwnSpeed
         postState(for: messageId, player: audioPlayer)
         updateTimer(for: audioPlayer)
+        return true
     }
 
     func stop() {
@@ -196,6 +206,7 @@ final class ChatVoiceMessagePlayer: NSObject, AVAudioPlayerDelegate {
         player?.stop()
         player = nil
         activeMessageId = nil
+        activePlaysAtOwnSpeed = false
 
         // KHANDAQ (#36): notify the previously-active cell so it resets to the play icon (now with
         // its remembered position instead of a hard 0).

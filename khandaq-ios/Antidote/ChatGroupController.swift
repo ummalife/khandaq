@@ -40,8 +40,9 @@ class ChatGroupController: PortraitChatController {
     // updates don't re-scroll the list).
     fileprivate var lastAutoScrolledOutgoingId: String?
     /// KHANDAQ (ideas 1): the "Unread messages" band and the jump to it on open, as in the conversation with
-    /// one person (AirUnreadBand); taken in viewDidLoad, before viewWillAppear marks the group read.
-    fileprivate var unreadBand = AirUnreadBand.none
+    /// one person (AirUnreadBand); taken in viewDidLoad, before viewWillAppear marks the group read. Read where the
+    /// transcript decides which entry closes a run (configureGroupEntry).
+    fileprivate(set) var unreadBand = AirUnreadBand.none
     var visibleMessages: Int
     fileprivate var showsSystemMessages: Bool
 
@@ -69,7 +70,6 @@ class ChatGroupController: PortraitChatController {
     // KHANDAQ (#93-task): floating "jump to latest" button, shown when scrolled up.
     fileprivate var scrollDownButton: UIButton!
     fileprivate var tableViewToChatInputConstraint: Constraint!
-    fileprivate var chatInputViewBottomConstraint: Constraint?
     fileprivate let imageCache = NSCache<AnyObject, AnyObject>()
     // KHANDAQ (#15): cached pixel dimensions (cheap header read) so the preview bubble is sized to the
     // media's aspect ratio synchronously at display time — avoids a height "jump" when the heavy
@@ -281,11 +281,9 @@ class ChatGroupController: PortraitChatController {
 
         chatInputView.snp.makeConstraints {
             $0.leading.trailing.equalTo(view)
-            chatInputViewBottomConstraint = $0.bottom.equalTo(view).constraint
-            if #available(iOS 11.0, *) {
-                let b = UIApplication.shared.keyWindow?.safeAreaInsets.bottom ?? 20
-                chatInputViewBottomConstraint?.update(offset: -b)
-            }
+            // KHANDAQ (beta 8251): on the keyboard layout guide, as in the conversation with one person: the
+            // field follows the keyboard while a drag of the log puts it away (ChatPrivateController).
+            $0.bottom.equalTo(view.keyboardLayoutGuide.snp.top)
         }
 
         // KHANDAQ (#115): fill the home-indicator gap beneath the input bar with the bar's own
@@ -878,25 +876,20 @@ class ChatGroupController: PortraitChatController {
         delegate?.chatGroupControllerWillDisappear(self)
     }
 
-    override func keyboardWillShowAnimated(keyboardFrame frame: CGRect) {
-        super.keyboardWillShowAnimated(keyboardFrame: frame)
-        chatInputViewBottomConstraint?.update(offset: -frame.size.height)
-    }
-
-    override func keyboardWillHideAnimated(keyboardFrame frame: CGRect) {
-        super.keyboardWillHideAnimated(keyboardFrame: frame)
-        var offset: CGFloat = 0
-        if #available(iOS 11.0, *) {
-            offset = -(UIApplication.shared.keyWindow?.safeAreaInsets.bottom ?? 20)
-        }
-        chatInputViewBottomConstraint?.update(offset: offset)
-    }
-
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let maxHeight = view.bounds.height * 0.4
         chatInputView.maxHeight = maxHeight
         updateGroupTitleWidth()
+
+        // KHANDAQ (beta 8251): the keyboard follows a drag of the log from the moment the finger leaves the
+        // log, not only once it reaches the keyboard under the reply preview and the field (ChatPrivateController).
+        if #available(iOS 17.0, *) {
+            let padding = max(0, chatInputView.frame.maxY - replyController.previewView.frame.minY)
+            if view.keyboardLayoutGuide.keyboardDismissPadding != padding {
+                view.keyboardLayoutGuide.keyboardDismissPadding = padding
+            }
+        }
 
         if isMembersDrawerOpen {
             membersDrawerLeadingConstraint?.update(offset: 0)
@@ -1536,6 +1529,12 @@ private extension ChatGroupController {
                 model.voiceDuration = VoiceMessageHelper.audioDuration(at: path)
             }
         }
+        // KHANDAQ (tester 8263): an audio file that is here plays in its entry, as in a chat with a person.
+        model.isAudioFile = hold == .none && messageFile.fileType == .ready
+            && VoiceMessageHelper.isInlineAudioFile(fileName: messageFile.fileName, filePath: messageFile.filePath())
+        if model.isAudioFile, let path = messageFile.filePath() {
+            model.voiceDuration = VoiceMessageHelper.cachedAudioDuration(at: path)
+        }
 
         switch messageFile.fileType {
             case .loading:
@@ -1581,6 +1580,32 @@ private extension ChatGroupController {
 
         model.openHandle = { [weak self] in
             self?.presentFilePreview(for: message)
+        }
+
+        if model.isAudioFile {
+            // KHANDAQ (tester 8263): the play button of an audio file plays it here; one the player does not
+            // read opens as before, in QuickLook.
+            model.voicePlayToggleHandle = { [weak self] in
+                guard let self = self,
+                      let path = message.messageFile?.filePath(),
+                      message.messageFile?.fileType == .ready else {
+                    return
+                }
+                if ChatVoiceMessagePlayer.shared.togglePlayback(messageId: message.uniqueIdentifier, filePath: path, atOwnSpeed: true) {
+                    self.refreshVisibleVoiceCells(for: message.uniqueIdentifier)
+                }
+                else {
+                    self.presentFilePreview(for: message)
+                }
+            }
+            model.voiceSeekHandle = { fraction in
+                guard let path = message.messageFile?.filePath(),
+                      message.messageFile?.fileType == .ready else {
+                    return
+                }
+                ChatVoiceMessagePlayer.shared.seek(
+                    messageId: message.uniqueIdentifier, filePath: path, fraction: fraction)
+            }
         }
 
         if isVoice {

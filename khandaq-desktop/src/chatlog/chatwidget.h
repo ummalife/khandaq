@@ -129,6 +129,16 @@ public:
     static constexpr size_t unreadLookBack = 1000;
     /** An entry is written a moment before the alert that counts it notes the time. */
     static constexpr int unreadSlackSecs = 2;
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): whether the entry at idx, of which the log just told, is
+     * one we sent from here: a text, a file, a voice note or a note, by self, and new to the log
+     * (at or past knownEnd, the end the transcript had heard of). The transcript then shows its
+     * foot, wherever it was. One of ours that a group relays from its history carries our key in
+     * the group, not self, a file that goes on from before (ToxFile::continued) was not sent now,
+     * and a change to an entry already there is no new one: they leave it be.
+     */
+    static bool sentFromHere(const IChatLog& log, ChatLogIdx idx, ChatLogIdx knownEnd,
+                             const ToxPk& self);
 
     /** Whether the person of a conversation with one person is online now. */
     void setPersonOnline(bool online);
@@ -344,6 +354,8 @@ private:
     bool groupChat = false;
     bool notesChat = false;
     ToxPk groupSelfKey;
+    /** The end of the log as the transcript heard of it: an entry told of past it is new. */
+    ChatLogIdx seenEnd{0};
     /** A left press landed on a name that opens a menu: a release on it, without a drag, opens it. */
     bool authorPressed = false;
     ChatLogIdx pressedAuthor{0};

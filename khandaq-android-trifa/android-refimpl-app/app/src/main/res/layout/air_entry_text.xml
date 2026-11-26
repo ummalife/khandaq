@@ -57,7 +57,20 @@
             android:textAppearance="@style/TextAppearance.KQ.Caption"
             android:textColor="@color/kq_ink_3" />
 
+        <!-- KHANDAQ (tester 21.11, 8255): the tile of the member who wrote a group entry, level with the bottom of
+             the last entry of their run (AirTranscript.bindAuthorTile). Gone everywhere else: our own entries, a
+             service line, the conversation with one person. -->
+        <com.zoffcc.applications.trifa.AirTileView
+            android:id="@+id/air_entry_tile"
+            android:layout_width="@dimen/kq_size_tile_compact"
+            android:layout_height="@dimen/kq_size_tile_compact"
+            android:layout_gravity="bottom"
+            android:layout_marginStart="@dimen/kq_space_10"
+            android:importantForAccessibility="no"
+            android:visibility="gone" />
+
         <LinearLayout
+            android:id="@+id/air_entry_body"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/kq_space_10"

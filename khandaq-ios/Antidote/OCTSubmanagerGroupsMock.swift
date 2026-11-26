@@ -73,6 +73,10 @@ class OCTSubmanagerGroupsMock: NSObject, OCTSubmanagerGroups {
         // nop
     }
 
+    func removeGroupMessages(_ messages: [OCTMessageAbstract]!, in chat: OCTChat!) {
+        // nop
+    }
+
     func editGroupMessage(_ message: OCTMessageAbstract!, in chat: OCTChat!, newText: String!) {
         // nop
     }

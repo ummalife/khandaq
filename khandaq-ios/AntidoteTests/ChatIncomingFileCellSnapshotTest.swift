@@ -48,6 +48,24 @@ class ChatIncomingFileCellSnapshotTest: CellSnapshotTest {
         model.isVoiceMessage = true
         verifyFileCell(ChatIncomingFileCell(), model: model)
     }
+
+    /// KHANDAQ (tester 21.11, 8255): a file of another member of a group, alone in its run: their name over it and
+    /// their tile beside it, level with its bottom, as beside a text.
+    func testGroupFileOfAnotherMemberHasTheirTile() {
+        let model = fileEntry(ChatIncomingFileCellModel(), state: .done)
+        model.authorText = "Bilal"
+        model.authorColor = AirTone.color(at: 4)
+        model.authorTile = AirAuthorTile(style: .person(initials: "B", tone: 4), shows: true, onTap: nil)
+        verifyFileCell(ChatIncomingFileCell(), model: model)
+    }
+
+    /// A photo of another member at the end of their run: the preview gives way to the column of the tile.
+    func testGroupPhotoOfAnotherMemberHasTheirTile() {
+        let model = fileEntry(ChatIncomingFileCellModel(), state: .done, name: "icon.png", bytes: 3_140, uti: kUTTypePNG as String)
+        model.previewSize = image.size
+        model.authorTile = AirAuthorTile(style: .person(initials: "B", tone: 4), shows: true, onTap: nil)
+        verifyFileCell(ChatIncomingFileCell(), model: model, preview: image)
+    }
 }
 
 private extension ChatIncomingFileCellSnapshotTest {

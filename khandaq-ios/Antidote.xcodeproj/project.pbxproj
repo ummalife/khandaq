@@ -97,6 +97,7 @@
 		1160B67E1D5F9993002DF75B /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1160B67D1D5F9993002DF75B /* KeychainManager.swift */; };
 		1160B6821D5FC7CC002DF75B /* KeychainManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1160B6801D5FC7CC002DF75B /* KeychainManagerTests.swift */; };
 		KQCAPORDER00000000000001 /* OwnCaptionOrderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQCAPORDER00000000000002 /* OwnCaptionOrderTests.swift */; };
+		KQSAVEDEDIT0000000000001 /* SavedNoteEditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQSAVEDEDIT0000000000002 /* SavedNoteEditTests.swift */; };
 		KQPASTE00000000000000001 /* ChatInputPasteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQPASTE00000000000000002 /* ChatInputPasteTests.swift */; };
 		KQPUSHTOKLOG000000000001 /* PushTokenLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQPUSHTOKLOG000000000002 /* PushTokenLogTests.swift */; };
 		1160B68B1D5FD8DE002DF75B /* LaunchPlaceholderController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1160B6891D5FD8DE002DF75B /* LaunchPlaceholderController.swift */; };
@@ -323,6 +324,8 @@
 		KQONLINE0000000000000001 /* GroupOnlineCountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQONLINE0000000000000002 /* GroupOnlineCountTests.swift */; };
 		KQLEAVE00000000000000001 /* GroupLeaveNoticeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQLEAVE00000000000000002 /* GroupLeaveNoticeTests.swift */; };
 		KQPLEAVE0000000000000001 /* GroupPendingLeaveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQPLEAVE0000000000000002 /* GroupPendingLeaveTests.swift */; };
+		KQSELFNM0000000000000001 /* GroupSelfNameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQSELFNM0000000000000002 /* GroupSelfNameTests.swift */; };
+		KQTOMB000000000000000001 /* GroupMessageTombstoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQTOMB000000000000000002 /* GroupMessageTombstoneTests.swift */; };
 		B3C344111661920000000003 /* AirRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344111661920000000002 /* AirRequestTests.swift */; };
 		C2611260FB0000000000A006 /* GroupContactsMentionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2611260FB0000000000A005 /* GroupContactsMentionsTests.swift */; };
 		B3C343706707940000000003 /* AirNewContactModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C343706707940000000002 /* AirNewContactModelTests.swift */; };
@@ -624,6 +627,7 @@
 		1160B67D1D5F9993002DF75B /* KeychainManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
 		1160B6801D5FC7CC002DF75B /* KeychainManagerTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KeychainManagerTests.swift; sourceTree = "<group>"; };
 		KQCAPORDER00000000000002 /* OwnCaptionOrderTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OwnCaptionOrderTests.swift; sourceTree = "<group>"; };
+		KQSAVEDEDIT0000000000002 /* SavedNoteEditTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SavedNoteEditTests.swift; sourceTree = "<group>"; };
 		KQPASTE00000000000000002 /* ChatInputPasteTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatInputPasteTests.swift; sourceTree = "<group>"; };
 		KQPUSHTOKLOG000000000002 /* PushTokenLogTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PushTokenLogTests.swift; sourceTree = "<group>"; };
 		1160B6891D5FD8DE002DF75B /* LaunchPlaceholderController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LaunchPlaceholderController.swift; sourceTree = "<group>"; };
@@ -857,6 +861,8 @@
 		KQONLINE0000000000000002 /* GroupOnlineCountTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupOnlineCountTests.swift; sourceTree = "<group>"; };
 		KQLEAVE00000000000000002 /* GroupLeaveNoticeTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupLeaveNoticeTests.swift; sourceTree = "<group>"; };
 		KQPLEAVE0000000000000002 /* GroupPendingLeaveTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupPendingLeaveTests.swift; sourceTree = "<group>"; };
+		KQSELFNM0000000000000002 /* GroupSelfNameTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupSelfNameTests.swift; sourceTree = "<group>"; };
+		KQTOMB000000000000000002 /* GroupMessageTombstoneTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupMessageTombstoneTests.swift; sourceTree = "<group>"; };
 		B3C344111661920000000002 /* AirRequestTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirRequestTests.swift; sourceTree = "<group>"; };
 		C2611260FB0000000000A005 /* GroupContactsMentionsTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupContactsMentionsTests.swift; sourceTree = "<group>"; };
 		B3C343706707940000000002 /* AirNewContactModelTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirNewContactModelTests.swift; sourceTree = "<group>"; };
@@ -1060,6 +1066,8 @@
 				KQONLINE0000000000000002 /* GroupOnlineCountTests.swift */,
 				KQLEAVE00000000000000002 /* GroupLeaveNoticeTests.swift */,
 				KQPLEAVE0000000000000002 /* GroupPendingLeaveTests.swift */,
+				KQSELFNM0000000000000002 /* GroupSelfNameTests.swift */,
+				KQTOMB000000000000000002 /* GroupMessageTombstoneTests.swift */,
 				B3C344111661920000000002 /* AirRequestTests.swift */,
 				C2611260FB0000000000A005 /* GroupContactsMentionsTests.swift */,
 				B3C343706707940000000002 /* AirNewContactModelTests.swift */,
@@ -1250,6 +1258,7 @@
 				9CDC09241C34083100DC0D63 /* FriendListDataSourceTest.swift */,
 				1160B6801D5FC7CC002DF75B /* KeychainManagerTests.swift */,
 				KQCAPORDER00000000000002 /* OwnCaptionOrderTests.swift */,
+				KQSAVEDEDIT0000000000002 /* SavedNoteEditTests.swift */,
 				KQPASTE00000000000000002 /* ChatInputPasteTests.swift */,
 				KQPUSHTOKLOG000000000002 /* PushTokenLogTests.swift */,
 				11F83BDA1CAFB2A20074FE11 /* SwiftSupport.swift */,
@@ -2392,6 +2401,7 @@
 				1173F0701BC5D9CA00B88B7B /* ThemeTest.swift in Sources */,
 				1160B6821D5FC7CC002DF75B /* KeychainManagerTests.swift in Sources */,
 				KQCAPORDER00000000000001 /* OwnCaptionOrderTests.swift in Sources */,
+				KQSAVEDEDIT0000000000001 /* SavedNoteEditTests.swift in Sources */,
 				KQPASTE00000000000000001 /* ChatInputPasteTests.swift in Sources */,
 				KQPUSHTOKLOG000000000001 /* PushTokenLogTests.swift in Sources */,
 				113F031B1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift in Sources */,
@@ -2421,6 +2431,8 @@
 				KQONLINE0000000000000001 /* GroupOnlineCountTests.swift in Sources */,
 				KQLEAVE00000000000000001 /* GroupLeaveNoticeTests.swift in Sources */,
 				KQPLEAVE0000000000000001 /* GroupPendingLeaveTests.swift in Sources */,
+				KQSELFNM0000000000000001 /* GroupSelfNameTests.swift in Sources */,
+				KQTOMB000000000000000001 /* GroupMessageTombstoneTests.swift in Sources */,
 				B3C344111661920000000003 /* AirRequestTests.swift in Sources */,
 				C2611260FB0000000000A006 /* GroupContactsMentionsTests.swift in Sources */,
 				B3C343706707940000000003 /* AirNewContactModelTests.swift in Sources */,

@@ -775,6 +775,26 @@
     <string name="media_send_caption_hint">Добавить подпись</string>
     <string name="media_send_edit_photo">Редактировать фото</string>
     <string name="media_send_edit_failed">Не удалось отредактировать фото</string>
+    <string name="media_send_add_more">Добавить фото или видео</string>
+    <!-- Khandaq Testers 8263: the PDF viewer, and More (Share, Open in another app) of the media viewers -->
+    <string name="media_viewer_more">Ещё</string>
+    <string name="media_viewer_open_elsewhere">Открыть в другом приложении</string>
+    <string name="pdf_viewer_page_format">Страница %1$d из %2$d</string>
+    <string name="pdf_viewer_opens_elsewhere">Этот PDF нельзя показать здесь, поэтому он откроется в другом приложении</string>
+    <!-- Khandaq Testers 8264: the edits of a photo on the send screen, and Draw and write -->
+    <string name="media_send_edit_crop">Обрезать и повернуть</string>
+    <string name="media_send_edit_markup">Рисовать и писать</string>
+    <string name="photo_markup_undo">Отменить</string>
+    <string name="photo_markup_done">Готово</string>
+    <string name="photo_markup_text">Текст</string>
+    <string name="photo_markup_add_text">Добавить текст</string>
+    <string name="photo_markup_text_hint">Введите текст</string>
+    <string name="photo_markup_color_white">Белый</string>
+    <string name="photo_markup_color_black">Чёрный</string>
+    <string name="photo_markup_color_red">Красный</string>
+    <string name="photo_markup_color_yellow">Жёлтый</string>
+    <string name="photo_markup_color_green">Зелёный</string>
+    <string name="photo_markup_color_blue">Синий</string>
     <string name="media_send_counter_format">%1$d / %2$d</string>
     <string name="media_label_video">Видео</string>
     <string name="media_label_audio">Аудио</string>
@@ -1034,6 +1054,8 @@
     <string name="MessageListActivity_longpress_to_record_audiomsg">долгое нажатие для записи аудиосообщения</string>
     <string name="voice_recording_cancel">Отмена</string>
     <string name="voice_recording_send">Отправить голосовое сообщение</string>
+    <string name="voice_recording_pause">Приостановить запись</string>
+    <string name="voice_recording_resume">Продолжить запись</string>
     <string name="incoming_filetransfer_size_too_large">Слишком большой объём входящего файла. Могут быть приняты файлы объёмом до 2 Гбайт.</string>
     <string name="layout___peer_first_join_date">Дата первого подключения:</string>
     <string name="layout___group_peerlimit">Лимит человек (пиров)</string>

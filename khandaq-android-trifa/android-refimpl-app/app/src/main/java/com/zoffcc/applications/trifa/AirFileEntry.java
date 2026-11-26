@@ -427,7 +427,10 @@ final class AirFileEntry
                 color = AirUi.toneColor(context, AirModel.Tone.index(TextUtils.isEmpty(key) ? name : key));
             }
         }
-        final String shown = (full.isEmpty() || !AirTranscript.startsGroupRunFor(m, position)) ? null : full;
+        // KHANDAQ (tester 21.11, 8255): the member's tile the holder drew, put again by the entry's place in its run
+        // (a neighbour that comes or goes redraws only this frame), before the box of a photo is sized beside it.
+        AirTranscript.placeAuthorTile(views.tile, views.body, m, position);
+        final String shown = (full.isEmpty() || !AirTranscript.startsGroupRunFor(context, m, position)) ? null : full;
         frame(views, AirUi.localDigits(context, HelperGeneric.format_group_message_time(m, outgoing)), full, shown,
               color);
         // The state came with the transfer helper during this bind; drawn again over what the frame reset.
@@ -981,9 +984,11 @@ final class AirFileEntry
             box.setOutlineProvider(ROUNDED);
             box.setClipToOutline(true);
         }
-        final int column = v.time != null ? AirTranscript.timeColumnWidth(v.time)
-                                          : preview.getResources().getDimensionPixelSize(
-                                                  R.dimen.kq_size_time_column_phone);
+        // KHANDAQ (tester 21.11, 8255): beside the column of a member's tile the content is narrower by it.
+        final int column = (v.time != null ? AirTranscript.timeColumnWidth(v.time)
+                                           : preview.getResources().getDimensionPixelSize(
+                                                   R.dimen.kq_size_time_column_phone))
+                           + AirTranscript.authorTileRoom(v.tile);
         final String key = e.path == null ? "" : e.path;
         preview.setTag(R.id.air_file_aspect_key, key);
         final Float known = key.isEmpty() ? null : ASPECTS.get(key);
@@ -1250,6 +1255,11 @@ final class AirFileEntry
         final TextView dayLabel;
         @Nullable
         final TextView author;
+        /** KHANDAQ (tester 21.11, 8255): the member's tile beside a group entry and the column after it. */
+        @Nullable
+        final AirTileView tile;
+        @Nullable
+        final View body;
         @Nullable
         final TextView peerName;
         @Nullable
@@ -1303,6 +1313,8 @@ final class AirFileEntry
             dayRow = root.findViewById(R.id.message_text_date);
             dayLabel = root.findViewById(R.id.message_text_date_string);
             author = root.findViewById(R.id.air_file_author);
+            tile = root.findViewById(R.id.air_file_tile);
+            body = root.findViewById(R.id.air_file_body);
             peerName = root.findViewById(R.id.peer_name_text);
             fileRow = root.findViewById(R.id.air_file_row);
             ViewGroup found = root.findViewById(R.id.ft_incoming_rounded_bg);

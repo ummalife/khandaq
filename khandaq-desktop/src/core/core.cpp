@@ -137,6 +137,15 @@ QByteArray groupChatId(const Tox* tox, uint32_t groupNumber)
     return chatId;
 }
 
+/**
+ * KHANDAQ (beta feedback 2026-11-22): whether toxcore holds the name of ours it was given in a
+ * group. It does at FAIL_SEND too, and tells the name to the members as they connect.
+ */
+bool groupSelfNameHeld(Tox_Err_Group_Self_Name_Set err)
+{
+    return err == TOX_ERR_GROUP_SELF_NAME_SET_OK || err == TOX_ERR_GROUP_SELF_NAME_SET_FAIL_SEND;
+}
+
 // Defined with the friend-assisted join below.
 void forgetFriendAssistedJoin(const QByteArray& chatId);
 // Defined with the files of groups below.
@@ -925,6 +934,9 @@ void Core::onGroupSelfJoin(Tox* tox, uint32_t groupId, void* vCore)
         return;
     }
     qDebug() << QString("Group %1 self joined").arg(groupId);
+    // KHANDAQ (beta feedback 2026-11-22): a group joined again, or one that kept a name the
+    // profile had before, takes the name we should have there; the save below keeps it.
+    core->applyGroupSelfName(groupId);
     emit core->saveRequest();
     // 0.2.56: a group joined by its ID is in that save once it has its shared state, whose name is
     // never empty; the next start loads it. A member that had none to give leaves it for then.
@@ -1542,6 +1554,10 @@ void Core::leaveGroupAfterNotice(int groupId)
     forgetFriendAssistedJoin(groupChatId(tox.get(), groupNumber));
     // 0.2.56: nor does the next start join it again.
     forgetUnsyncedGroupJoin(groupChatId(tox.get(), groupNumber));
+    // KHANDAQ (beta feedback 2026-11-22): nor does a later join take the name it had of its own.
+    if (groupSelfNames.forget(groupChatId(tox.get(), groupNumber))) {
+        emit groupSelfNamesChanged(groupSelfNames.store());
+    }
     if (sendGroupLeaveNotice(groupId)) {
         // Our own peer counts as one.
         Tox_Err_Group_Peer_Query peerError;
@@ -1680,11 +1696,6 @@ void Core::rejoinStoredGroups(const QString& stored)
 {
     QMutexLocker ml{&coreLoopLock};
 
-    QString selfName = getUsername();
-    if (selfName.isEmpty()) {
-        selfName = tr("User");
-    }
-    ToxString cSelfName(selfName);
     for (const QByteArray& chatId : Air::PendingGroupLeaves::parseStore(stored)) {
         const uint8_t* const id = reinterpret_cast<const uint8_t*>(chatId.constData());
         Tox_Err_Group_State_Queries stateError;
@@ -1694,6 +1705,8 @@ void Core::rejoinStoredGroups(const QString& stored)
             qDebug() << "Group" << loaded << "joined by its ID had synced before the app closed";
             continue;
         }
+        // KHANDAQ (beta feedback 2026-11-22): with the name we have there.
+        const ToxString cSelfName(groupSelfNameFor(chatId));
         Tox_Err_Group_Join error;
         const uint32_t groupNumber = tox_group_join(tox.get(), id, cSelfName.data(),
                                                     cSelfName.size(), nullptr, 0, &error);
@@ -1729,6 +1742,85 @@ void Core::forgetUnsyncedGroupJoin(const QByteArray& chatId)
     if (!chatId.isEmpty() && unsyncedGroupJoins.removeAll(chatId) > 0) {
         emit unsyncedGroupJoinsChanged(getUnsyncedGroupJoins());
     }
+}
+
+void Core::restoreGroupSelfNames(const QString& stored)
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    groupSelfNames = Air::GroupSelfNames::parseStore(stored);
+}
+
+QString Core::getGroupSelfNames() const
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    return groupSelfNames.store();
+}
+
+/**
+ * @brief The numbers of the groups toxcore holds: those it lists (tox_group_get_grouplist), which
+ * are the ones it saves, then the ones joined by their ID that have not synced yet
+ * (rejoinStoredGroups). Called with coreLoopLock held.
+ */
+std::vector<uint32_t> Core::heldGroupNumbers() const
+{
+    const uint32_t groupCount = tox_group_get_number_groups(tox.get());
+    std::vector<uint32_t> groupNumbers(groupCount);
+    if (groupCount > 0) {
+        tox_group_get_grouplist(tox.get(), groupNumbers.data());
+    }
+    // 0.2.56: toxcore lists only the groups it saves; one joined by its ID shows before it synced
+    // as well.
+    for (const QByteArray& chatId : unsyncedGroupJoins) {
+        const uint8_t* const id = reinterpret_cast<const uint8_t*>(chatId.constData());
+        Tox_Err_Group_State_Queries stateError;
+        const uint32_t groupNumber = tox_group_by_chat_id(tox.get(), id, &stateError);
+        const bool listed =
+            std::find(groupNumbers.begin(), groupNumbers.end(), groupNumber) != groupNumbers.end();
+        if (stateError == TOX_ERR_GROUP_STATE_QUERIES_OK
+            && groupNumber != std::numeric_limits<uint32_t>::max() && !listed) {
+            groupNumbers.push_back(groupNumber);
+        }
+    }
+    return groupNumbers;
+}
+
+/**
+ * @brief KHANDAQ (beta feedback 2026-11-22): the name we join the group with, or give it again:
+ * its own, else the profile name, else the one toxcore needs for a profile without a name. An
+ * empty chat id is a group not founded yet. Called with coreLoopLock held.
+ */
+QString Core::groupSelfNameFor(const QByteArray& chatId) const
+{
+    const QString name = groupSelfNames.nameFor(chatId, getUsername());
+    return name.isEmpty() ? tr("User") : name;
+}
+
+/**
+ * @brief KHANDAQ (beta feedback 2026-11-22): gives the group the name we should have there
+ * (groupSelfNameFor) when toxcore holds another: a name the profile had before, or the one a
+ * join took. Not to a group we are leaving. Called with coreLoopLock held.
+ * @return Whether toxcore took a new name, which the next save keeps.
+ */
+bool Core::applyGroupSelfName(uint32_t groupNumber)
+{
+    if (ignoresGroup(groupNumber)) {
+        return false;
+    }
+    const QByteArray chatId = groupChatId(tox.get(), groupNumber);
+    if (chatId.isEmpty()) {
+        return false;
+    }
+    const QString wanted = groupSelfNameFor(chatId);
+    if (!Air::needsGroupSelfName(getGroupSelfName(static_cast<int>(groupNumber)), wanted)) {
+        return false;
+    }
+    const ToxString cName(wanted);
+    Tox_Err_Group_Self_Name_Set error;
+    tox_group_self_set_name(tox.get(), groupNumber, cName.data(), cName.size(), &error);
+    qDebug() << "Group" << groupNumber << "given our name, error" << static_cast<int>(error);
+    return groupSelfNameHeld(error);
 }
 
 QString Core::getPendingGroupLeaves() const
@@ -1799,6 +1891,11 @@ void Core::setUsername(const QString& username)
         return;
     }
 
+    // KHANDAQ (beta feedback 2026-11-22): toxcore gives the profile name to friends only. Every
+    // group without a name of our own takes it as well; one with its own keeps that.
+    for (const uint32_t groupNumber : heldGroupNumbers()) {
+        applyGroupSelfName(groupNumber);
+    }
     emit usernameSet(username);
     emit saveRequest();
 }
@@ -1973,35 +2070,17 @@ void Core::loadGroups()
 {
     QMutexLocker ml{&coreLoopLock};
 
-    const uint32_t groupCount = tox_group_get_number_groups(tox.get());
-    if (groupCount == 0 && unsyncedGroupJoins.isEmpty()) {
-        return;
-    }
-
-    std::vector<uint32_t> groupNumbers(groupCount);
-    if (groupCount > 0) {
-        tox_group_get_grouplist(tox.get(), groupNumbers.data());
-    }
-    // 0.2.56: toxcore lists only the groups it saves; one joined by its ID shows before it synced
-    // as well (rejoinStoredGroups).
-    for (const QByteArray& chatId : unsyncedGroupJoins) {
-        Tox_Err_Group_State_Queries stateError;
-        const uint32_t groupNumber = tox_group_by_chat_id(
-            tox.get(), reinterpret_cast<const uint8_t*>(chatId.constData()), &stateError);
-        if (stateError == TOX_ERR_GROUP_STATE_QUERIES_OK
-            && groupNumber != std::numeric_limits<uint32_t>::max()
-            && std::find(groupNumbers.begin(), groupNumbers.end(), groupNumber)
-                   == groupNumbers.end()) {
-            groupNumbers.push_back(groupNumber);
-        }
-    }
-
-    for (uint32_t groupNumber : groupNumbers) {
+    bool named = false;
+    for (uint32_t groupNumber : heldGroupNumbers()) {
         // QA live F11: a group whose leave the profile kept was left by leaveStoredGroups, and
         // toxcore lists it until the first tox_iterate.
         if (ignoresGroup(groupNumber)) {
             continue;
         }
+        // KHANDAQ (beta feedback 2026-11-22): a group saved with a name the profile had before
+        // takes the one we should have there. A group we founded hears of no join of ours
+        // (onGroupSelfJoin), so it is given here, before any member connects.
+        named = applyGroupSelfName(groupNumber) || named;
         Tox_Err_Group_State_Queries error;
         QString name;
         const GroupId persistentId = getGroupPersistentId(groupNumber);
@@ -2029,6 +2108,9 @@ void Core::loadGroups()
         }
         reconnectGroupIfDisconnected(groupNumber);
         emit emptyGroupCreated(groupNumber, persistentId, name);
+    }
+    if (named) {
+        emit saveRequest();
     }
 }
 
@@ -2176,6 +2258,23 @@ ToxPk Core::getGroupSelfPublicKey(int groupId) const
         return ToxPk{};
     }
     return ToxPk(selfPk);
+}
+
+QString Core::getGroupSelfName(int groupId) const
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    const uint32_t groupNumber = static_cast<uint32_t>(groupId);
+    Tox_Err_Group_Self_Query error;
+    const size_t size = tox_group_self_get_name_size(tox.get(), groupNumber, &error);
+    if (error != TOX_ERR_GROUP_SELF_QUERY_OK || size == 0) {
+        return QString();
+    }
+    std::vector<uint8_t> name(size);
+    if (!tox_group_self_get_name(tox.get(), groupNumber, name.data(), &error)) {
+        return QString();
+    }
+    return ToxString(name.data(), size).getQString();
 }
 
 ToxPk Core::getGroupPeerPk(int groupId, int peerId) const
@@ -2368,6 +2467,32 @@ bool Core::setGroupPrivacyState(int groupId, Tox_Group_Privacy_State privacyStat
     return true;
 }
 
+bool Core::setGroupSelfName(int groupId, const QString& name)
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    const uint32_t groupNumber = static_cast<uint32_t>(groupId);
+    const QByteArray chatId = groupChatId(tox.get(), groupNumber);
+    if (name.isEmpty() || chatId.isEmpty() || ignoresGroup(groupNumber)) {
+        return false;
+    }
+    if (name != getGroupSelfName(groupId)) {
+        const ToxString cName(name);
+        Tox_Err_Group_Self_Name_Set error;
+        tox_group_self_set_name(tox.get(), groupNumber, cName.data(), cName.size(), &error);
+        if (!groupSelfNameHeld(error)) {
+            qWarning() << "Group" << groupId << "refused our name there, error"
+                       << static_cast<int>(error);
+            return false;
+        }
+        emit saveRequest();
+    }
+    if (groupSelfNames.choose(chatId, name, getUsername())) {
+        emit groupSelfNamesChanged(groupSelfNames.store());
+    }
+    return true;
+}
+
 bool Core::sendGroupPrivateMessage(int groupId, int peerId, const QString& message)
 {
     QMutexLocker ml{&coreLoopLock};
@@ -2456,11 +2581,9 @@ uint32_t Core::joinGroupchat(const GroupInvite& inviteInfo)
         }
     }
 
-    QString selfName = getUsername();
-    if (selfName.isEmpty()) {
-        selfName = tr("User");
-    }
-    ToxString cSelfName(selfName);
+    // KHANDAQ (beta feedback 2026-11-22): a group joined again by an invitation takes the name we
+    // had there of our own.
+    const ToxString cSelfName(groupSelfNameFor(invite.left(TOX_GROUP_CHAT_ID_SIZE)));
 
     qDebug() << QString("Accepting NGC group invite from friend %1").arg(friendId);
     Tox_Err_Group_Invite_Accept error;
@@ -2562,11 +2685,9 @@ uint32_t Core::joinGroupByChatId(const QByteArray& chatId)
         return existingNum;
     }
 
-    QString selfName = getUsername();
-    if (selfName.isEmpty()) {
-        selfName = tr("User");
-    }
-    ToxString cSelfName(selfName);
+    // KHANDAQ (beta feedback 2026-11-22): a group joined again takes the name we had there of our
+    // own.
+    const ToxString cSelfName(groupSelfNameFor(chatId));
 
     Tox_Err_Group_Join error;
     const uint32_t groupNum = tox_group_join(tox.get(), reinterpret_cast<const uint8_t*>(chatId.constData()),
@@ -3741,6 +3862,13 @@ void Core::checkGroupFileArrivals(qint64 nowMs)
 {
     QMutexLocker ml{&coreLoopLock};
 
+    // KHANDAQ (2026-11-22): while no file comes there is nothing to look at. begin() would detach
+    // the empty hash, which writes it, and the hash is the process's (ngcForgetFiles): two cores
+    // started at once (test_core starts two) did that together, and one of them walked the table
+    // the other had just put in its place.
+    if (ngcIncomingAssemblies.isEmpty()) {
+        return;
+    }
     QVector<QByteArray> givenUp;
     for (auto it = ngcIncomingAssemblies.begin(); it != ngcIncomingAssemblies.end();) {
         NgcIncomingAssembly& assembly = it.value();
@@ -4643,12 +4771,9 @@ int Core::createGroup(const QString& groupName, Tox_Group_Privacy_State privacyS
 {
     QMutexLocker ml{&coreLoopLock};
 
-    QString selfName = getUsername();
-    if (selfName.isEmpty()) {
-        selfName = tr("User");
-    }
     ToxString cGroupName(groupName);
-    ToxString cSelfName(selfName);
+    // A new group has no name of our own yet: the profile name.
+    const ToxString cSelfName(groupSelfNameFor(QByteArray()));
 
     Tox_Err_Group_New error;
     const uint32_t groupId = tox_group_new(tox.get(), privacyState, cGroupName.data(), cGroupName.size(),

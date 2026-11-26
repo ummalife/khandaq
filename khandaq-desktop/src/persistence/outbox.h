@@ -118,6 +118,8 @@ public:
         qint64 id = -1;
         QDateTime timestamp;
         QString text;
+        /** KHANDAQ (beta feedback 2026-11-22): when it was last edited; invalid when never. */
+        QDateTime editedAt;
     };
 
     explicit SavedNotes(std::shared_ptr<RawDatabase> db);
@@ -126,6 +128,11 @@ public:
     QVector<Note> all();
     /** Returns the new note's id. */
     qint64 add(const QDateTime& time, const QString& text);
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): the note takes text, edited at time; it keeps its place,
+     * which its timestamp gives.
+     */
+    void edit(qint64 id, const QString& text, const QDateTime& time);
     void remove(qint64 id);
 
 private:

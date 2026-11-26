@@ -106,12 +106,14 @@ public class GroupAuthorTapTest
         final String holder = code("GroupMessageListHolder_text_incoming_not_read.java");
         assertTrue(holder.contains("entry_author = (TextView) itemView.findViewById(R.id.air_entry_author);"));
         final String entry = bare(body(holder, "private void bindEntry("));
-        final String wired = bare("AirTranscript.bindAuthorTap(entry_author, layout_message_container,"
+        // KHANDAQ (tester 21.11, 8255): one listener for the name and the member's tile (GroupAuthorTileTest).
+        final String wired = bare("final View.OnClickListener openAuthor ="
                                   + " should_open_author_profile(is_system_message, m, authorKey) ? v -> {"
                                   + " if (!is_selected)");
         assertTrue(entry.contains(wired));
         assertTrue(entry.contains(bare("GroupMessageListActivity.open_group_peer_info_activity("
                                        + " v.getContext(), authorKey, m.group_identifier);")));
+        assertTrue(entry.contains(bare("AirTranscript.bindAuthorTap(entry_author, layout_message_container, openAuthor);")));
         // After the entry is drawn: bindGroupText decides whether the author shows at all.
         assertTrue(entry.indexOf("AirTranscript.bindGroupText(") < entry.indexOf("AirTranscript.bindAuthorTap("));
     }
@@ -122,11 +124,12 @@ public class GroupAuthorTapTest
         final String holder = code("GroupMessageListHolder_file_incoming_state_cancel.java");
         assertTrue(holder.contains("file_author = (TextView) itemView.findViewById(R.id.air_file_author);"));
         final String bind = bare(body(holder, "public void bindMessageList("));
-        assertTrue(bind.contains(bare("AirTranscript.bindAuthorTap(file_author, layout_message_container,"
+        assertTrue(bind.contains(bare("final View.OnClickListener open_author ="
                                       + " GroupMessageListHolder_text_incoming_not_read.should_open_author_profile("
                                       + " is_system_message, m, author_pubkey) ? v -> { if (!is_selected)")));
         assertTrue(bind.contains(bare("GroupMessageListActivity.open_group_peer_info_activity("
                                       + " v.getContext(), author_pubkey, m.group_identifier);")));
+        assertTrue(bind.contains(bare("AirTranscript.bindAuthorTap(file_author, layout_message_container, open_author);")));
     }
 
     @Test

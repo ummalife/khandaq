@@ -524,6 +524,22 @@ public class HelperMessageEdit
         return R.string.chat_edit_failed;
     }
 
+    /**
+     * KHANDAQ (Khandaq Testers 8253): whether a correction of a 1:1 text is too long to save. A note in Saved
+     * Messages stays on this device, so it takes a text of any length, as a new note does
+     * (FavoritesChatHelper.sendTextMessage); a correction to a contact travels in one packet and holds at most
+     * MAX_EDIT_TEXT_BYTES. The 1300-byte limit used to be checked before the chat was, so a long note could be
+     * written but not corrected.
+     */
+    static boolean isDirectEditTooLong(final String friendPubkey, final String newText)
+    {
+        if ((newText == null) || FavoritesChatHelper.isFavoritesChat(friendPubkey))
+        {
+            return false;
+        }
+        return newText.getBytes(StandardCharsets.UTF_8).length > MAX_EDIT_TEXT_BYTES;
+    }
+
     static int directEditBlockReason(final Message m, final long nowMs)
     {
         // Saved Messages: purely local edit, always allowed

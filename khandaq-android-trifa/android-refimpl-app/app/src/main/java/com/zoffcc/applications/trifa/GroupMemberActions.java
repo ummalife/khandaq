@@ -271,6 +271,9 @@ final class GroupMemberActions
     static void setMemberMuted(final String group_id, final String peer_pubkey, final boolean muted)
     {
         group_notification_silent_peer_set(group_id, peer_pubkey, muted);
+        // KHANDAQ (0.2.69, group message wakes): the friend whose member this is gets a 190/03 set without the group,
+        // or with it again, so that its messages there wake us only while the member is not muted here.
+        PushPreviewPeers.wakeSetsChanged();
         update_group_in_groupmessagelist(group_id);
     }
 

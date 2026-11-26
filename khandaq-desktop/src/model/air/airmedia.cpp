@@ -24,6 +24,7 @@
 #include <QFileInfo>
 #include <QIODevice>
 #include <QRegularExpression>
+#include <QSet>
 
 #include <cmath>
 #include <limits>
@@ -241,6 +242,29 @@ QString freePartPath(const QString& path, const std::function<bool(const QString
                                                      || taken(partFilePath(candidate)));
                                       });
     return partFilePath(free);
+}
+
+QStringList withMoreFiles(const QStringList& listed, const QStringList& chosen)
+{
+    const auto fileOf = [](const QString& path) {
+        return QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+    };
+    QStringList files = listed;
+    QSet<QString> known;
+    for (const QString& path : listed) {
+        known.insert(fileOf(path));
+    }
+    for (const QString& path : chosen) {
+        if (path.isEmpty()) {
+            continue;
+        }
+        const QString file = fileOf(path);
+        if (!known.contains(file)) {
+            known.insert(file);
+            files.append(path);
+        }
+    }
+    return files;
 }
 
 bool FileEntryState::isProblem() const

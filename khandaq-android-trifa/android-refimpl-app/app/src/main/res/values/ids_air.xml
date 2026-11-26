@@ -10,6 +10,8 @@
     <item name="air_reply_style" type="id" />
     <!-- The views of an entry, looked up once per row holder. -->
     <item name="air_entry_views" type="id" />
+    <!-- Tester 21.11 (8255): what the tile beside a group entry stands for, kept to put it again when a neighbour changes. -->
+    <item name="air_entry_tile_model" type="id" />
     <!-- The accessibility actions (edit, cancel) a tray row carries, kept to replace them on a rebind. -->
     <item name="air_tray_actions" type="id" />
     <!-- The fields of New contact, so their text survives a recreate and their headings can label them. -->

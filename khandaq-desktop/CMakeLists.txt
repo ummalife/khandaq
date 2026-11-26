@@ -318,6 +318,8 @@ set(${PROJECT_NAME}_SOURCES
   src/model/air/airgroupfilerepair.h
   src/model/air/airgroupleave.cpp
   src/model/air/airgroupleave.h
+  src/model/air/airgroupselfname.cpp
+  src/model/air/airgroupselfname.h
   src/model/air/airhistorysync.cpp
   src/model/air/airhistorysync.h
   src/model/air/airlocalstore.cpp

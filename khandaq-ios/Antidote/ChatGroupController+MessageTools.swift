@@ -179,13 +179,17 @@ extension ChatGroupController {
 
         let toRemove = selectedRows.map { messageEntry(atDisplayIndex: $0.row).message }
         // KHANDAQ (#193): own group TEXT messages retract for everyone; the rest delete locally.
+        // KHANDAQ (tester 21.11, 8256/8261): locally through the groups submanager, which keeps them deleted when the
+        // history sync brings them again.
+        var localOnly = [OCTMessageAbstract]()
         for message in toRemove {
             if message.messageText != nil && message.groupSenderPeerId == 0 {
                 submanagerGroups.deleteGroupMessage(forBoth: message, in: chat)
             } else {
-                submanagerChats.removeMessages([message])
+                localOnly.append(message)
             }
         }
+        submanagerGroups.removeGroupMessages(localOnly, in: chat)
         toggleTableViewEditing(false, animated: true)
     }
 
@@ -303,7 +307,8 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
         if message.messageText != nil && message.groupSenderPeerId == 0 {
             submanagerGroups.deleteGroupMessage(forBoth: message, in: chat)
         } else {
-            submanagerChats.removeMessages([message])
+            // KHANDAQ (tester 21.11, 8256/8261): kept deleted when the history sync brings it again.
+            submanagerGroups.removeGroupMessages([message], in: chat)
         }
     }
 
@@ -424,13 +429,30 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
         if let editable = cell as? ChatEditable, !editable.shouldShowMenu() {
             return
         }
-        presentGroupContextPopup(for: cell, message: message, indexPath: indexPath)
-    }
-
-    fileprivate func presentGroupContextPopup(for cell: ChatMovableDateCell, message: OCTMessageAbstract, indexPath: IndexPath) {
         if #available(iOS 10.0, *) {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
+        // KHANDAQ (beta 8251): with the keyboard up the popup stood partly or wholly under it; the keyboard
+        // goes down first and the popup opens where the log then shows the message (ChatPrivateController).
+        guard isKeyboardShown, !message.isInvalidated, let messageId = message.uniqueIdentifier else {
+            presentGroupContextPopup(for: cell, message: message, indexPath: indexPath)
+            return
+        }
+        putKeyboardAway { [weak self] in
+            guard let self = self, self.view.window != nil, !self.tableView.isEditing,
+                  let indexPath = self.tableView.indexPathsForVisibleRows?.first(where: { indexPath in
+                      let shown = self.messageEntry(atDisplayIndex: indexPath.row).message
+                      return !shown.isInvalidated && shown.uniqueIdentifier == messageId
+                  }),
+                  let cell = self.tableView.cellForRow(at: indexPath) as? ChatMovableDateCell else {
+                return
+            }
+            let shown = self.messageEntry(atDisplayIndex: indexPath.row).message
+            self.presentGroupContextPopup(for: cell, message: shown, indexPath: indexPath)
+        }
+    }
+
+    fileprivate func presentGroupContextPopup(for cell: ChatMovableDateCell, message: OCTMessageAbstract, indexPath: IndexPath) {
         let actions = groupContextActions(for: cell, message: message, indexPath: indexPath)
 
         let editable = cell as? ChatEditable

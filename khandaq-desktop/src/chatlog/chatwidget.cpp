@@ -80,13 +80,9 @@ ChatMessage::Ptr createDateMessage(QDateTime timestamp, DocumentCache& documentC
     return ChatMessage::createDayMark(dateText, documentCache, settings, style);
 }
 
-ChatMessage::Ptr createMessage(const ChatMessage::AirLook& look, const QString& displayName,
-                               const ChatLogMessage& chatLogMessage, DocumentCache& documentCache,
-                               SmileyPack& smileyPack, Settings& settings, Style& style)
+ChatMessage::MessageType messageTypeOf(const ChatMessage::AirLook& look,
+                                       const ChatLogMessage& chatLogMessage)
 {
-    auto messageType = chatLogMessage.message.isAction ? ChatMessage::MessageType::ACTION
-                                                       : ChatMessage::MessageType::NORMAL;
-
     // KHANDAQ (26.11.2026): a mention of the key the group knows us by marks it too, also once it
     // comes back from the history without the marks the dispatcher gave it.
     const bool bSelfMentioned =
@@ -97,13 +93,21 @@ ChatMessage::Ptr createMessage(const ChatMessage::AirLook& look, const QString& 
                        });
 
     if (bSelfMentioned) {
-        messageType = ChatMessage::MessageType::ALERT;
+        return ChatMessage::MessageType::ALERT;
     }
+    return chatLogMessage.message.isAction ? ChatMessage::MessageType::ACTION
+                                           : ChatMessage::MessageType::NORMAL;
+}
 
+ChatMessage::Ptr createMessage(const ChatMessage::AirLook& look, const QString& displayName,
+                               const ChatLogMessage& chatLogMessage, DocumentCache& documentCache,
+                               SmileyPack& smileyPack, Settings& settings, Style& style)
+{
     const auto timestamp = chatLogMessage.message.timestamp;
     return ChatMessage::createChatMessage(look, displayName, chatLogMessage.message.content,
-                                          messageType, timestamp, chatLogMessage.marks,
-                                          documentCache, smileyPack, settings, style);
+                                          messageTypeOf(look, chatLogMessage), timestamp,
+                                          chatLogMessage.marks, documentCache, smileyPack, settings,
+                                          style);
 }
 
 /** Returns whether a line drawn before may have changed its height: an edit, a reaction. */
@@ -123,6 +127,7 @@ bool renderMessageRaw(const ChatMessage::AirLook& look, const QString& displayNa
         chatMessage->setStatus(look.status);
         const bool authorChanged = chatMessage->updateAuthor(look);
         const bool bodyChanged = chatMessage->updateMessage(chatLogMessage.message.content,
+                                                            messageTypeOf(look, chatLogMessage),
                                                             chatLogMessage.marks, smileyPack);
         return authorChanged || bodyChanged;
     }
@@ -365,6 +370,7 @@ ChatWidget::ChatWidget(IChatLog& chatLog_, const Core& core_, DocumentCache& doc
     Translator::registerHandler(std::bind(&ChatWidget::retranslateUi, this), this);
 
     connect(this, &ChatWidget::renderFinished, this, &ChatWidget::onRenderFinished);
+    seenEnd = chatLog_.getNextIdx();
     connect(&chatLog_, &IChatLog::itemUpdated, this, &ChatWidget::onMessageUpdated);
     connect(verticalScrollBar(), &QScrollBar::valueChanged, this, &ChatWidget::onScrollValueChanged);
     // KHANDAQ (beta ideas 2026-11-20): a scroll of the person's own (the wheel, the keys, the bar)
@@ -1423,8 +1429,26 @@ void ChatWidget::onMultiClickTimeout()
 
 void ChatWidget::onMessageUpdated(ChatLogIdx idx)
 {
+    // KHANDAQ (beta feedback 2026-11-22): what we send shows at the foot, wherever the transcript
+    // was; what others send moves it only while it rests there, as before.
+    const bool isNew = idx >= seenEnd;
+    const bool ours = isNew && sentFromHere(chatLog, idx, seenEnd, core.getSelfPublicKey());
+    if (isNew) {
+        seenEnd = idx + 1;
+    }
+    if (ours) {
+        // A layout under way ends there too, not at the line it kept in view.
+        workerStb = true;
+    }
     if (shouldRenderMessage(idx)) {
         renderMessage(idx);
+        if (ours) {
+            scrollToBottom();
+        }
+    } else if (ours) {
+        // The lines drawn are far up the conversation: they move to its end first.
+        renderCompletionFns.push_back([this] { scrollToBottom(); });
+        setRenderedWindowEnd(chatLog.getNextIdx());
     }
 }
 
@@ -2285,6 +2309,24 @@ void ChatWidget::markUnread(int count, const QDateTime& since)
     } else {
         setRenderedWindowStart(clampedAdd(idx, -windowChunkSize, chatLog));
     }
+}
+
+bool ChatWidget::sentFromHere(const IChatLog& log, ChatLogIdx idx, ChatLogIdx knownEnd,
+                              const ToxPk& self)
+{
+    if (idx < knownEnd || idx < log.getFirstIdx() || idx >= log.getNextIdx()) {
+        return false;
+    }
+    const ChatLogItem& item = log.at(idx);
+    if (item.getSender() != self) {
+        return false;
+    }
+    const ChatLogItem::ContentType type = item.getContentType();
+    if (type == ChatLogItem::ContentType::fileTransfer) {
+        // A file that goes on from before, its entry of then not loaded, was not sent now.
+        return !item.getContentAsFile().file.continued;
+    }
+    return type == ChatLogItem::ContentType::message;
 }
 
 bool ChatWidget::firstUnreadIdx(const IChatLog& log, const ToxPk& self, const ToxPk& groupSelf,

@@ -89,6 +89,20 @@ final class GroupVoiceMessageRecorder: NSObject, AVAudioRecorderDelegate {
         outputURL = nil
     }
 
+    /// KHANDAQ (tester 8249): pause a hands-free recording; resumeRecording() goes on into the same file,
+    /// so the note is one recording without the paused stretch. Stopping while paused finishes it as usual.
+    func pauseRecording() {
+        guard let rec = recorder, rec.isRecording else { return }
+        rec.pause()
+        VoiceDebugHUD.shared.log("❚❚ paused")
+    }
+
+    func resumeRecording() {
+        guard let rec = recorder, !rec.isRecording else { return }
+        let resumed = rec.record()
+        VoiceDebugHUD.shared.log("▶︎ resumed ok=\(resumed ? "Y" : "N")")
+    }
+
     /// KHANDAQ (#voice-iphone11): finish the recording and deliver the FINALIZED file URL via the
     /// delegate callback. The old code read the file size immediately after stop(), but AAC
     /// finalization is async — on slower hardware (iPhone 11 / A13) the container wasn't flushed yet,
@@ -164,6 +178,48 @@ struct VoiceHoldGate {
     /// Whether the answer for `hold` may start a recording: that hold is still on.
     func mayRecord(for hold: Int) -> Bool {
         return isHeld && hold == current
+    }
+}
+
+/// KHANDAQ (tester 8249): the time a recording shows. Paused stretches do not count, so after a pause the
+/// timer goes on from where it stood, as the recorded note does.
+struct VoiceRecordingClock {
+    private var startedAt: Date?
+    private var pausedAt: Date?
+    private var pausedTotal: TimeInterval = 0
+
+    var isRunning: Bool {
+        return startedAt != nil && pausedAt == nil
+    }
+
+    mutating func start(at date: Date) {
+        startedAt = date
+        pausedAt = nil
+        pausedTotal = 0
+    }
+
+    mutating func pause(at date: Date) {
+        guard startedAt != nil, pausedAt == nil else { return }
+        pausedAt = date
+    }
+
+    mutating func resume(at date: Date) {
+        guard let paused = pausedAt else { return }
+        pausedTotal += max(0, date.timeIntervalSince(paused))
+        pausedAt = nil
+    }
+
+    mutating func reset() {
+        startedAt = nil
+        pausedAt = nil
+        pausedTotal = 0
+    }
+
+    /// The recorded time at `date`; nil before a start.
+    func elapsed(at date: Date) -> TimeInterval? {
+        guard let start = startedAt else { return nil }
+        let end = pausedAt ?? date
+        return max(0, end.timeIntervalSince(start) - pausedTotal)
     }
 }
 

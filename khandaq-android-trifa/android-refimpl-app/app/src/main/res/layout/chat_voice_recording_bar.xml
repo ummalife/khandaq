@@ -69,6 +69,15 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
+    <!-- KHANDAQ (Khandaq Testers 8249): pause and resume a recording that runs hands-free (a 1:1 chat once
+         locked, a group from the start); ChatVoiceRecordingUiHelper shows it and swaps its glyph and words. -->
+    <ImageButton
+        android:id="@+id/voice_recording_pause"
+        style="@style/Widget.KQ.Air.IconButton"
+        android:contentDescription="@string/voice_recording_pause"
+        android:src="@drawable/air_voice_ic_pause"
+        android:visibility="gone" />
+
     <FrameLayout
         android:layout_width="52dp"
         android:layout_height="52dp"

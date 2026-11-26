@@ -153,6 +153,123 @@ public class PushPreviewSeenTest
     }
 
     @Test
+    public void a_group_text_a_push_showed_does_not_alert_again_when_it_comes_over_tox()
+    {
+        // KHANDAQ (0.2.69, group message wakes): the wake names the text by toxcore's message id and the sender's key
+        // in the group; the row keeps the id as 8 hex, the callback gives it as a number. Both are the same mark.
+        final MemoryPreferences prefs = new MemoryPreferences();
+        final PushPreviewSeen seen = new PushPreviewSeen();
+        final String member = repeat("c4", 32);
+        final PushPreviewSeen.Event push = PushPreviewSeen.forPreview(
+                SENDER, PushPreviewPayload.groupText("hello", 0xABCDL, member, "Isa", T0 / 1000L)
+                                          .inGroup("Team", repeat("0f", 32)));
+        assertEquals(1, push.marks.size());
+        final String memberUpper = member.toUpperCase(java.util.Locale.ROOT);
+        assertEquals(push.marks, PushPreviewSeen.forGroupText(0xABCDL, memberUpper).marks);
+        assertEquals(push.marks, PushPreviewSeen.forGroupText("0000abcd", member).marks);
+        assertTrue(seen.pushMayShow(prefs, push, T0));
+        seen.pushShown(prefs, push, T0);
+        assertTrue(seen.toxArrived(prefs, PushPreviewSeen.forGroupText(0xABCDL, member), T0 + 5_000L));
+
+        // The same id from another member, or another id from the member, is another message, and alerts.
+        assertFalse(seen.toxArrived(prefs, PushPreviewSeen.forGroupText(0xABCDL, repeat("c5", 32)), T0 + 6_000L));
+        assertFalse(seen.toxArrived(prefs, PushPreviewSeen.forGroupText(0xABCEL, member), T0 + 7_000L));
+        // A text that came first holds back a late push of it.
+        assertFalse(seen.toxArrived(prefs, PushPreviewSeen.forGroupText(0x1234L, member), T0));
+        assertFalse(seen.pushMayShow(prefs, PushPreviewSeen.forPreview(
+                SENDER, PushPreviewPayload.groupText("late", 0x1234L, member, "Isa", T0 / 1000L)
+                                          .inGroup("Team", repeat("0f", 32))), T0 + 60_000L));
+
+        // No mark without a well-formed id and key; a private message carries none.
+        assertTrue(PushPreviewSeen.forGroupText("abcd", member).marks.isEmpty());
+        assertTrue(PushPreviewSeen.forGroupText("-0000001", member).marks.isEmpty());
+        assertTrue(PushPreviewSeen.forGroupText("0000zzzz", member).marks.isEmpty());
+        assertTrue(PushPreviewSeen.forGroupText((String) null, member).marks.isEmpty());
+        assertTrue(PushPreviewSeen.forGroupText(-1L, member).marks.isEmpty());
+        assertTrue(PushPreviewSeen.forGroupText(1L, null).marks.isEmpty());
+    }
+
+    @Test
+    public void a_group_text_that_waited_is_known_by_its_member_and_what_it_says_once()
+    {
+        // KHANDAQ (0.2.69, group message wakes): a text that had to wait woke without an event key, naming its
+        // sender's key in the group (gp). When it comes, under the id toxcore gave it as it went, what it says from
+        // that key tells it, once.
+        final MemoryPreferences prefs = new MemoryPreferences();
+        final PushPreviewSeen seen = new PushPreviewSeen();
+        final String member = repeat("c4", 32);
+        final PushPreviewSeen.Event push = PushPreviewSeen.forPreview(
+                SENDER, PushPreviewPayload.waitingGroupText("wake test one", member, "Isa", T0 / 1000L)
+                                          .inGroup("Team", repeat("0f", 32)));
+        assertEquals(1, push.marks.size());
+        assertTrue(seen.pushMayShow(prefs, push, T0));
+        seen.pushShown(prefs, push, T0);
+        assertTrue(seen.toxArrived(prefs, PushPreviewSeen.forGroupText(0x7D098DL, member, "wake test one",
+                                                                       "wake test one"), T0 + 60_000L));
+        // The mark is used up: the next text saying the same alerts.
+        assertFalse(seen.toxArrived(prefs, PushPreviewSeen.forGroupText(0x7D098EL, member, "wake test one",
+                                                                        "wake test one"), T0 + 61_000L));
+
+        // The text as the chat shows it matches when it came with more (a reply's header, the mentions block), and
+        // the row's id as 8 hex gives the same marks as the callback's number.
+        final PushPreviewSeen shown = new PushPreviewSeen();
+        shown.pushShown(prefs, PushPreviewSeen.forPreview(
+                SENDER, PushPreviewPayload.waitingGroupText("answer", member, "Isa", T0 / 1000L)
+                                          .inGroup("Team", repeat("0f", 32))), T0);
+        assertEquals(PushPreviewSeen.forGroupText(0x10L, member, "answer", "> quoted\nanswer").marks,
+                     PushPreviewSeen.forGroupText("00000010", member, "answer", "> quoted\nanswer").marks);
+        assertTrue(shown.toxArrived(prefs, PushPreviewSeen.forGroupText("00000010", member, "answer",
+                                                                        "> quoted\nanswer"), T0 + 2_000L));
+
+        // From another member, or saying something else, it is another message.
+        final PushPreviewSeen other = new PushPreviewSeen();
+        other.pushShown(prefs, push, T0);
+        assertFalse(other.toxArrived(prefs, PushPreviewSeen.forGroupText(0x11L, repeat("c5", 32), "wake test one",
+                                                                         "wake test one"), T0 + 1_000L));
+        assertFalse(other.toxArrived(prefs, PushPreviewSeen.forGroupText(0x12L, member, "wake test two",
+                                                                         "wake test two"), T0 + 2_000L));
+        // Without a key in the group a preview without h is known by nothing; with h, by its event key only.
+        assertTrue(PushPreviewSeen.forPreview(SENDER, PushPreviewPayload.waitingGroupText("x", null, "Isa", 1L)
+                                                                        .inGroup("Team", repeat("0f", 32)))
+                                  .marks.isEmpty());
+        assertTrue(PushPreviewSeen.forGroupText(0x13L, null, "x", "x").marks.isEmpty());
+    }
+
+    @Test
+    public void the_mark_of_a_text_that_waited_is_the_one_of_the_spec()
+    {
+        // docs/PUSH_PREVIEWS.md, "Test vectors": iOS keeps it as khq_tm, Android with its "t" in front.
+        assertEquals("tdda36f64ff2a17499a893ea2042bacad",
+                     PushPreviewSeen.textMark(PushPreviewCryptoTest.PEER_PK, "Wake  test\none ")
+                                    .toLowerCase(java.util.Locale.ROOT));
+        assertEquals(PushPreviewSeen.textMark(PushPreviewCryptoTest.PEER_PK, "Wake  test one"),
+                     PushPreviewSeen.textMark(PushPreviewCryptoTest.PEER_PK.toLowerCase(java.util.Locale.ROOT),
+                                              "Wake  test\r\none"));
+    }
+
+    @Test
+    public void a_group_file_a_push_showed_does_not_alert_again_when_it_comes_over_tox()
+    {
+        final MemoryPreferences prefs = new MemoryPreferences();
+        final PushPreviewSeen seen = new PushPreviewSeen();
+        final PushPreviewSeen.Event push = PushPreviewSeen.forPreview(
+                SENDER, PushPreviewPayload.groupFile(PushPreviewPayload.KIND_PHOTO, "IMG_1.jpg", FILE_ID, "Isa",
+                                                     T0 / 1000L).inGroup("Team", repeat("0f", 32)));
+        assertEquals(1, push.marks.size());
+        final PushPreviewSeen.Event tox = PushPreviewSeen.forGroupFile(FILE_ID.toUpperCase(java.util.Locale.ROOT));
+        assertEquals(push.marks, tox.marks);
+        // The direct file of the same id is another event.
+        final PushPreviewSeen.Event direct = PushPreviewSeen.forFile(SENDER, FILE_ID, PushPreviewPayload.KIND_PHOTO,
+                                                                     "IMG_1.jpg");
+        assertTrue(Collections.disjoint(tox.marks, direct.marks));
+        seen.pushShown(prefs, push, T0);
+        assertTrue(seen.toxArrived(prefs, tox, T0 + 2_000L));
+        assertFalse(seen.toxArrived(prefs, PushPreviewSeen.forGroupFile(repeat("ce", 32)), T0 + 3_000L));
+        assertTrue(PushPreviewSeen.forGroupFile("cd").marks.isEmpty());
+        assertTrue(PushPreviewSeen.forGroupFile(null).marks.isEmpty());
+    }
+
+    @Test
     public void a_file_is_matched_by_its_id_or_by_its_kind_and_name()
     {
         final PushPreviewSeen.Event withId = PushPreviewSeen.forPreview(

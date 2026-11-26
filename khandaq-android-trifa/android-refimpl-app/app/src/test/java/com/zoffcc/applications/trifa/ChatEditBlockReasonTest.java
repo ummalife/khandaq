@@ -10,6 +10,8 @@ import static com.zoffcc.applications.trifa.HelperMessageEdit.EDIT_WINDOW_MS;
 import static com.zoffcc.applications.trifa.HelperMessageEdit.directEditBlockReason;
 import static com.zoffcc.applications.trifa.HelperMessageEdit.groupEditBlockReason;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /**
  * KHANDAQ (QA 02.10, "not everyone can edit messages", Galaxy A55) — why a given own text cannot be
@@ -119,6 +121,52 @@ public class ChatEditBlockReasonTest
         final Message m = own("note", "", false, EDIT_WINDOW_MS * 10);
         m.tox_friendpubkey = FavoritesChatHelper.CHAT_ID;
         assertEquals(0, directEditBlockReason(m, NOW));
+    }
+
+    @Test
+    public void a_long_correction_of_a_note_is_saved_a_long_correction_to_a_contact_is_refused()
+    {
+        // KHANDAQ (Khandaq Testers 8253): a note stays on this device and takes a text of any length, as a new
+        // note does; a correction to a contact goes out in one packet of at most MAX_EDIT_TEXT_BYTES.
+        final String limit = repeat("a", HelperMessageEdit.MAX_EDIT_TEXT_BYTES);
+        final String over = limit + "a";
+        final String longNote = repeat("a long note \u2713 ", 2_000); // 16 bytes each in UTF-8: 32,000 bytes
+        assertFalse(HelperMessageEdit.isDirectEditTooLong(FavoritesChatHelper.CHAT_ID, over));
+        assertFalse(HelperMessageEdit.isDirectEditTooLong(FavoritesChatHelper.CHAT_ID, longNote));
+        assertFalse(HelperMessageEdit.isDirectEditTooLong("A1B2", limit));
+        assertTrue(HelperMessageEdit.isDirectEditTooLong("A1B2", over));
+        assertTrue(HelperMessageEdit.isDirectEditTooLong("A1B2", longNote));
+        // The limit counts bytes, not characters: 650 two-byte letters fit, one more does not.
+        final int twoByteLetters = HelperMessageEdit.MAX_EDIT_TEXT_BYTES / 2;
+        assertFalse(HelperMessageEdit.isDirectEditTooLong("A1B2", repeat("\u00fc", twoByteLetters)));
+        assertTrue(HelperMessageEdit.isDirectEditTooLong("A1B2", repeat("\u00fc", twoByteLetters + 1)));
+        assertFalse(HelperMessageEdit.isDirectEditTooLong("A1B2", null));
+    }
+
+    @Test
+    public void the_chat_screen_asks_the_chat_before_it_refuses_a_long_correction() throws Exception
+    {
+        // The send path of a 1:1 chat and Saved Messages holds the edit to the limit only through the rule above.
+        final String activity = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(
+                "src/main/java/com/zoffcc/applications/trifa/MessageListActivity.java")),
+                                           java.nio.charset.StandardCharsets.UTF_8);
+        final int from = activity.indexOf("public void send_text_message(final String friend_pubkey, "
+                                          + "final String message, final boolean rawStandalone)");
+        final int to = activity.indexOf("ChatReplyPreviewController.consumeEditDirect();", from);
+        assertTrue((from > 0) && (to > from));
+        final String editPath = activity.substring(from, to);
+        assertTrue(editPath.contains("HelperMessageEdit.isDirectEditTooLong(friend_pubkey, newBody)"));
+        assertFalse(editPath.contains("MAX_EDIT_TEXT_BYTES"));
+    }
+
+    private static String repeat(final String s, final int times)
+    {
+        final StringBuilder b = new StringBuilder(s.length() * times);
+        for (int i = 0; i < times; i++)
+        {
+            b.append(s);
+        }
+        return b.toString();
     }
 
     @Test

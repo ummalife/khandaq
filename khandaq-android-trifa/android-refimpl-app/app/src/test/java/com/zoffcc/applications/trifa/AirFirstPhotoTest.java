@@ -159,7 +159,9 @@ public class AirFirstPhotoTest
         final int add = tile.indexOf("case ADD_PHOTO:");
         assertTrue(add > 0);
         assertTrue(tile.indexOf("icon.setImageResource(R.drawable.kq_ic_plus);", add) > add);
-        assertTrue(tile.contains("return pending() || kind == Kind.SAVED || kind == Kind.ADD_PHOTO;"));
+        // KHANDAQ (tester 21.11, 8255): the plain tile of an unconfirmed group author is glyph-only too.
+        assertTrue(tile.contains("return pending() || kind == Kind.SAVED || kind == Kind.ADD_PHOTO"
+                                 + " || kind == Kind.UNCONFIRMED;"));
         assertTrue(method(tile, "void showPhoto(final boolean shown)").contains("photoShown = shown && !glyphOnly();"));
     }
 

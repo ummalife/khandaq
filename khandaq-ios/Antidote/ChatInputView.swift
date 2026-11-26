@@ -24,12 +24,16 @@ protocol ChatInputViewDelegate: class {
     func chatInputViewVoiceRecordDidStart(_ view: ChatInputView)
     func chatInputViewVoiceRecordDidEnd(_ view: ChatInputView, cancelled: Bool)
     func chatInputViewVoiceButtonTapped(_ view: ChatInputView)
+    func chatInputViewVoiceRecordDidPause(_ view: ChatInputView)
+    func chatInputViewVoiceRecordDidResume(_ view: ChatInputView)
 }
 
 extension ChatInputViewDelegate {
     func chatInputViewVoiceRecordDidStart(_ view: ChatInputView) {}
     func chatInputViewVoiceRecordDidEnd(_ view: ChatInputView, cancelled: Bool) {}
     func chatInputViewVoiceButtonTapped(_ view: ChatInputView) {}
+    func chatInputViewVoiceRecordDidPause(_ view: ChatInputView) {}
+    func chatInputViewVoiceRecordDidResume(_ view: ChatInputView) {}
 }
 
 /// KHANDAQ (0.2.60): the field of a message takes a photo pasted into it (users pasted photos, as in other
@@ -136,9 +140,12 @@ class ChatInputView: UIView {
     fileprivate var recordingTimerLabel: UILabel!
     fileprivate var recordingCancelButton: UIButton!
     fileprivate var recordingSendButton: UIButton!
+    // KHANDAQ (tester 8249): a hands-free recording can be paused and resumed, as in Telegram.
+    fileprivate var recordingPauseButton: UIButton!
+    fileprivate var recordingPaused = false
     fileprivate var theme: Theme!
     fileprivate var recordingTimer: Timer?
-    fileprivate var recordingStartedAt: Date?
+    fileprivate var recordingClock = VoiceRecordingClock()
     fileprivate var isVoiceRecording = false
     fileprivate var recordingEndedByControl = false
     // KHANDAQ (#35): Telegram-style slide-to-cancel. While holding the mic, drag left past the
@@ -405,6 +412,7 @@ extension ChatInputView {
         slideHintLabel.isHidden = true
         recordingCancelButton.isHidden = false
         recordingSendButton.isHidden = false
+        recordingPauseButton.isHidden = false
         recordingTimerLabel.alpha = 1.0
         // Haptic confirm the lock engaged (matches Telegram).
         if #available(iOS 10.0, *) {
@@ -422,6 +430,47 @@ extension ChatInputView {
         guard isVoiceRecording else { return }
         recordingEndedByControl = true
         finishVoiceRecording(cancelled: false)
+    }
+
+    /// KHANDAQ (tester 8249): pause a hands-free recording and go on with it later, into the same note.
+    /// The timer stops while paused; Send and Cancel work in both states.
+    @objc func recordingPauseTapped() {
+        guard isVoiceRecording, !recordingEndedByControl, recordingPauseButton.isHidden == false else { return }
+        recordingPaused = !recordingPaused
+        if recordingPaused {
+            recordingClock.pause(at: Date())
+            delegate?.chatInputViewVoiceRecordDidPause(self)
+        }
+        else {
+            recordingClock.resume(at: Date())
+            delegate?.chatInputViewVoiceRecordDidResume(self)
+        }
+        updateRecordingPauseButton()
+        updateRecordingTimerLabel()
+    }
+
+    /// KHANDAQ (tester 8249): the timer of a recording runs in the common modes. A timer scheduled the
+    /// default way fires only in the default mode, and while a finger drags or holds the chat the main
+    /// loop runs in the tracking mode: the shown time stood still while the recording went on.
+    static func scheduleRecordingTimer(interval: TimeInterval, block: @escaping (Timer) -> Void) -> Timer {
+        let timer = Timer(timeInterval: interval, repeats: true, block: block)
+        RunLoop.main.add(timer, forMode: .commonModes)
+        return timer
+    }
+
+    /// Pause while recording, the microphone while paused (it resumes); the dot dims while nothing is
+    /// being recorded.
+    fileprivate func updateRecordingPauseButton() {
+        let symbol = recordingPaused ? "mic.fill" : "pause.fill"
+        if #available(iOS 13.0, *) {
+            let config = UIImage.SymbolConfiguration(pointSize: 20.0, weight: .regular)
+            recordingPauseButton.setImage(UIImage(systemName: symbol, withConfiguration: config), for: .normal)
+        }
+        else {
+            recordingPauseButton.setTitle(recordingPaused ? "●" : "❚❚", for: .normal)
+        }
+        recordingPauseButton.accessibilityLabel = String(localized: recordingPaused ? "voice_recording_resume" : "voice_recording_pause")
+        recordingDot?.alpha = recordingPaused ? 0.3 : 1.0
     }
 
     /// KHANDAQ (#G7-lock, review): abort an in-progress recording when the chat is torn down. Slide-up
@@ -603,6 +652,13 @@ private extension ChatInputView {
         recordingCancelButton.addTarget(self, action: #selector(ChatInputView.recordingCancelTapped), for: .touchUpInside)
         recordingBar.addSubview(recordingCancelButton)
 
+        recordingPauseButton = UIButton(type: .system)
+        recordingPauseButton.tintColor = theme.colorForType(.LinkText)
+        recordingPauseButton.isHidden = true
+        recordingPauseButton.addTarget(self, action: #selector(ChatInputView.recordingPauseTapped), for: .touchUpInside)
+        recordingBar.addSubview(recordingPauseButton)
+        updateRecordingPauseButton()
+
         recordingSendButton = UIButton(type: .system)
         recordingSendButton.backgroundColor = theme.colorForType(.LinkText)
         recordingSendButton.layer.cornerRadius = 20.0
@@ -684,6 +740,13 @@ private extension ChatInputView {
         recordingCancelButton.snp.makeConstraints {
             $0.trailing.equalTo(recordingSendButton.snp.leading).offset(-12.0)
             $0.centerY.equalTo(recordingBar)
+        }
+
+        recordingPauseButton.snp.makeConstraints {
+            $0.trailing.equalTo(recordingCancelButton.snp.leading).offset(-8.0)
+            $0.leading.greaterThanOrEqualTo(recordingTimerLabel.snp.trailing).offset(8.0)
+            $0.centerY.equalTo(recordingBar)
+            $0.width.height.equalTo(40.0)
         }
 
         slideHintLabel.snp.makeConstraints {
@@ -795,13 +858,16 @@ private extension ChatInputView {
         // instead (you can't slide a tap). The two control sets are mutually exclusive → never overlap.
         recordingCancelButton.isHidden = !showControls
         recordingSendButton.isHidden = !showControls
+        recordingPauseButton.isHidden = !showControls
+        recordingPaused = false
+        updateRecordingPauseButton()
         slideHintLabel.isHidden = showControls
         recordingTimerLabel.alpha = 1.0
         updateSlideToCancelHint()
-        recordingStartedAt = Date()
+        recordingClock.start(at: Date())
         recordingTimerLabel.text = "0:00"
         recordingTimer?.invalidate()
-        recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
+        recordingTimer = ChatInputView.scheduleRecordingTimer(interval: 0.2) { [weak self] _ in
             self?.updateRecordingTimerLabel()
         }
     }
@@ -809,7 +875,10 @@ private extension ChatInputView {
     func hideRecordingBar() {
         recordingTimer?.invalidate()
         recordingTimer = nil
-        recordingStartedAt = nil
+        recordingClock.reset()
+        recordingPaused = false
+        updateRecordingPauseButton()
+        recordingPauseButton.isHidden = true
         recordingBar.isHidden = true
         // KHANDAQ (#35): reset slide-to-cancel visuals for the next recording.
         recordingWillCancel = false
@@ -838,8 +907,7 @@ private extension ChatInputView {
     }
 
     func updateRecordingTimerLabel() {
-        guard let startedAt = recordingStartedAt else { return }
-        let elapsed = max(0.0, Date().timeIntervalSince(startedAt))
+        guard let elapsed = recordingClock.elapsed(at: Date()) else { return }
         let total = Int(elapsed)
         recordingTimerLabel.text = String(format: "%d:%02d", total / 60, total % 60)
     }
@@ -938,6 +1006,7 @@ extension ChatInputView {
         slideHintLabel.textColor = KQColor.ink3
         recordingCancelButton.setTitleColor(KQColor.ink2, for: .normal)
         recordingCancelButton.titleLabel?.font = KQFont.font(.label)
+        recordingPauseButton.tintColor = KQColor.ink2
         recordingSendButton.backgroundColor = KQColor.ink
         recordingSendButton.layer.cornerRadius = KQRadius.control
         recordingSendButton.tintColor = KQColor.onInk

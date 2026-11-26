@@ -47,6 +47,11 @@ struct AirGroupInfo
      */
     QString groupKey;
     int tone = 0;
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): our name in this group, as its members see it; the
+     * profile name stays as it is.
+     */
+    QString selfName;
     Air::GroupReach reach;
     Air::GroupRole selfRole = Air::GroupRole::Member;
     Air::GroupVoice voice = Air::GroupVoice::All;
@@ -69,7 +74,8 @@ struct AirGroupInfo
 
 /**
  * The dossier of a group (E14): a fold panel over the conversation, as high as the column lets it
- * be, so the members have room. In order: the group with its counts; your role in words; who gets
+ * be, so the members have room. In order: the group with its counts; your name in the group, which
+ * Enter or leaving the field sets and Esc takes back; your role in words; who gets
  * a message now (or the members, while you may not write), by role and online first, with a search
  * from 20 members; the group key with Copy, Invite and QR and who can join; notifications; Leave
  * the group with its consequence. A member's row opens what may be done to them, each asked once.
@@ -118,10 +124,16 @@ signals:
     void inviteRequested(const QVector<Air::InviteCandidate>& chosen);
     /** The founder chose who can join; the switch shows the change once setInfo brings it. */
     void privacyChangeRequested(Air::GroupPrivacy privacy);
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): a new name of ours in this group was typed, trimmed and
+     * never empty; the field shows the one setInfo brings next.
+     */
+    void selfNameRequested(const QString& name);
 
 protected:
     void arrange(int width) override;
     void aboutToFold() override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     QVBoxLayout* section(QBoxLayout* column, QLabel** title);
@@ -130,6 +142,11 @@ private:
     void refreshMembers();
     void refreshInvite();
     void confirm(const Air::GroupMember& member, Air::MemberAction action);
+    /** Keeps what is typed within the bytes toxcore takes for a name (Air::fitEdit). */
+    void keepSelfNameWithin();
+    void commitSelfName();
+    /** The field shows the name the group has (info.selfName). */
+    void revertSelfName();
 
     AirGroupInfo info;
     QString query;
@@ -139,6 +156,12 @@ private:
     QLabel* nameLabel = nullptr;
     QLabel* countsLabel = nullptr;
     AirButton* renameButton = nullptr;
+
+    QLabel* selfNameTitle = nullptr;
+    AirTextField* selfNameField = nullptr;
+    QLabel* selfNameNote = nullptr;
+    /** What the field held after the last edit, for Air::fitEdit. */
+    QString typedSelfName;
 
     QLabel* roleTitle = nullptr;
     QLabel* roleText = nullptr;

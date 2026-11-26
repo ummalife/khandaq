@@ -182,7 +182,6 @@ class ChatPrivateController: PortraitChatController {
     fileprivate var typingViewToChatInputConstraint: Constraint!
 
     fileprivate var newMessageViewTopConstraint: Constraint?
-    fileprivate var chatInputViewBottomConstraint: Constraint?
 
     fileprivate var newMessagesViewVisible = false
 
@@ -595,12 +594,7 @@ class ChatPrivateController: PortraitChatController {
         isKeyboardUp = true
         keepRoomForLog()
 
-        guard let constraint = chatInputViewBottomConstraint else {
-            return
-        }
-
-        constraint.update(offset: -frame.size.height)
-
+        // The field follows the keyboard by the keyboard layout guide (installConstraints).
         if disableNextInputViewAnimation {
             disableNextInputViewAnimation = false
             suppressNextKeyboardAnimation = true
@@ -612,19 +606,6 @@ class ChatPrivateController: PortraitChatController {
         trayView?.hidesDetail = false
         isKeyboardUp = false
         keepRoomForLog()
-
-        guard let constraint = chatInputViewBottomConstraint else {
-            return
-        }
-
-        // TODO: this moves the input view a bit more to the top, because the home button "line" is in the way otherwise
-        //       please fix me properly in the future
-        constraint.update(offset: 0.0)
-        if #available(iOS 11.0, *) {
-            let keyWindow = UIApplication.shared.keyWindow
-            let b = keyWindow?.safeAreaInsets.bottom
-            constraint.update(offset: -(b ?? 20))
-        }
     }
 
     override func viewDidLayoutSubviews() {
@@ -633,6 +614,17 @@ class ChatPrivateController: PortraitChatController {
         updateInputViewMaxHeight()
         updateTitleWidth()
         keepRoomForLog(whileLayingOut: true)
+
+        // KHANDAQ (beta 8251): dragging the log down hands the keyboard to the finger as soon as the finger
+        // leaves the log, as in Telegram. Without the padding the keyboard waited until the finger had
+        // crossed the tray, the reply preview and the field, so a drag that ended on the field put nothing
+        // away.
+        if #available(iOS 17.0, *) {
+            let padding = max(0, chatInputView.frame.maxY - bottomStack.frame.minY)
+            if view.keyboardLayoutGuide.keyboardDismissPadding != padding {
+                view.keyboardLayoutGuide.keyboardDismissPadding = padding
+            }
+        }
     }
 }
 
@@ -1833,16 +1825,34 @@ private extension ChatPrivateController {
         if let editable = cell as? ChatEditable, !editable.shouldShowMenu() {
             return
         }
-        presentContextPopup(for: cell, indexPath: indexPath)
-    }
-
-    // KHANDAQ (#G5 reaction-row): the unified Telegram popup — reaction bar above + action list below,
-    // one dimmed backdrop. Reuses the exact per-cell handlers the system menu used, minus "Реакция"
-    // (the bar handles it). Reactions and actions are gated by the cell exactly as before.
-    fileprivate func presentContextPopup(for cell: ChatMovableDateCell, indexPath: IndexPath) {
         if #available(iOS 10.0, *) {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
+        // KHANDAQ (beta 8251): the popup is laid out over the whole screen, so with the keyboard up its lower
+        // rows (all of them, for a message near the field) stood under the keyboard and could not be reached.
+        // The keyboard goes down first, and the popup opens around the message where the log then shows it.
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
+        guard isKeyboardShown, !message.isInvalidated, let messageId = message.uniqueIdentifier else {
+            presentContextPopup(for: cell, indexPath: indexPath)
+            return
+        }
+        putKeyboardAway { [weak self] in
+            guard let self = self, self.view.window != nil, let tableView = self.tableView, !tableView.isEditing,
+                  let indexPath = tableView.indexPathsForVisibleRows?.first(where: { indexPath in
+                      let shown = self.messageEntry(atDisplayIndex: indexPath.row).message
+                      return !shown.isInvalidated && shown.uniqueIdentifier == messageId
+                  }),
+                  let cell = tableView.cellForRow(at: indexPath) as? ChatMovableDateCell else {
+                return
+            }
+            self.presentContextPopup(for: cell, indexPath: indexPath)
+        }
+    }
+
+    // KHANDAQ (#G5 reaction-row): the unified Telegram popup — reaction bar above + action list below,
+    // one dimmed backdrop. Reuses the exact per-cell handlers the system menu used, minus "React"
+    // (the bar handles it). Reactions and actions are gated by the cell exactly as before.
+    fileprivate func presentContextPopup(for cell: ChatMovableDateCell, indexPath: IndexPath) {
         let message = messageEntry(atDisplayIndex: indexPath.row).message
 
         func supports(_ sel: Selector) -> Bool { cell.isMenuActionSupportedByCell(sel) }
@@ -2123,14 +2133,12 @@ private extension ChatPrivateController {
         chatInputView.snp.makeConstraints {
             $0.leading.trailing.equalTo(view)
             $0.top.greaterThanOrEqualTo(view).offset(Constants.InputViewTopOffset)
-            chatInputViewBottomConstraint = $0.bottom.equalTo(view).constraint
-            // TODO: this moves the input view a bit more to the top, because the home button "line" is in the way otherwise
-            //       please fix me properly in the future
-            if #available(iOS 11.0, *) {
-                let keyWindow = UIApplication.shared.keyWindow
-                let b = keyWindow?.safeAreaInsets.bottom
-                chatInputViewBottomConstraint?.update(offset: -(b ?? 20))
-            }
+            // KHANDAQ (beta 8251): the field stands on the keyboard layout guide: on the keyboard while it is
+            // up, over the home indicator while it is down, and in between while a drag of the log puts the
+            // keyboard away. Moved only by the keyboard notifications, the field stayed where it was for the
+            // whole drag, a blank band opened between it and the sinking keyboard, and it dropped only once
+            // the keyboard had gone.
+            $0.bottom.equalTo(view.keyboardLayoutGuide.snp.top)
         }
 
         // KHANDAQ (#115): the input bar is pushed up by the home-indicator safe area (see above), which
@@ -2697,6 +2705,14 @@ private extension ChatPrivateController {
                 model.voiceDuration = VoiceMessageHelper.audioDuration(at: path)
             }
         }
+        // KHANDAQ (tester 8263): an audio file that is here plays in its entry; until then it is a file with
+        // its download.
+        model.isAudioFile = message.messageFile?.fileType == .ready
+            && VoiceMessageHelper.isInlineAudioFile(fileName: message.messageFile?.fileName,
+                                                    filePath: message.messageFile?.filePath())
+        if model.isAudioFile, let path = message.messageFile?.filePath() {
+            model.voiceDuration = VoiceMessageHelper.cachedAudioDuration(at: path)
+        }
 
         switch message.messageFile!.fileType {
             case .waitingConfirmation:
@@ -2778,7 +2794,7 @@ private extension ChatPrivateController {
             }
         }
 
-        model.openHandle = { [weak self] in
+        let open: () -> Void = { [weak self] in
             guard let sself = self else {
                 return
             }
@@ -2788,6 +2804,30 @@ private extension ChatPrivateController {
             }
 
             sself.delegate?.chatPrivateControllerShowQuickLookController(sself, dataSource: qlDataSource, selectedIndex: index)
+        }
+        model.openHandle = open
+
+        if model.isAudioFile {
+            // KHANDAQ (tester 8263): the play button of an audio file plays it here; one the player does not
+            // read opens as before, in QuickLook.
+            model.voicePlayToggleHandle = {
+                guard message.messageFile?.fileType == .ready,
+                      let path = message.messageFile?.filePath(),
+                      let messageId = message.uniqueIdentifier else {
+                    return
+                }
+                if !ChatVoiceMessagePlayer.shared.togglePlayback(messageId: messageId, filePath: path, atOwnSpeed: true) {
+                    open()
+                }
+            }
+            model.voiceSeekHandle = { fraction in
+                guard message.messageFile?.fileType == .ready,
+                      let path = message.messageFile?.filePath(),
+                      let messageId = message.uniqueIdentifier else {
+                    return
+                }
+                ChatVoiceMessagePlayer.shared.seek(messageId: messageId, filePath: path, fraction: fraction)
+            }
         }
 
         if isVoice {

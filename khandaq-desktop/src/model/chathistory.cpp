@@ -22,6 +22,7 @@
 #include "src/core/chatid.h"
 #include "src/model/air/airconversation.h"
 #include "src/model/air/airhistorysync.h"
+#include "src/model/air/airlocalstore.h"
 #include "src/model/friend.h"
 #include "src/model/group.h"
 #include "src/widget/form/chatform.h"
@@ -342,6 +343,11 @@ void ChatHistory::onFileTransferBrokenUnbroken(const ToxPk& sender, const ToxFil
 
 void ChatHistory::onMessageReceived(const ToxPk& sender, const Message& message)
 {
+    // KHANDAQ (beta feedback 2026-11-22): a text of a group its author deleted before it came.
+    if (isDeleted(sender, Air::MessageEffect::Anchor::Text, message.wireId)) {
+        qDebug() << "A text of a group came after its author deleted it; dropped";
+        return;
+    }
     if (canUseHistory()) {
         auto& chatId = chat.getPersistentId();
         auto displayName = chat.getDisplayedName(sender);
@@ -360,6 +366,12 @@ void ChatHistory::onMessageReceived(const ToxPk& sender, const Message& message)
 
 void ChatHistory::onMessageSynced(const ToxPk& sender, const Message& message)
 {
+    // KHANDAQ (beta feedback 2026-11-22): a member who missed its deletion relays it again, after
+    // a restart too, and the history keeps no words of it to know it by below.
+    if (isDeleted(sender, Air::MessageEffect::Anchor::Text, message.wireId)) {
+        qDebug() << "A text relayed from the history of a group was deleted by its author; dropped";
+        return;
+    }
     // Core drops a copy of what came in this session (Air::SyncedTextLedger). The history knows
     // a group's text by its author and words only: it keeps no id of it.
     const QString content = storedText(message);
@@ -595,6 +607,18 @@ SessionChatLog::EffectResult ChatHistory::applyEffect(const ToxPk& sender,
 {
     using Change = SessionChatLog::EffectResult::Change;
     const SessionChatLog::EffectResult result = sessionChatLog.applyEffect(sender, effect, selfKey);
+    // KHANDAQ (beta feedback 2026-11-22): a member who missed a deletion relays the message again
+    // from the history of the group, after a restart too: the deletion is kept for that copy, and
+    // one of a message not loaded here erases it in the history. Ours never comes back as theirs,
+    // and a text id of zeros is a message still on its way (SessionChatLog::applyEffect).
+    if (effect.kind == Air::MessageEffect::Kind::Delete && !friendChat && canUseHistory()
+        && sender != coreIdHandler.getSelfPublicKey() && sender != selfKey
+        && effect.anchorId.count('\0') != effect.anchorId.size()) {
+        history->addDeletion(chat.getPersistentId(), sender, effect.anchor, effect.anchorId);
+        if (result.change == Change::None) {
+            eraseUnloaded(sender, effect);
+        }
+    }
     if (result.change == Change::None || !canUseHistory()) {
         return result;
     }
@@ -632,6 +656,42 @@ SessionChatLog::EffectResult ChatHistory::applyEffect(const ToxPk& sender,
         }
     }
     return result;
+}
+
+bool ChatHistory::isDeleted(const ToxPk& author, Air::MessageEffect::Anchor anchor,
+                            const QByteArray& anchorId) const
+{
+    return !friendChat && canUseHistory()
+           && history->isDeleted(chat.getPersistentId(), author, anchor, anchorId);
+}
+
+void ChatHistory::eraseUnloaded(const ToxPk& author, const Air::MessageEffect& effect)
+{
+    const ChatId& chatId = chat.getPersistentId();
+    if (effect.anchor == Air::MessageEffect::Anchor::File) {
+        // Only a file the author sent: nothing here checked who sent this one.
+        history->eraseFileEntry(chatId, effect.anchorId, author);
+        return;
+    }
+    // The history keeps no id of a group's text; the entry store keeps those of the last texts of
+    // the groups (LocalStore::wireLimit), so a text with one is among its author's last ones.
+    if (!entryStore) {
+        return;
+    }
+    const QVector<History::KeptText> texts =
+        history->textsOf(chatId, author, Air::LocalStore::wireLimit);
+    for (const History::KeptText& kept : texts) {
+        const QString key =
+            Air::textEntryKey(chatKey(), author.toString(), kept.time.toMSecsSinceEpoch());
+        if (entryStore->wireId(key) != effect.anchorId) {
+            continue;
+        }
+        history->setMessageText(chatId, author, kept.time, kept.text, QString());
+        entryStore->setEntryMarks(key, Air::EntryMarks());
+        entryStore->setWireId(key, QByteArray());
+        qDebug() << "A deletion in a group erased a text the conversation has not loaded";
+        return;
+    }
 }
 
 QString ChatHistory::chatKey() const

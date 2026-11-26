@@ -11,6 +11,7 @@
 #import "OCTRealmManager.h"
 #import "OCTPushUrlValidator.h"
 #import "OCTPushPreview.h"
+#import "OCTSubmanagerChatsImpl.h"
 #import "OCTChat.h"
 #import "OCTGroupContactExchange.h"
 #import "OCTGroupContactStore.h"
@@ -44,7 +45,7 @@ static NSString *OCTShortPublicKeyLabel(NSString *publicKey)
     return [[publicKey substringFromIndex:publicKey.length - 6] uppercaseString];
 }
 
-static void OCTSendPushURLToFriend(OCTTox *tox, OCTToxFriendNumber friendNumber)
+static void OCTSendPushURLToFriend(OCTTox *tox, OCTToxFriendNumber friendNumber, id<OCTSubmanagerChats> chats)
 {
 #if OCTHasFirebase
     if ([FIRApp defaultApp] == nil) {
@@ -81,6 +82,16 @@ static void OCTSendPushURLToFriend(OCTTox *tox, OCTToxFriendNumber friendNumber)
     }
     NSData *presencePacket = [OCTPushPreview groupPresencePacketWithHashes:[OCTPushPreview ownGroupPresenceHashesWithTox:tox]];
     [tox sendLosslessPacketWithFriendNumber:friendNumber bytes:presencePacket error:nil];
+
+    // KHANDAQ (0.2.69, group message wakes): and the groups of ours in which the friend's group messages may wake this
+    // device (190/03). A moment later on the main queue: the set is read from the Realm, and one caller sends this
+    // from inside a write to it.
+    if ([chats isKindOfClass:[OCTSubmanagerChatsImpl class]] && friendPublicKey.length > 0) {
+        OCTSubmanagerChatsImpl *chatsImpl = (OCTSubmanagerChatsImpl *)chats;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [chatsImpl sendGroupWakeToFriendWithPublicKey:friendPublicKey];
+        });
+    }
 #endif
 }
 
@@ -492,7 +503,7 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
         }];
 
         if (friendIsConnected) {
-            OCTSendPushURLToFriend(tox, number);
+            OCTSendPushURLToFriend(tox, number, [self.dataSource managerGetChats]);
             [[self.dataSource managerGetNotificationCenter] postNotificationName:kOCTFriendConnectionStatusChangeNotification
                                                                         object:friend];
         }
@@ -577,7 +588,7 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
         }];
 
         if (connected) {
-            OCTSendPushURLToFriend(tox, friend.friendNumber);
+            OCTSendPushURLToFriend(tox, friend.friendNumber, [self.dataSource managerGetChats]);
         }
 
         [[self.dataSource managerGetNotificationCenter] postNotificationName:kOCTFriendConnectionStatusChangeNotification
@@ -686,6 +697,22 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
         return;
     }
     [OCTPushPreview storeGroupPresence:hashes forFriendPublicKey:publicKey];
+
+    // KHANDAQ (0.2.69, group message wakes): our 190/03 set for the friend leaves out a group where a member muted here
+    // is the friend, and only this set tells which member that is.
+    id<OCTSubmanagerChats> chats = [self.dataSource managerGetChats];
+    if ([chats isKindOfClass:[OCTSubmanagerChatsImpl class]]) {
+        [(OCTSubmanagerChatsImpl *)chats sendGroupWakeToFriendWithPublicKey:publicKey];
+    }
+}
+
+- (void)tox:(OCTTox *)tox friendGroupWake:(NSArray<NSString *> *)hashes friendNumber:(OCTToxFriendNumber)friendNumber
+{
+    NSString *publicKey = [[self.dataSource managerGetTox] publicKeyFromFriendNumber:friendNumber error:nil];
+    if ([[self.dataSource managerGetRealmManager] friendWithPublicKey:publicKey] == nil) {
+        return;
+    }
+    [OCTPushPreview storeGroupWake:hashes forFriendPublicKey:publicKey];
 }
 
 - (void)tox:(OCTTox *)tox friendStatusMessageUpdate:(NSString *)statusMessage friendNumber:(OCTToxFriendNumber)friendNumber
@@ -786,7 +813,7 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
 #endif
             if (token.length > 0)
             {
-                OCTSendPushURLToFriend(tox, friendNumber);
+                OCTSendPushURLToFriend(tox, friendNumber, [self.dataSource managerGetChats]);
             }
         }
         theFriend.isConnected = (status != OCTToxConnectionStatusNone);
@@ -949,7 +976,7 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
     }
 
     if (friend.isConnected) {
-        OCTSendPushURLToFriend(tox, friendNumber);
+        OCTSendPushURLToFriend(tox, friendNumber, [self.dataSource managerGetChats]);
         [[self.dataSource managerGetNotificationCenter] postNotificationName:kOCTFriendConnectionStatusChangeNotification
                                                                     object:friend];
     }

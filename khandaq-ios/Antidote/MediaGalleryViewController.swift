@@ -40,6 +40,9 @@ final class MediaGalleryViewController: UIViewController {
     private let titleLabel = UILabel()
     private let dateLabel = UILabel()
     private let titleStack = UIStackView()
+    /// KHANDAQ (tester 8263): the photo or the video shown, to another app, to Photos or to Files: the system
+    /// share sheet, as QuickLook has it for the other files.
+    private let shareButton = UIButton(type: .system)
     private let forwardButton = UIButton(type: .system)
     private let deleteButton = UIButton(type: .system)
     private let thumbsCollection: UICollectionView
@@ -152,6 +155,21 @@ final class MediaGalleryViewController: UIViewController {
             make.centerY.equalTo(backButton)
         }
 
+        shareButton.setImage(UIImage(systemName: "square.and.arrow.up",
+                                     withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)), for: .normal)
+        shareButton.tintColor = .white
+        shareButton.accessibilityLabel = String(localized: "air_first_share")
+        shareButton.accessibilityIdentifier = "media.gallery.share"
+        shareButton.backgroundColor = UIColor.black.withAlphaComponent(0.35)
+        shareButton.layer.cornerRadius = 20
+        shareButton.addTarget(self, action: #selector(shareTapped), for: .touchUpInside)
+        topBar.addSubview(shareButton)
+        shareButton.snp.makeConstraints { make in
+            make.trailing.equalToSuperview().offset(-10)
+            make.centerY.equalTo(backButton)
+            make.width.height.equalTo(40)
+        }
+
         // Bottom controls: forward (left) + delete (right), thumbnails above
         // Icons, not text glyphs (redesign stage 3: no arrows or emoji typed into the interface).
         forwardButton.setImage(UIImage(systemName: "arrowshape.turn.up.right"), for: .normal)
@@ -213,6 +231,42 @@ final class MediaGalleryViewController: UIViewController {
         dismiss(animated: true, completion: nil)
     }
 
+    @objc private func shareTapped() {
+        guard let sheet = makeShareSheet() else {
+            return
+        }
+        present(sheet, animated: true, completion: nil)
+    }
+
+    /// KHANDAQ (tester 8263): the share sheet for the file shown: Save Image or Save Video, Save to Files,
+    /// another app. Nil while that file is not on this device.
+    func makeShareSheet() -> UIActivityViewController? {
+        guard items.indices.contains(currentIndex) else {
+            return nil
+        }
+        let url = items[currentIndex].url
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return nil
+        }
+        let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        sheet.popoverPresentationController?.sourceView = shareButton
+        sheet.popoverPresentationController?.sourceRect = shareButton.bounds
+        return sheet
+    }
+
+    /// KHANDAQ (tester 8263): a video plays in the player screen of the app, with its controls (pause, the
+    /// time bar, the sound, picture in picture); the page had played it with none, not even a pause. Its
+    /// close comes back here.
+    private func playVideo(at url: URL) {
+        let player = AVPlayer(url: url)
+        let controller = AVPlayerViewController()
+        controller.player = player
+        controller.modalPresentationStyle = .fullScreen
+        present(controller, animated: true) {
+            player.play()
+        }
+    }
+
     // KHANDAQ (#207): fade the chrome in/out. Alpha (not isHidden) so already-hidden controls
     // (forward/delete when no delegate action, single-item thumb strip) stay hidden.
     private func toggleChrome() {
@@ -257,6 +311,7 @@ extension MediaGalleryViewController: UICollectionViewDataSource, UICollectionVi
                                                       for: indexPath) as! MediaPageCell
         cell.configure(with: items[indexPath.item])
         cell.onSingleTap = { [weak self] in self?.toggleChrome() }
+        cell.onPlayVideo = { [weak self] url in self?.playVideo(at: url) }
         return cell
     }
 

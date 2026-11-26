@@ -17,6 +17,10 @@
 @class RLMResults;
 @class RLMRealm;
 
+/// KHANDAQ (#170): the name of a group file without the "NNN_" prefixes a stored copy gets, so that copies of one file
+/// compare equal. Also what OCTGroupMessageTombstones remembers a deleted file by.
+FOUNDATION_EXTERN NSString *OCTGroupFileBaseName(NSString *fileName);
+
 @interface OCTRealmManager : NSObject
 
 /**

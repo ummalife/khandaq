@@ -897,6 +897,8 @@ public final class AirGroupDossierActivity extends AirScreenActivity
                 TrifaToxService.orma.updateGroupDB().group_identifierEq(id).notification_silent(muted).execute();
                 // KHANDAQ (0.2.64): and the copy of it the push preview handler reads.
                 PushPreviewPeers.refreshMutedChats();
+                // KHANDAQ (0.2.69, group message wakes): and our 190/03 sets, which leave a muted group out.
+                PushPreviewPeers.wakeSetsChanged();
                 // KHANDAQ (0.2.57, review): the person's choice for Khandaq Community outlasts a new row of it.
                 CommunityAutoJoin.noteSoundChoice(groupId, muted);
             }
@@ -962,6 +964,9 @@ public final class AirGroupDossierActivity extends AirScreenActivity
     private static void clearHistoryHere(final String groupId)
     {
         final String id = groupId.toLowerCase(Locale.ROOT);
+        // KHANDAQ (tester 21.11, 8256/8261): a cleared history stays cleared: the messages the members could still
+        // serve in a history sync are remembered as deleted.
+        HelperMessageDelete.rememberClearedGroupHistory(id);
         try
         {
             final List<GroupMessage> files = TrifaToxService.orma.selectFromGroupMessage().group_identifierEq(id)

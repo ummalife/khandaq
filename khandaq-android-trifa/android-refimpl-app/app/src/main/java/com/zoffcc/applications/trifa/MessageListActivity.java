@@ -30,7 +30,6 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
-import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -57,7 +56,6 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.github.piasy.rxandroidaudio.AudioRecorder;
 import com.mikepenz.fontawesome_typeface_library.FontAwesome;
 import com.mikepenz.google_material_typeface_library.GoogleMaterial;
 import com.mikepenz.iconics.IconicsDrawable;
@@ -205,6 +203,9 @@ public class MessageListActivity extends AppCompatActivity
     static ChatVoiceRecordingUiHelper voiceRecordingUiHelper = null;
     static boolean ml_is_recording = false;
     static boolean ml_is_rec_ok = false;
+    // KHANDAQ (Khandaq Testers 8249): the note being recorded, which the bar's pause button pauses and resumes.
+    static final java.util.concurrent.atomic.AtomicReference<VoiceNoteRecorder> voice_note_recorder =
+            new java.util.concurrent.atomic.AtomicReference<>(null);
     // KHANDAQ (iOS hold-to-record): mic ACTION_DOWN starts, ACTION_UP sends, slide-left cancels,
     // slide-UP locks (WhatsApp-style): recording continues hands-free, finish via the bar buttons.
     private float voice_rec_down_x = 0f;
@@ -468,6 +469,14 @@ public class MessageListActivity extends AppCompatActivity
                         ml_is_rec_ok = false;
                         ml_is_recording = false;
                         set_recording_pop_visibilty_s(false);
+                    }
+
+                    @Override
+                    public boolean onTogglePause()
+                    {
+                        // KHANDAQ (Khandaq Testers 8249): shown once the recording is locked, hands-free.
+                        final VoiceNoteRecorder recorder = voice_note_recorder.get();
+                        return (recorder != null) && ml_is_recording && recorder.togglePause();
                     }
                 });
 
@@ -807,6 +816,8 @@ public class MessageListActivity extends AppCompatActivity
                     public void run()
                     {
                         String audio_rec_filename_final = null;
+                        // KHANDAQ (Khandaq Testers 8249): a recorder that can pause, in the format voice notes had.
+                        final VoiceNoteRecorder mAudioRecorder = new VoiceNoteRecorder();
                         ml_is_recording = true;
                         ml_is_rec_ok = false;
                         final MessageListActivity activity = MainActivity.message_list_activity;
@@ -817,7 +828,6 @@ public class MessageListActivity extends AppCompatActivity
                         try
                         {
                             HelperGeneric.logI(TAG, "onCreate:record_audio:start");
-                            AudioRecorder mAudioRecorder = AudioRecorder.getInstance();
                             if (activity == null)
                             {
                                 set_recording_pop_visibilty_s(false);
@@ -898,30 +908,26 @@ public class MessageListActivity extends AppCompatActivity
 
                             File mAudioFile = new File(audio_rec_filename_final);
                             // HelperGeneric.logI(TAG, "onCreate:record_audio:file=" + audio_rec_filename_final);
-                            try
+                            // KHANDAQ: best-out-of-the-box — 1:1 voice notes are 64 kbps AAC (was the library
+                            // default), matching the group path; VoiceNoteRecorder keeps that format.
+                            // A note before whose thread has not seen its cancel yet gives the microphone up first,
+                            // as AudioRecorder, one for the whole app, stopped it.
+                            final VoiceNoteRecorder previous_recorder = voice_note_recorder.getAndSet(null);
+                            if (previous_recorder != null)
                             {
-                                // KHANDAQ: best-out-of-the-box — encode 1:1 voice notes at 64 kbps AAC (was
-                                // the library default), matching the group path for clearer voice messages.
-                                mAudioRecorder.prepareRecord(MediaRecorder.AudioSource.MIC, MediaRecorder.OutputFormat.MPEG_4,
-                                                             MediaRecorder.AudioEncoder.AAC, 44100, 64000, mAudioFile);
+                                previous_recorder.stop(false);
                             }
-                            catch (Exception prepare_error)
-                            {
-                                HelperGeneric.logI(TAG, "onCreate:record_audio:prepare:EE:" + prepare_error.getMessage());
-                                set_recording_pop_visibilty_s(false);
-                                ml_is_recording = false;
-                                ml_is_rec_ok = false;
-                                return;
-                            }
-                            boolean rec_start_result = mAudioRecorder.startRecord();
+                            boolean rec_start_result = mAudioRecorder.start(v.getContext(), mAudioFile);
                             if (!rec_start_result)
                             {
                                 // HINT: some problem on starting the recording
+                                HelperGeneric.logI(TAG, "onCreate:record_audio:start:failed");
                                 set_recording_pop_visibilty_s(false);
                                 ml_is_recording = false;
                                 ml_is_rec_ok = false;
                                 return;
                             }
+                            voice_note_recorder.set(mAudioRecorder);
 
                             while (ml_is_recording && !voice_rec_abort)
                             {
@@ -933,7 +939,8 @@ public class MessageListActivity extends AppCompatActivity
                                 {
                                 }
 
-                                set_recording_pop_text_s(seconds_time_format_or_empty(mAudioRecorder.progress()));
+                                // A paused note's clock holds still, and so does the timer.
+                                set_recording_pop_text_s(seconds_time_format_or_empty(mAudioRecorder.elapsedSeconds()));
                             }
                             // KHANDAQ: lifted before the thread started → discard (no send).
                             if (voice_rec_abort)
@@ -942,7 +949,7 @@ public class MessageListActivity extends AppCompatActivity
                                 ml_is_rec_ok = false;
                             }
                             set_recording_pop_visibilty_s(false);
-                            int rec_result = mAudioRecorder.stopRecord();
+                            int rec_result = mAudioRecorder.stop(ml_is_rec_ok);
                             HelperGeneric.logI(TAG, "onCreate:record_audio:finished:res=" + rec_result);
                             if (rec_result == -1)
                             {
@@ -956,6 +963,9 @@ public class MessageListActivity extends AppCompatActivity
                             ml_is_recording = false;
                             ml_is_rec_ok = false;
                         }
+                        // A note an error left running stops here; a stopped one answers at once.
+                        mAudioRecorder.stop(false);
+                        voice_note_recorder.compareAndSet(mAudioRecorder, null);
                         set_recording_pop_visibilty_s(false);
 
                         if (ml_is_rec_ok)
@@ -1970,7 +1980,8 @@ public class MessageListActivity extends AppCompatActivity
         }
 
         sheet.setContentView(content);
-        sheet.show();
+        // KHANDAQ (tester 23.11): whole, not at the peek height, so nothing of it waits below the screen.
+        AttachSheet.showWhole(sheet);
     }
 
     /** KHANDAQ (Figma attach grid): route 1..N picked media Uris into the existing send preview / send flow. */
@@ -2184,8 +2195,8 @@ public class MessageListActivity extends AppCompatActivity
             {
                 return;
             }
-            if (newBody.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-                > HelperMessageEdit.MAX_EDIT_TEXT_BYTES)
+            // KHANDAQ (Khandaq Testers 8253): a note in Saved Messages has no limit; a correction to a contact does.
+            if (HelperMessageEdit.isDirectEditTooLong(friend_pubkey, newBody))
             {
                 AirComposerNotice.say(getString(R.string.chat_edit_too_long), false);
                 return; // edit mode stays active so the user can shorten the text

@@ -16,7 +16,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 /**
  * KHANDAQ (0.2.64): the cryptography and the packets of push previews (docs/PUSH_PREVIEWS.md): the per-contact key
- * K, lossless packet 190 with its two subtypes, the sealed preview and the relay's event id. Pure Java, so that the
+ * K, lossless packet 190 with its subtypes, the sealed preview and the relay's event id. Pure Java, so that the
  * unit tests hold every byte of it against the vectors of the spec.
  */
 final class PushPreviewCrypto
@@ -25,6 +25,8 @@ final class PushPreviewCrypto
     static final int PKT_PUSH_PREVIEW = 190;
     static final byte SUBTYPE_KEY = 0x01;
     static final byte SUBTYPE_GROUP_PRESENCE = 0x02;
+    /** KHANDAQ (0.2.69, group message wakes): the groups whose messages may wake the device that sends it. */
+    static final byte SUBTYPE_GROUP_WAKE = 0x03;
     static final byte PACKET_VERSION = 0x01;
 
     static final int KEY_BYTES = 32;
@@ -119,6 +121,34 @@ final class PushPreviewCrypto
     /** Packet 190/02: BE 02 01 n hash*n, with the first 64 well-formed hashes. */
     static byte[] presencePacket(final List<byte[]> hashes)
     {
+        return hashSetPacket(SUBTYPE_GROUP_PRESENCE, hashes);
+    }
+
+    /** The hashes of packet 190/02 as 32 lowercase hex each (possibly none), or null for a malformed packet. */
+    static List<String> presenceFromPacket(final byte[] data, final int length)
+    {
+        return hashSetFromPacket(SUBTYPE_GROUP_PRESENCE, data, length);
+    }
+
+    // ---- group message wakes ----
+
+    /**
+     * Packet 190/03: BE 03 01 n hash*n, with the first 64 well-formed hashes. KHANDAQ (0.2.69, group message wakes):
+     * the layout of 190/02, so that the two can never drift apart; only the subtype tells them apart.
+     */
+    static byte[] wakePacket(final List<byte[]> hashes)
+    {
+        return hashSetPacket(SUBTYPE_GROUP_WAKE, hashes);
+    }
+
+    /** The hashes of packet 190/03 as 32 lowercase hex each (possibly none), or null for a malformed packet. */
+    static List<String> wakeFromPacket(final byte[] data, final int length)
+    {
+        return hashSetFromPacket(SUBTYPE_GROUP_WAKE, data, length);
+    }
+
+    private static byte[] hashSetPacket(final byte subtype, final List<byte[]> hashes)
+    {
         final List<byte[]> kept = new ArrayList<>();
         if (hashes != null)
         {
@@ -136,7 +166,7 @@ final class PushPreviewCrypto
         }
         final byte[] packet = new byte[4 + kept.size() * PRESENCE_HASH_BYTES];
         packet[0] = (byte) PKT_PUSH_PREVIEW;
-        packet[1] = SUBTYPE_GROUP_PRESENCE;
+        packet[1] = subtype;
         packet[2] = PACKET_VERSION;
         packet[3] = (byte) kept.size();
         for (int i = 0; i < kept.size(); i++)
@@ -146,11 +176,10 @@ final class PushPreviewCrypto
         return packet;
     }
 
-    /** The hashes of packet 190/02 as 32 lowercase hex each (possibly none), or null for a malformed packet. */
-    static List<String> presenceFromPacket(final byte[] data, final int length)
+    private static List<String> hashSetFromPacket(final byte subtype, final byte[] data, final int length)
     {
         if (data == null || length < 4 || data.length < length
-            || data[0] != (byte) PKT_PUSH_PREVIEW || data[1] != SUBTYPE_GROUP_PRESENCE || data[2] != PACKET_VERSION)
+            || data[0] != (byte) PKT_PUSH_PREVIEW || data[1] != subtype || data[2] != PACKET_VERSION)
         {
             return null;
         }

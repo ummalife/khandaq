@@ -123,6 +123,9 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
     ViewGroup layout_message_container;
     /** The author over the file's entry (AirFileEntry draws it); null in a layout without one. */
     TextView file_author;
+    /** KHANDAQ (tester 21.11, 8255): the member's tile beside the entry and the column of the file after it. */
+    AirTileView file_tile;
+    View file_body;
     boolean is_selected = false;
     boolean is_system_message = false;
     ImageView img_corner;
@@ -149,6 +152,8 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
         layout_message_container = (ViewGroup) itemView.findViewById(R.id.layout_message_container);
         img_corner = (ImageView) itemView.findViewById(R.id.img_corner);
         file_author = (TextView) itemView.findViewById(R.id.air_file_author);
+        file_tile = itemView.findViewById(R.id.air_file_tile);
+        file_body = itemView.findViewById(R.id.air_file_body);
 
         ft_preview_container = (ViewGroup) itemView.findViewById(R.id.ft_preview_container);
         ft_preview_image = (ImageButton) itemView.findViewById(R.id.ft_preview_image);
@@ -311,6 +316,8 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
         textView.addAutoLinkMode(AutoLinkMode.MODE_URL, AutoLinkMode.MODE_EMAIL, AutoLinkMode.MODE_HASHTAG,
                                  AutoLinkMode.MODE_MENTION, AutoLinkMode.MODE_CUSTOM);
 
+        // KHANDAQ (tester 21.11, 8255): the name the member's tile takes its initials from; null for none.
+        String tile_name = null;
         try
         {
             String peer_name = tox_group_peer_get_name__wrapper(m.group_identifier, message__tox_peerpubkey);
@@ -330,6 +337,10 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
                 {
                     peer_name = "Unknown";
                 }
+                else
+                {
+                    tile_name = peer_name;
+                }
             }
             else
             {
@@ -342,7 +353,12 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
                     else
                     {
                         peer_name = message__tox_peername;
+                        tile_name = peer_name;
                     }
+                }
+                else
+                {
+                    tile_name = peer_name;
                 }
             }
 
@@ -530,15 +546,28 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
         // KHANDAQ (0.2.58): the entry shows the author in air_file_author (AirFileEntry), not in the views
         // above, which it hides: the name it shows opens the member's profile, by the rule of a text.
         final String author_pubkey = message__tox_peerpubkey;
-        AirTranscript.bindAuthorTap(file_author, layout_message_container,
-                                    GroupMessageListHolder_text_incoming_not_read.should_open_author_profile(
-                                            is_system_message, m, author_pubkey) ? v -> {
-                                        if (!is_selected)
-                                        {
-                                            GroupMessageListActivity.open_group_peer_info_activity(
-                                                    v.getContext(), author_pubkey, m.group_identifier);
-                                        }
-                                    } : null);
+        final View.OnClickListener open_author =
+                GroupMessageListHolder_text_incoming_not_read.should_open_author_profile(is_system_message, m,
+                                                                                         author_pubkey) ? v -> {
+                    if (!is_selected)
+                    {
+                        GroupMessageListActivity.open_group_peer_info_activity(v.getContext(), author_pubkey,
+                                                                               m.group_identifier);
+                    }
+                } : null;
+        AirTranscript.bindAuthorTap(file_author, layout_message_container, open_author);
+
+        // KHANDAQ (tester 21.11, 8255): the member's tile beside the last entry of their run, as beside a text, in the
+        // tone the author takes over this entry (AirFileEntry.bindGroup). A file record never carries a signature, so
+        // one the history brought has the plain tile; AirFileEntry.bindGroup puts the tile again as neighbours change.
+        final boolean author_named = (tile_name != null) && !tile_name.trim().isEmpty() && !"-1".equals(tile_name);
+        final String tone_key = ((m.tox_group_peer_pubkey == null) || m.tox_group_peer_pubkey.isEmpty())
+                                ? tile_name : m.tox_group_peer_pubkey;
+        AirTranscript.bindAuthorTile(file_tile, file_body, layout_message_container, m, this.getAdapterPosition(),
+                                     is_system_message ? null : new AirTranscript.AuthorTile(
+                                             m.id, GroupMessageListHolder_text_incoming_not_read
+                                                     .should_show_plain_author_tile(m, false, author_named),
+                                             tile_name, AirModel.Tone.index(tone_key), open_author));
 
         // --------- peer name (show only if different from previous message) ---------
         // --------- peer name (show only if different from previous message) ---------

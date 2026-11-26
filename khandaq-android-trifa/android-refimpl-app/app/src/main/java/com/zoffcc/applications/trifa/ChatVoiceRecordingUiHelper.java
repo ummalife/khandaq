@@ -1,11 +1,15 @@
 package com.zoffcc.applications.trifa;
 
+import android.content.res.ColorStateList;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
 import org.khandaq.messenger.R;
+
+import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
 
 /**
  * Telegram-style inline voice recording bar (replaces input bar, not fullscreen overlay).
@@ -17,6 +21,15 @@ final class ChatVoiceRecordingUiHelper
         void onSend();
 
         void onCancel();
+
+        /**
+         * KHANDAQ (Khandaq Testers 8249): the pause button was tapped. Pauses a recording that runs or goes on
+         * with a paused one, and says whether it is paused now.
+         */
+        default boolean onTogglePause()
+        {
+            return false;
+        }
     }
 
     private static final float SWIPE_CANCEL_MIN_PX = 120f;
@@ -25,7 +38,12 @@ final class ChatVoiceRecordingUiHelper
     private final View recordingBar;
     private final TextView timerView;
     private final ImageButton sendButton;
+    /** KHANDAQ (Khandaq Testers 8249): pause and resume, while the recording runs hands-free. */
+    private final ImageButton pauseButton;
     private RecordingActionListener actionListener;
+    /** A group records by a tap, hands-free from the start; a 1:1 chat once the recording is locked. */
+    private boolean pauseWhileRecording = false;
+    private boolean locked = false;
     /**
      * KHANDAQ (redesign, stage 2): the one-to-one chat draws this bar with the design system. Its
      * recording dot stays still, as the design system's dots never pulse (the timer running beside it
@@ -39,12 +57,24 @@ final class ChatVoiceRecordingUiHelper
                                        final View recordingBar,
                                        final TextView timerView,
                                        final TextView cancelView,
-                                       final ImageButton sendButton)
+                                       final ImageButton sendButton,
+                                       final ImageButton pauseButton)
     {
         this.inputBar = inputBar;
         this.recordingBar = recordingBar;
         this.timerView = timerView;
         this.sendButton = sendButton;
+        this.pauseButton = pauseButton;
+
+        if (pauseButton != null)
+        {
+            pauseButton.setOnClickListener(v -> {
+                if (actionListener != null)
+                {
+                    setPausedUi(actionListener.onTogglePause());
+                }
+            });
+        }
 
         cancelView.setOnClickListener(v -> {
             if (actionListener != null)
@@ -101,6 +131,7 @@ final class ChatVoiceRecordingUiHelper
         final TextView timerView = emojiBarRoot.findViewById(R.id.voice_recording_timer);
         final TextView cancelView = emojiBarRoot.findViewById(R.id.voice_recording_cancel);
         final ImageButton sendButton = emojiBarRoot.findViewById(R.id.voice_recording_send);
+        final ImageButton pauseButton = emojiBarRoot.findViewById(R.id.voice_recording_pause);
 
         if (inputBar == null || recordingBar == null || timerView == null
                 || cancelView == null || sendButton == null)
@@ -109,7 +140,7 @@ final class ChatVoiceRecordingUiHelper
         }
 
         final ChatVoiceRecordingUiHelper helper = new ChatVoiceRecordingUiHelper(
-                inputBar, recordingBar, timerView, cancelView, sendButton);
+                inputBar, recordingBar, timerView, cancelView, sendButton, pauseButton);
         helper.actionListener = listener;
         return helper;
     }
@@ -122,18 +153,68 @@ final class ChatVoiceRecordingUiHelper
         if (recordingBar != null)
         {
             recordingBar.setVisibility(View.VISIBLE);
-            final View dot = recordingBar.findViewById(R.id.voice_recording_dot);
-            if (dot != null && !airStyle)
-            {
-                final android.view.animation.AlphaAnimation blink =
-                        new android.view.animation.AlphaAnimation(1f, 0.2f);
-                blink.setDuration(600);
-                blink.setRepeatMode(android.view.animation.Animation.REVERSE);
-                blink.setRepeatCount(android.view.animation.Animation.INFINITE);
-                dot.startAnimation(blink);
-            }
         }
+        setPausedUi(false);
+        updatePauseButton();
         setTimerText("0:00");
+    }
+
+    /**
+     * KHANDAQ (Khandaq Testers 8249): a group records by a tap, so its recording can pause from the start; a 1:1
+     * chat holds the mic and can pause once the recording is locked.
+     */
+    void setPauseWhileRecording(final boolean always)
+    {
+        pauseWhileRecording = always;
+        updatePauseButton();
+    }
+
+    /**
+     * KHANDAQ (Khandaq Testers 8249): a paused recording shows the mic, which goes on with it, and a still grey
+     * dot; a running one the two bars and the red dot. TalkBack names what the button does.
+     */
+    void setPausedUi(final boolean paused)
+    {
+        if (pauseButton != null)
+        {
+            pauseButton.setImageResource(paused ? R.drawable.kq_ic_mic : R.drawable.air_voice_ic_pause);
+            pauseButton.setContentDescription(pauseButton.getContext().getString(
+                    paused ? R.string.voice_recording_resume : R.string.voice_recording_pause));
+        }
+        final View dot = (recordingBar == null) ? null : recordingBar.findViewById(R.id.voice_recording_dot);
+        if (dot == null)
+        {
+            return;
+        }
+        dot.clearAnimation();
+        if (paused)
+        {
+            ViewCompat.setBackgroundTintList(dot, ColorStateList.valueOf(
+                    ContextCompat.getColor(dot.getContext(), R.color.kq_ink_3)));
+        }
+        else if (airStyle)
+        {
+            ViewCompat.setBackgroundTintList(dot, ColorStateList.valueOf(
+                    ContextCompat.getColor(dot.getContext(), R.color.kq_danger)));
+        }
+        else
+        {
+            ViewCompat.setBackgroundTintList(dot, null);
+            final android.view.animation.AlphaAnimation blink =
+                    new android.view.animation.AlphaAnimation(1f, 0.2f);
+            blink.setDuration(600);
+            blink.setRepeatMode(android.view.animation.Animation.REVERSE);
+            blink.setRepeatCount(android.view.animation.Animation.INFINITE);
+            dot.startAnimation(blink);
+        }
+    }
+
+    private void updatePauseButton()
+    {
+        if (pauseButton != null)
+        {
+            pauseButton.setVisibility((pauseWhileRecording || locked) ? View.VISIBLE : View.GONE);
+        }
     }
 
     /**
@@ -142,6 +223,8 @@ final class ChatVoiceRecordingUiHelper
      */
     void setLockedUi(final boolean locked)
     {
+        this.locked = locked;
+        updatePauseButton();
         if (sendButton != null)
         {
             if (airStyle)

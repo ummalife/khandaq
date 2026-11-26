@@ -18,6 +18,7 @@
 */
 
 #include "src/widget/tool/chatquotepreview.h"
+#include "src/widget/air/airstrings.h"
 #include "src/widget/air/airstyle.h"
 #include "src/widget/air/airtokens.h"
 #include "src/widget/air/airwidgets.h"
@@ -84,6 +85,7 @@ private slots:
     void showsAReplyOnOneLineUnderWhomItAnswers();
     void aReplyToYourOwnSaysYourselfAndSendsYourName();
     void aReplyAndAQuoteTakeEachOthersPlace();
+    void anEditSaysEditingAndIsNoQuote();
 };
 
 void TestChatQuotePreview::staysHiddenWithoutAQuote()
@@ -296,6 +298,57 @@ void TestChatQuotePreview::aReplyAndAQuoteTakeEachOthersPlace()
     QVERIFY(!column.preview->hasQuote());
     QVERIFY(!column.preview->isReply());
     QCOMPARE(column.preview->accessibleName(), QStringLiteral("Quote"));
+}
+
+/**
+ * KHANDAQ (beta feedback 2026-11-22): a saved message being edited: "Editing" over one line of its
+ * words, which Send does not hand over; the cross cancels it, and a quote takes its place.
+ */
+void TestChatQuotePreview::anEditSaysEditingAndIsNoQuote()
+{
+    using AirStrings::Text;
+    Column column(480);
+    QSignalSpy changed(column.preview, &ChatQuotePreview::changed);
+    column.preview->setEdit(longQuote);
+    QVERIFY(column.preview->isEdit());
+    QVERIFY(!column.preview->hasQuote());
+    QVERIFY(!column.preview->isReply());
+    QVERIFY(column.preview->isVisible());
+    QCOMPARE(changed.count(), 1);
+    QCOMPARE(column.preview->accessibleName(), AirStrings::text(Text::NoteEditing));
+    QCOMPARE(closeOf(column.preview)->toolTip(), AirStrings::text(Text::NoteEditCancel));
+    QCOMPARE(closeOf(column.preview)->accessibleName(), AirStrings::text(Text::NoteEditCancel));
+    QCOMPARE(column.preview->shownLines(480).size(), 1);
+    QCOMPARE(column.preview->heightForWidth(480), heightFor(1));
+
+    // The cross cancels it.
+    QSignalSpy cleared(column.preview, &ChatQuotePreview::cleared);
+    closeOf(column.preview)->click();
+    QCOMPARE(cleared.count(), 1);
+    QVERIFY(!column.preview->isEdit());
+    QVERIFY(!column.preview->isVisible());
+    QCOMPARE(column.preview->accessibleName(), QStringLiteral("Quote"));
+
+    // A quote takes its place, and it a quote's; clearing it from outside takes it away.
+    column.preview->setEdit(QStringLiteral("Buy dates\nand milk"));
+    QCOMPARE(column.preview->quoteText(), QStringLiteral("Buy dates and milk"));
+    column.preview->setQuoteText(QStringLiteral("Материалы к четвергу"));
+    QVERIFY(!column.preview->isEdit());
+    QVERIFY(column.preview->hasQuote());
+    column.preview->setEdit(QStringLiteral("Buy dates"));
+    QVERIFY(column.preview->isEdit());
+    QVERIFY(!column.preview->hasQuote());
+    changed.clear();
+    column.preview->clearQuote();
+    QCOMPARE(changed.count(), 1);
+    QVERIFY(!column.preview->isEdit());
+    QVERIFY(!column.preview->isVisible());
+
+    // Words with nothing to show still say what is being done.
+    column.preview->setEdit(QStringLiteral(" \n "));
+    QVERIFY(column.preview->isEdit());
+    QVERIFY(column.preview->isVisible());
+    QCOMPARE(column.preview->accessibleName(), AirStrings::text(Text::NoteEditing));
 }
 
 int main(int argc, char* argv[])

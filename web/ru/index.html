@@ -309,16 +309,17 @@
                 <a class="btn btn-ink" href="https://testflight.apple.com/join/4ppS8ZN5" data-primary>Открыть TestFlight</a>
               </div>
             </li>
-            <li class="dl-row" id="dl-windows" data-platform="windows" data-cta="Скачать для Windows" data-note="Windows 10 и&nbsp;11, x64. Подписи Authenticode у&nbsp;файла пока нет: проверьте его подпись, как показано ниже.">
+            <li class="dl-row" id="dl-windows" data-platform="windows" data-cta="Скачать для Windows" data-note="Windows 10 и&nbsp;11, x64. Подписи Authenticode у&nbsp;установщика пока нет: проверьте его подпись, как показано ниже.">
               <div class="dl-info">
                 <p class="dl-yours" hidden>Ваше устройство</p>
                 <h3>Windows</h3>
-                <p>Переносимая сборка для Windows 10 и&nbsp;11, x64. Распакуйте архив и&nbsp;запустите <code>Khandaq.exe</code>, установка не&nbsp;нужна.</p>
+                <p>Windows 10 и&nbsp;11, x64. Установщик добавляет Khandaq в&nbsp;меню «Пуск», а&nbsp;удалить его можно в&nbsp;разделе «Параметры &gt; Приложения». Переносимый zip ничего не&nbsp;устанавливает: распакуйте его и&nbsp;запустите <code>Khandaq.exe</code>.</p>
                 <span class="meta">Релиз v0.2.68 на&nbsp;GitHub, GPL-3.0</span>
               </div>
               <div class="dl-actions">
-                <a class="btn btn-ink" href="/downloads/khandaq-windows-x86_64.zip" data-asset="khandaq-windows-x86_64.zip" data-primary>Скачать .zip</a>
-                <a class="btn-quiet" href="/downloads/khandaq-windows-x86_64.zip">Зеркало на&nbsp;khandaq.org</a>
+                <a class="btn btn-ink" href="/downloads/khandaq-windows-installer.exe" data-asset="khandaq-windows-installer.exe" data-primary>Скачать установщик (.exe)</a>
+                <a class="btn btn-plain" href="/downloads/khandaq-windows-x86_64.zip" data-asset="khandaq-windows-x86_64.zip">Переносимый .zip</a>
+                <a class="btn-quiet" href="/downloads/">Зеркало на&nbsp;khandaq.org</a>
               </div>
             </li>
             <li class="dl-row" id="dl-macos" data-platform="macos" data-cta="Скачать для macOS" data-note="Для Mac с&nbsp;Apple Silicon и&nbsp;macOS 11 или новее. Нотаризации пока нет: при первом запуске нужен ещё один шаг.">
@@ -374,10 +375,11 @@
               </div>
             </details>
             <details class="qa">
-              <summary>Windows: предупреждение о&nbsp;неизвестном издателе</summary>
+              <summary>Windows: установщик, переносимый zip и&nbsp;предупреждение о&nbsp;неизвестном издателе</summary>
               <div class="qa-body">
                 <ol>
-                  <li>Проверьте подпись, как показано выше, затем распакуйте архив и&nbsp;запустите <code>Khandaq.exe</code>.</li>
+                  <li>Скачайте установщик и&nbsp;его подпись <code>khandaq-windows-installer.exe.sig</code> и&nbsp;проверьте, как показано выше, в&nbsp;Git Bash: <code>ssh-keygen -Y verify -f allowed_signers -I releases@khandaq.org -n khandaq-release -s khandaq-windows-installer.exe.sig &lt; khandaq-windows-installer.exe</code>. Затем запустите его. Он попросит права администратора, установит Khandaq в&nbsp;Program Files и&nbsp;добавит в&nbsp;меню «Пуск»; на&nbsp;последней странице есть галочка для ярлыка на&nbsp;рабочем столе. Удалить Khandaq можно в&nbsp;разделе «Параметры &gt; Приложения».</li>
+                  <li>Нет прав администратора или не&nbsp;хотите ничего устанавливать? Возьмите переносимый zip: проверьте его подпись так&nbsp;же, распакуйте и&nbsp;запустите <code>Khandaq.exe</code>. Он откроет тот&nbsp;же профиль, что и&nbsp;установленное приложение, если вы не&nbsp;включали в&nbsp;его настройках <strong>Хранить профиль рядом с&nbsp;приложением</strong>.</li>
                   <li>Windows предупредит, что издатель неизвестен: у&nbsp;сборки для компьютера <strong>пока нет подписи Authenticode</strong>, и&nbsp;мы не&nbsp;будем делать вид, что это нормально. Подлинность файла подтверждает проверка подписи. Предупреждение Windows говорит правду: сама Windows проверить это за&nbsp;вас не&nbsp;может.</li>
                   <li>Мы не&nbsp;просим добавлять исключения в&nbsp;антивирус. Если антивирус ругается на&nbsp;файл, подпись которого сошлась, напишите нам: такое ложное срабатывание стоит разобрать, а&nbsp;не&nbsp;отключать.</li>
                 </ol>
@@ -583,8 +585,8 @@
       var gh = 'https://github.com/ummalife/khandaq/releases/download/' + release + '/';
       // The files a release publishes. A link names its file in data-asset, and only a name on this list
       // becomes a GitHub address, so nothing read from the page goes into an href as it is.
-      var files = ['khandaq-windows-x86_64.zip', 'khandaq-macos.zip', 'khandaq-messenger_amd64.deb',
-        'khandaq-linux-x86_64-portable.tar.gz', 'SHA256SUMS.txt'];
+      var files = ['khandaq-windows-installer.exe', 'khandaq-windows-x86_64.zip', 'khandaq-macos.zip',
+        'khandaq-messenger_amd64.deb', 'khandaq-linux-x86_64-portable.tar.gz', 'SHA256SUMS.txt'];
       var links = document.querySelectorAll('[data-asset]');
       for (var i = 0; i < links.length; i++) {
         var wanted = links[i].getAttribute('data-asset');

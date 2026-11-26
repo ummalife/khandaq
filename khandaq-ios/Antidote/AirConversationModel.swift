@@ -146,6 +146,17 @@ enum AirTranscript {
         return entry.date.timeIntervalSince(previous.date) > runGap
     }
 
+    /// KHANDAQ (tester 21.11, 8255): an entry closes its run, and shows the tile of its author, unless the entry
+    /// after it in reading order goes on with the run: the last entry, one followed by the unread band
+    /// (`nextUnderBand`), and one after which a run starts close their runs.
+    static func endsRun(_ entry: AirRunKey, before next: AirRunKey?, nextUnderBand: Bool = false,
+                        calendar: Calendar = Calendar.current) -> Bool {
+        guard let next = next else {
+            return true
+        }
+        return nextUnderBand || startsRun(next, after: entry, calendar: calendar)
+    }
+
     /// The first word of a name: the author label and the hints say "Amina", not "Amina Safina".
     static func shortName(_ name: String) -> String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -104,6 +104,7 @@ private slots:
     void aNameFromTheSenderStaysInItsFolder();
     void aFileThatComesIsWrittenToItsPartUntilWhole();
     void aFileThatStartsAgainGetsAFreePartBeside();
+    void moreFilesJoinTheListOnce();
     void theirFileWaitsForAcceptOrDecline();
     void ourFileWaitsForTheOtherSide();
     void aMovingFileSaysWhatIsLeft();
@@ -255,6 +256,26 @@ void TestAirMedia::aFileThatStartsAgainGetsAFreePartBeside()
     QCOMPARE(Air::freePartPath(path, taken),
              Air::partFilePath(folder + QStringLiteral("/lecture (2).mkv")));
     QCOMPARE(Air::freePartPath(QString(), taken), QString());
+}
+
+/**
+ * KHANDAQ (beta feedback 2026-11-22): Add more in the dialog before sending: the files listed stay
+ * in their order and those chosen follow them, each file once, however its path is written.
+ */
+void TestAirMedia::moreFilesJoinTheListOnce()
+{
+    const QString photo = QStringLiteral("/home/maryam/Pictures/photo.jpg");
+    const QString notes = QStringLiteral("/home/maryam/Documents/notes.pdf");
+    const QString plan = QStringLiteral("/home/maryam/Documents/plan.txt");
+    const QStringList listed{photo, notes};
+
+    QCOMPARE(Air::withMoreFiles(listed, {}), listed);
+    QCOMPARE(Air::withMoreFiles(listed, {plan}), (QStringList{photo, notes, plan}));
+    // Chosen again, also as another way of writing it, or twice in one choice: listed once.
+    const QString notesAgain = QStringLiteral("/home/maryam/Documents/./../Documents/notes.pdf");
+    QCOMPARE(Air::withMoreFiles(listed, {notesAgain, plan, plan, QString(), photo}),
+             (QStringList{photo, notes, plan}));
+    QCOMPARE(Air::withMoreFiles({}, {plan, notes}), (QStringList{plan, notes}));
 }
 
 void TestAirMedia::theirFileWaitsForAcceptOrDecline()

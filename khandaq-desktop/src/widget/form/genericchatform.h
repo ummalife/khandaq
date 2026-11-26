@@ -111,7 +111,8 @@ public slots:
 protected slots:
     void onChatContextMenuRequested(QPoint pos);
     virtual void onScreenshotClicked() = 0;
-    void onSendTriggered();
+    /** Enter or Send: the field goes. KHANDAQ (beta feedback 2026-11-22): a form may take it. */
+    virtual void onSendTriggered();
     virtual void onAttachClicked() = 0;
     virtual void onPasteFiles(const QStringList& paths);
     /**
@@ -255,6 +256,12 @@ protected:
      * sendPreparedFiles takes them, with its checks. A picture pasted waits over the field instead.
      */
     void offerFiles(const QStringList& paths);
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): Add more of that dialog: the system dialog again, in the
+     * folder of the last file listed; the files chosen there join those listed, and they are asked
+     * about again as files pasted or dropped are (onPasteFiles). None chosen asks about the same.
+     */
+    void addMoreFiles(const QStringList& listed);
     /**
      * KHANDAQ (beta ideas 2026-11-20): web addresses dropped on the conversation go into the field
      * at its cursor, to be sent with Enter like anything typed there.

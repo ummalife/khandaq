@@ -672,7 +672,15 @@ typedef NS_ENUM(NSInteger, OCTNgcSentFileLookupStep) {
     [self appendFilename:fileName toData:packet];
     [packet appendData:fileData];
 
-    return [self sendPacedPacket:packet groupNumber:groupNumber msgIdHex:msgIdHex error:error];
+    if (! [self sendPacedPacket:packet groupNumber:groupNumber msgIdHex:msgIdHex error:error]) {
+        return NO;
+    }
+
+    void (^offerSent)(uint32_t, NSString *, NSString *) = self.offerSentBlock;
+    if (offerSent) {
+        offerSent(groupNumber, msgIdHex, fileName);
+    }
+    return YES;
 }
 
 - (BOOL)sendChunkedFileAtPath:(NSString *)filePath
@@ -704,6 +712,11 @@ typedef NS_ENUM(NSInteger, OCTNgcSentFileLookupStep) {
 
     if (! [self sendPacedPacket:beginPacket groupNumber:groupNumber msgIdHex:msgIdHex error:error]) {
         return endUpload(NO);
+    }
+
+    void (^offerSent)(uint32_t, NSString *, NSString *) = self.offerSentBlock;
+    if (offerSent) {
+        offerSent(groupNumber, msgIdHex, fileName);
     }
 
     NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:filePath];

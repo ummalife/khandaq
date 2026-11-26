@@ -25,6 +25,7 @@
 
 #include <QByteArray>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
 #include <functional>
@@ -112,6 +113,13 @@ QString wholeFilePath(const QString& path);
  * it goes to, where neither that file nor its part is taken. Empty for an empty name.
  */
 QString freePartPath(const QString& path, const std::function<bool(const QString&)>& taken);
+
+/**
+ * KHANDAQ (beta feedback 2026-11-22): the files the dialog before sending lists once Add more chose
+ * more: those listed, in their order, then each one chosen that is not among them yet, in the order
+ * the system dialog gave them. A path written another way ("a/./b") is the same file.
+ */
+QStringList withMoreFiles(const QStringList& listed, const QStringList& chosen);
 
 /** What a file entry offers, in the order it shows them. */
 enum class FileAction

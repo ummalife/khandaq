@@ -3,8 +3,10 @@
     KHANDAQ (redesign, stage 2): the transcript of the conversation with one person. The surface of the
     screen with no wallpaper under it; the day floats over the top edge while the list scrolls. Every id
     and onClick handler of the old layout except the wallpaper is kept.
+    KHANDAQ (Khandaq Testers 8251): the list dragged down takes the keyboard down with it
+    (ChatKeyboardPullLayout, a RelativeLayout as before).
 -->
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.zoffcc.applications.trifa.ChatKeyboardPullLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -69,4 +71,4 @@
         app:srcCompat="@drawable/kq_ic_chevron_down"
         app:tint="@color/kq_ink_2" />
 
-</RelativeLayout>
+</com.zoffcc.applications.trifa.ChatKeyboardPullLayout>

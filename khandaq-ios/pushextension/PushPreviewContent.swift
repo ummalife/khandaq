@@ -22,6 +22,9 @@ struct PushPreview: Equatable {
     var senderName: String?
     var groupName: String?
     var groupId: String?
+    /// KHANDAQ (0.2.69, group message wakes): `gp`, the sender's key in the group (64 uppercase hex), which a group
+    /// text that had to wait carries in place of an event key.
+    var groupPeerKey: String?
     var sentAt: TimeInterval
     var eventKey: String?
 }
@@ -90,8 +93,45 @@ enum PushPreviewCrypto {
                            senderName: text("n", limit: 64),
                            groupName: text("g", limit: 64),
                            groupId: groupId,
+                           groupPeerKey: peerKey(fields["gp"]),
                            sentAt: (fields["ts"] as? NSNumber)?.doubleValue ?? 0,
                            eventKey: text("h", limit: 200))
+    }
+
+    /// KHANDAQ (0.2.69, group message wakes): a member key as `gp` gives it, exactly 64 hex digits, in upper case; nil
+    /// for anything else, so that a value cut short or padded never stands for a key.
+    static func peerKey(_ value: Any?) -> String? {
+        guard let key = value as? String, key.utf8.count == 64, key.utf8.allSatisfy({ byte in
+            (byte >= 0x30 && byte <= 0x39) || (byte >= 0x41 && byte <= 0x46) || (byte >= 0x61 && byte <= 0x66)
+        }) else {
+            return nil
+        }
+        return key.uppercased()
+    }
+
+    /// KHANDAQ (0.2.69, group message wakes): what a text says, on one line: CR LF, LF and CR each as a space, then
+    /// trimmed.
+    static func oneLine(_ text: String) -> String {
+        return text.replacingOccurrences(of: "\r\n", with: " ", options: .literal)
+            .replacingOccurrences(of: "\n", with: " ", options: .literal)
+            .replacingOccurrences(of: "\r", with: " ", options: .literal)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /**
+     * KHANDAQ (0.2.69, group message wakes): the mark of a group text by what it says (docs/PUSH_PREVIEWS.md, "Group
+     * message wakes"): 32 lowercase hex, the first 16 bytes of SHA-256 over the UTF-8 of the sender's key in the
+     * group in upper case, a line feed and the text on one line. The push extension puts it in `khq_tm` for a text
+     * that had to wait, whose preview has no event key; the app computes it for a group text that comes over Tox, and
+     * the two meet. Nil for a key that is not 64 hex or a text with nothing on its line.
+     */
+    static func textMark(senderKey: String, text: String) -> String? {
+        let said = oneLine(text)
+        guard let key = peerKey(senderKey), !said.isEmpty else {
+            return nil
+        }
+        let digest = SHA256.hash(data: Data((key + "\n" + said).utf8))
+        return digest.prefix(16).map { String(format: "%02x", $0) }.joined()
     }
 
     static func data(fromHex hex: String) -> Data? {
@@ -423,6 +463,14 @@ enum PushPreviewPresenter {
         }
         if let groupId = preview.groupId {
             info["khq_gid"] = groupId
+        }
+        // KHANDAQ (0.2.69, group message wakes): a group text that had to wait on the sender's device has no event
+        // key, since toxcore gives a text its id only when it goes; it names the sender's key in the group instead,
+        // and the app knows the text by that key and what it says when it comes over Tox.
+        if preview.groupId != nil, preview.kind == .text, preview.eventKey == nil,
+           let senderKey = preview.groupPeerKey, let body = preview.body,
+           let mark = PushPreviewCrypto.textMark(senderKey: senderKey, text: body) {
+            info["khq_tm"] = mark
         }
         content.userInfo = info
         return true

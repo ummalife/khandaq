@@ -19,6 +19,8 @@
 
 // KHANDAQ (beta ideas 2026-11-20): where "Unread messages" stands when a conversation opens with
 // unread entries (ChatWidget::firstUnreadIdx), and the room its line takes (ChatLine::AirUnread).
+// KHANDAQ (beta feedback 2026-11-22): and which new entry takes the transcript to its foot, one we
+// sent from here (ChatWidget::sentFromHere).
 
 #include "src/chatlog/chatline.h"
 #include "src/chatlog/chatwidget.h"
@@ -114,6 +116,7 @@ private slots:
     void oneOfOursFromBeforeEndsTheSearch();
     void looksBackNoFurtherThanItsLimit();
     void theLineTakesTheRoomOfItsWordsAtTheTextColumn();
+    void onlyWhatWeSendFromHereTakesTheTranscriptToItsFoot();
 
 private:
     ChatLogIdx received(const ToxPk& sender, const QString& text,
@@ -358,6 +361,63 @@ void TestUnreadMark::theLineTakesTheRoomOfItsWordsAtTheTextColumn()
     QVERIFY(!line.getContent(2)->isVisible());
     QCOMPARE(line.getContent(0)->getText(), QString());
     QCOMPARE(line.getContent(0)->getSpokenText(), QStringLiteral("Unread messages"));
+}
+
+/**
+ * @brief A text, a file or a voice note we send is new to the log under our key: the transcript
+ * shows its foot. What others send, the news of a group, ours that a group relays under our key in
+ * it, a file of ours that goes on from before, and a change to an entry already told of are not.
+ */
+void TestUnreadMark::onlyWhatWeSendFromHereTakesTheTranscriptToItsFoot()
+{
+    const ToxPk self = idHandler.getSelfPublicKey();
+    const ToxPk groupSelf = keyOf(0x33);
+    const auto takesTheFoot = [this, &self](ChatLogIdx idx, ChatLogIdx knownEnd) {
+        return ChatWidget::sentFromHere(*log, idx, knownEnd, self);
+    };
+
+    const ChatLogIdx theirs = received(maryam, QStringLiteral("Assalamu alaykum"));
+    QVERIFY(!takesTheFoot(theirs, theirs));
+    const ChatLogIdx ours = sent(QStringLiteral("Wa alaykum assalam"));
+    QVERIFY(takesTheFoot(ours, ours));
+    // Told of again (delivered, edited): no new entry.
+    QVERIFY(!takesTheFoot(ours, ours + 1));
+
+    ToxFile photo(2, 0, QStringLiteral("photo.jpg"), QString(), 4096, ToxFile::SENDING);
+    photo.status = ToxFile::INITIALIZING;
+    const ChatLogIdx file = log->getNextIdx();
+    log->onFileUpdated(self, photo);
+    QCOMPARE(log->at(file).getContentType(), ChatLogItem::ContentType::fileTransfer);
+    QVERIFY(takesTheFoot(file, file));
+    ToxFile route(3, 0, QStringLiteral("route.pdf"), QString(), 2048, ToxFile::RECEIVING);
+    route.status = ToxFile::INITIALIZING;
+    const ChatLogIdx theirFile = log->getNextIdx();
+    log->onFileUpdated(maryam, route);
+    QVERIFY(!takesTheFoot(theirFile, theirFile));
+    // A file of ours that goes on from before, whose entry of then the log does not hold.
+    ToxFile resumed(4, 0, QStringLiteral("video.mp4"), QString(), 8192, ToxFile::SENDING);
+    resumed.status = ToxFile::INITIALIZING;
+    resumed.continued = true;
+    resumed.resumeFileId = QByteArray(32, '\x07');
+    const ChatLogIdx goesOn = log->getNextIdx();
+    log->onFileUpdated(self, resumed);
+    QCOMPARE(log->getNextIdx(), goesOn + 1);
+    QVERIFY(!takesTheFoot(goesOn, goesOn));
+
+    // Ours, relayed from the history of a group under our key in it.
+    const QDateTime anHourAgo = QDateTime::currentDateTime().addSecs(-3600);
+    const ChatLogIdx relayed = log->getNextIdx();
+    log->onRelayedMessageReceived(groupSelf, QStringLiteral("Isa"),
+                                  textAt(QStringLiteral("I bring the tent"), anHourAgo));
+    QVERIFY(!takesTheFoot(relayed, relayed));
+    SystemMessage joined;
+    joined.messageType = SystemMessageType::userJoinedGroup;
+    joined.timestamp = QDateTime::currentDateTime();
+    const ChatLogIdx news = log->getNextIdx();
+    log->addSystemMessage(joined);
+    QVERIFY(!takesTheFoot(news, news));
+    // An index the log does not hold.
+    QVERIFY(!takesTheFoot(log->getNextIdx(), log->getNextIdx()));
 }
 
 QTEST_MAIN(TestUnreadMark)

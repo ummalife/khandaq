@@ -82,6 +82,8 @@ private slots:
     void aNoteStopsAtItsLimitAndWaits();
     void aClosedFormTakesItsNoteWithIt();
     void anUnpluggedMicrophoneKeepsTheNote();
+    void aPausedNoteLeavesOutWhatItHears();
+    void onlyANoteWithItsMicrophoneOpenPauses();
 };
 
 /**
@@ -249,6 +251,113 @@ void TestAirVoiceRecorder::anUnpluggedMicrophoneKeepsTheNote()
     QCOMPARE(recorder.elapsedMs(), qint64{2000});
     const AirVoiceDecoder::Pcm pcm = recorder.finish();
     QCOMPARE(pcm.samples.size(), size_t{96000});
+}
+
+/**
+ * KHANDAQ (beta feedback 2026-11-22): a pause keeps the microphone open and leaves out what it
+ * hears; the note goes on after it as one stretch of sound, and its time stops meanwhile.
+ */
+void TestAirVoiceRecorder::aPausedNoteLeavesOutWhatItHears()
+{
+    AirVoiceRecorder recorder;
+    QObject form;
+    bool closed = false;
+    auto* const microphone = new FakeMicrophone(&closed);
+    QVERIFY(recorder.start(&form, own(microphone)));
+    QVERIFY(!recorder.isPaused());
+    QVERIFY(recorder.canPause());
+    // A second, then a second and a half while paused, then half a second more.
+    for (int i = 0; i < 50; ++i) {
+        microphone->say(960, 48000, {100});
+    }
+    QVERIFY(recorder.setPaused(true));
+    QVERIFY(recorder.isPaused());
+    QVERIFY(!recorder.setPaused(true));
+    for (int i = 0; i < 75; ++i) {
+        microphone->say(960, 48000, {-700});
+    }
+    QVERIFY(!closed);
+    QVERIFY(recorder.isRecordingFor(&form));
+    QCOMPARE(recorder.elapsedMs(), qint64{1000});
+    QVERIFY(recorder.setPaused(false));
+    QVERIFY(!recorder.isPaused());
+    QVERIFY(!recorder.setPaused(false));
+    for (int i = 0; i < 25; ++i) {
+        microphone->say(960, 48000, {300});
+    }
+    QCOMPARE(recorder.elapsedMs(), qint64{1500});
+
+    const AirVoiceDecoder::Pcm pcm = recorder.finish();
+    QVERIFY(closed);
+    QCOMPARE(pcm.sampleRate, 48000);
+    QCOMPARE(pcm.samples.size(), size_t{72000});
+    const auto pivot = pcm.samples.begin() + 48000;
+    QVERIFY(std::all_of(pcm.samples.begin(), pivot, [](int16_t sample) { return sample == 100; }));
+    QVERIFY(std::all_of(pivot, pcm.samples.end(), [](int16_t sample) { return sample == 300; }));
+    QVERIFY(!recorder.isPaused());
+
+    // A note paused from its start takes the rate of the first frame after the pause.
+    bool nextClosed = false;
+    auto* const next = new FakeMicrophone(&nextClosed);
+    QVERIFY(recorder.start(&form, own(next)));
+    QVERIFY(recorder.setPaused(true));
+    next->say(882, 44100, {500});
+    QCOMPARE(recorder.elapsedMs(), qint64{0});
+    QVERIFY(recorder.setPaused(false));
+    next->say(960, 48000, {500});
+    QCOMPARE(recorder.elapsedMs(), qint64{20});
+    // Cancelled while paused: the next note starts unpaused.
+    QVERIFY(recorder.setPaused(true));
+    recorder.cancel();
+    QVERIFY(nextClosed);
+    QVERIFY(!recorder.isPaused());
+    bool lastClosed = false;
+    QVERIFY(recorder.start(&form, own(new FakeMicrophone(&lastClosed))));
+    QVERIFY(!recorder.isPaused());
+    recorder.cancel();
+}
+
+/**
+ * No note, a note at its limit (the microphone closed) and a note whose microphone went away have
+ * nothing to pause; a paused note whose microphone goes away is no longer paused.
+ */
+void TestAirVoiceRecorder::onlyANoteWithItsMicrophoneOpenPauses()
+{
+    AirVoiceRecorder recorder;
+    QObject form;
+    QVERIFY(!recorder.canPause());
+    QVERIFY(!recorder.setPaused(true));
+    QVERIFY(!recorder.isPaused());
+
+    bool closed = false;
+    auto* const microphone = new FakeMicrophone(&closed);
+    QSignalSpy limit(&recorder, &AirVoiceRecorder::limitReached);
+    QVERIFY(recorder.start(&form, own(microphone)));
+    const qint64 seconds = AirVoiceRecorder::longestMs / 1000;
+    for (qint64 i = 0; i < seconds; ++i) {
+        microphone->say(8000, 8000, {700});
+    }
+    QVERIFY(limit.wait(2000));
+    QVERIFY(closed);
+    QVERIFY(recorder.isRecordingFor(&form));
+    QVERIFY(!recorder.canPause());
+    QVERIFY(!recorder.setPaused(true));
+    QVERIFY(!recorder.isPaused());
+    recorder.cancel();
+
+    bool unplugged = false;
+    auto* const second = new FakeMicrophone(&unplugged);
+    QSignalSpy lost(&recorder, &AirVoiceRecorder::lost);
+    QVERIFY(recorder.start(&form, own(second)));
+    second->say(960, 48000, {300});
+    QVERIFY(recorder.setPaused(true));
+    second->unplug();
+    QVERIFY(lost.wait(2000));
+    QVERIFY(unplugged);
+    QVERIFY(!recorder.isPaused());
+    QVERIFY(!recorder.canPause());
+    QVERIFY(!recorder.setPaused(false));
+    QCOMPARE(recorder.finish().samples.size(), size_t{960});
 }
 
 QTEST_GUILESS_MAIN(TestAirVoiceRecorder)

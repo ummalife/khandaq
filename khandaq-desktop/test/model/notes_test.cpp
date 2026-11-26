@@ -62,7 +62,8 @@ QDateTime at(int minute)
 
 /**
  * Saved Messages: a note deleted where the log shows it leaves the database and the log, and only
- * that note; the indexes of the others stay where they are.
+ * that note; the indexes of the others stay where they are. KHANDAQ (beta feedback 2026-11-22): a
+ * note edited takes its new words in the log and the database, marked "edited" after a restart too.
  */
 class TestNotes : public QObject
 {
@@ -74,6 +75,11 @@ private slots:
     void aNoteWrittenNowCanBeDeletedToo();
     void onlyANoteCanBeDeletedAndOnlyOnce();
     void withoutADatabaseANoteIsOnlyHidden();
+    void anEditedNoteKeepsItsWordsAfterARestart();
+    void aNoteWrittenNowCanBeEditedToo();
+    void anEditMakesAnActionOrUndoesOne();
+    void onlyANoteTakesAnEditAndOnlyWithNewWords();
+    void withoutADatabaseAnEditStaysUntilTheAppQuits();
 
 private:
     std::unique_ptr<SessionChatLog> open(SavedNotes* notes);
@@ -192,6 +198,132 @@ void TestNotes::withoutADatabaseANoteIsOnlyHidden()
     QVERIFY(dispatcher->hasNote(ChatLogIdx(0)));
     QVERIFY(dispatcher->removeNote(ChatLogIdx(0)));
     QVERIFY(!log->isShown(ChatLogIdx(0)));
+    QVERIFY(notes->all().isEmpty());
+}
+
+void TestNotes::anEditedNoteKeepsItsWordsAfterARestart()
+{
+    notes->add(at(1), QStringLiteral("Buy dates"));
+    notes->add(at(2), QStringLiteral("Call the library"));
+    const auto log = open(notes.get());
+    QSignalSpy updated(log.get(), &IChatLog::itemUpdated);
+    QCOMPARE(dispatcher->editableText(ChatLogIdx(1)), QStringLiteral("Call the library"));
+
+    const QString atNine = QStringLiteral("Call the library at nine");
+    QVERIFY(dispatcher->editNote(ChatLogIdx(1), false, atNine));
+    QCOMPARE(updated.count(), 1);
+    QCOMPARE(qvariant_cast<ChatLogIdx>(updated[0][0]), ChatLogIdx(1));
+    const ChatLogMessage& edited = log->at(ChatLogIdx(1)).getContentAsMessage();
+    QCOMPARE(edited.message.content, atNine);
+    QVERIFY(!edited.message.isAction);
+    QVERIFY(edited.marks.edited);
+    QVERIFY(edited.marks.editedAt > 0);
+    QVERIFY(!log->at(ChatLogIdx(0)).getContentAsMessage().marks.edited);
+    QCOMPARE(dispatcher->editableText(ChatLogIdx(1)), atNine);
+    const SearchPos start{ChatLogIdx(0), 0};
+    QVERIFY(log->searchForward(start, QStringLiteral("nine"), ParameterSearch()).found);
+
+    // The next start: the database keeps the words and when they changed, and the note its place.
+    SavedNotes reopened{db};
+    const auto stored = reopened.all();
+    QCOMPARE(stored.size(), 2);
+    QCOMPARE(stored[0].text, QStringLiteral("Buy dates"));
+    QVERIFY(!stored[0].editedAt.isValid());
+    QCOMPARE(stored[1].text, atNine);
+    QCOMPARE(stored[1].timestamp, at(2));
+    QVERIFY(stored[1].editedAt.isValid());
+    const quint32 editedAt = edited.marks.editedAt;
+    const auto restarted = open(&reopened);
+    const ChatLogMessage& shown = restarted->at(ChatLogIdx(1)).getContentAsMessage();
+    QCOMPARE(shown.message.content, atNine);
+    QCOMPARE(shown.message.timestamp, at(2));
+    QVERIFY(shown.marks.edited);
+    QCOMPARE(shown.marks.editedAt, editedAt);
+    QVERIFY(!restarted->at(ChatLogIdx(0)).getContentAsMessage().marks.edited);
+    // It is still a note: edited again, or deleted.
+    QVERIFY(dispatcher->editNote(ChatLogIdx(1), false, QStringLiteral("Library: done")));
+    QVERIFY(dispatcher->removeNote(ChatLogIdx(0)));
+    SavedNotes again{db};
+    const auto left = again.all();
+    QCOMPARE(left.size(), 1);
+    QCOMPARE(left[0].text, QStringLiteral("Library: done"));
+}
+
+void TestNotes::aNoteWrittenNowCanBeEditedToo()
+{
+    const auto log = open(notes.get());
+    dispatcher->sendMessage(false, QStringLiteral("Bring the book back"));
+    QVERIFY(dispatcher->editNote(ChatLogIdx(0), false, QStringLiteral("Bring both books back")));
+    QCOMPARE(log->at(ChatLogIdx(0)).getContentAsMessage().message.content,
+             QStringLiteral("Bring both books back"));
+
+    SavedNotes reopened{db};
+    const auto stored = reopened.all();
+    QCOMPARE(stored.size(), 1);
+    QCOMPARE(stored[0].text, QStringLiteral("Bring both books back"));
+    QVERIFY(stored[0].editedAt.isValid());
+}
+
+void TestNotes::anEditMakesAnActionOrUndoesOne()
+{
+    notes->add(at(1), NotesDispatcher::storedText(true, QStringLiteral("waves")));
+    notes->add(at(2), QStringLiteral("Buy dates"));
+    const auto log = open(notes.get());
+    // The field takes an action as it is typed.
+    QCOMPARE(dispatcher->editableText(ChatLogIdx(0)),
+             NotesDispatcher::storedText(true, QStringLiteral("waves")));
+
+    QVERIFY(dispatcher->editNote(ChatLogIdx(0), false, QStringLiteral("waves back")));
+    QVERIFY(dispatcher->editNote(ChatLogIdx(1), true, QStringLiteral("buys dates")));
+    QVERIFY(!log->at(ChatLogIdx(0)).getContentAsMessage().message.isAction);
+    QVERIFY(log->at(ChatLogIdx(1)).getContentAsMessage().message.isAction);
+    // The kind alone is a change too.
+    QVERIFY(dispatcher->editNote(ChatLogIdx(1), false, QStringLiteral("buys dates")));
+    QVERIFY(dispatcher->editNote(ChatLogIdx(1), true, QStringLiteral("buys dates")));
+
+    SavedNotes reopened{db};
+    const auto restarted = open(&reopened);
+    const Message& first = restarted->at(ChatLogIdx(0)).getContentAsMessage().message;
+    const Message& second = restarted->at(ChatLogIdx(1)).getContentAsMessage().message;
+    QVERIFY(!first.isAction);
+    QCOMPARE(first.content, QStringLiteral("waves back"));
+    QVERIFY(second.isAction);
+    QCOMPARE(second.content, QStringLiteral("buys dates"));
+}
+
+void TestNotes::onlyANoteTakesAnEditAndOnlyWithNewWords()
+{
+    notes->add(at(1), QStringLiteral("Buy dates"));
+    notes->add(at(2), QStringLiteral("Call the library"));
+    const auto log = open(notes.get());
+    QSignalSpy updated(log.get(), &IChatLog::itemUpdated);
+
+    QCOMPARE(dispatcher->editableText(ChatLogIdx(5)), QString());
+    QVERIFY(!dispatcher->editNote(ChatLogIdx(5), false, QStringLiteral("Buy figs")));
+    QVERIFY(!dispatcher->editNote(ChatLogIdx(0), false, QStringLiteral(" \n ")));
+    QVERIFY(!dispatcher->editNote(ChatLogIdx(0), false, QStringLiteral("Buy dates")));
+    QCOMPARE(updated.count(), 0);
+    QVERIFY(!log->at(ChatLogIdx(0)).getContentAsMessage().marks.edited);
+
+    QVERIFY(dispatcher->removeNote(ChatLogIdx(1)));
+    QCOMPARE(dispatcher->editableText(ChatLogIdx(1)), QString());
+    QVERIFY(!dispatcher->editNote(ChatLogIdx(1), false, QStringLiteral("Call at nine")));
+
+    SavedNotes reopened{db};
+    const auto stored = reopened.all();
+    QCOMPARE(stored.size(), 1);
+    QCOMPARE(stored[0].text, QStringLiteral("Buy dates"));
+    QVERIFY(!stored[0].editedAt.isValid());
+}
+
+void TestNotes::withoutADatabaseAnEditStaysUntilTheAppQuits()
+{
+    const auto log = open(nullptr);
+    dispatcher->sendMessage(false, QStringLiteral("Buy dates"));
+    QVERIFY(dispatcher->editNote(ChatLogIdx(0), false, QStringLiteral("Buy figs")));
+    QCOMPARE(log->at(ChatLogIdx(0)).getContentAsMessage().message.content,
+             QStringLiteral("Buy figs"));
+    QVERIFY(log->at(ChatLogIdx(0)).getContentAsMessage().marks.edited);
     QVERIFY(notes->all().isEmpty());
 }
 

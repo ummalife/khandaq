@@ -29,6 +29,7 @@ static NSString *const kOCTPushPreviewAllowedAccount = @"allow";
 /// Where the keys contacts sent us are kept, one item per contact (account = their public key).
 static NSString *const kOCTPushPreviewPeerService = @"org.khandaq.push.preview.peer";
 static NSString *const kOCTGroupPresenceDefaultsPrefix = @"khandaq.groupPresence.";
+static NSString *const kOCTGroupWakeDefaultsPrefix = @"khandaq.groupWake.";
 /// M once read or made in this process; resetAll drops it with the stored one.
 static NSData *sOCTPushPreviewMasterKey = nil;
 
@@ -36,11 +37,13 @@ enum {
     kOCTPushPreviewPacketId = 190,
     kOCTPushPreviewSubtypeKey = 0x01,
     kOCTPushPreviewSubtypePresence = 0x02,
+    kOCTPushPreviewSubtypeWake = 0x03,
     kOCTPushPreviewPacketVersion = 0x01,
     kOCTPushPreviewSealVersion = 0x01,
     kOCTPushPreviewKeyLength = 32,
     kOCTPushPreviewPublicKeyLength = 32,
     kOCTPushPreviewChatIdLength = 32,
+    kOCTPushPreviewGroupFileIdLength = 32,
     kOCTPushPreviewPresenceHashLength = 16,
     kOCTPushPreviewPresenceMaxHashes = 64,
     kOCTPushPreviewNonceLength = 12,
@@ -213,7 +216,7 @@ static NSString *OCTPushPreviewJSONString(NSString *value)
 /// compare them).
 static NSData *OCTPushPreviewSerialize(NSDictionary<NSString *, id> *fields)
 {
-    NSArray<NSString *> *order = @[@"v", @"k", @"b", @"rk", @"e", @"n", @"g", @"gid", @"ts", @"h"];
+    NSArray<NSString *> *order = @[@"v", @"k", @"b", @"rk", @"e", @"n", @"g", @"gid", @"gp", @"ts", @"h"];
     NSMutableString *json = [NSMutableString stringWithString:@"{"];
     BOOL first = YES;
     for (NSString *name in order) {
@@ -236,6 +239,89 @@ static NSData *OCTPushPreviewSerialize(NSDictionary<NSString *, id> *fields)
     }
     [json appendString:@"}"];
     return [json dataUsingEncoding:NSUTF8StringEncoding];
+}
+
+#pragma mark - Hash lists
+
+/// KHANDAQ (0.2.69, group message wakes): `BE <subtype> 01 <n> <n × 16-byte hashes>`, the shape 190/02 and 190/03
+/// share: the first 64 well-formed `hashes`.
+static NSData *OCTPushPreviewHashListPacket(uint8_t subtype, NSArray<NSString *> *hashes)
+{
+    NSMutableData *body = [NSMutableData new];
+    uint8_t count = 0;
+    for (NSString *hash in hashes) {
+        if (count == kOCTPushPreviewPresenceMaxHashes) {
+            break;
+        }
+        NSData *bytes = OCTPushPreviewDataFromHex(hash, kOCTPushPreviewPresenceHashLength);
+        if (bytes == nil) {
+            continue;
+        }
+        [body appendData:bytes];
+        count++;
+    }
+
+    NSMutableData *packet = [NSMutableData dataWithCapacity:4 + body.length];
+    const uint8_t header[4] = { kOCTPushPreviewPacketId, subtype, kOCTPushPreviewPacketVersion, count };
+    [packet appendBytes:header length:sizeof(header)];
+    [packet appendData:body];
+    return packet;
+}
+
+/// The hashes of a 190/`subtype` packet in lower case hex, nil for any other shape.
+static NSArray<NSString *> *OCTPushPreviewHashListFromPacket(uint8_t subtype, NSData *packet)
+{
+    if (packet.length < 4) {
+        return nil;
+    }
+    const uint8_t *bytes = packet.bytes;
+    if (bytes[0] != kOCTPushPreviewPacketId || bytes[1] != subtype || bytes[2] != kOCTPushPreviewPacketVersion) {
+        return nil;
+    }
+    NSUInteger count = bytes[3];
+    if (count > kOCTPushPreviewPresenceMaxHashes || packet.length != 4 + count * kOCTPushPreviewPresenceHashLength) {
+        return nil;
+    }
+    NSMutableArray<NSString *> *hashes = [NSMutableArray arrayWithCapacity:count];
+    for (NSUInteger i = 0; i < count; i++) {
+        [hashes addObject:OCTPushPreviewHex(bytes + 4 + i * kOCTPushPreviewPresenceHashLength, kOCTPushPreviewPresenceHashLength)];
+    }
+    return hashes;
+}
+
+/// The set a contact sent last (190/02 or 190/03, by the defaults prefix) replaces the one before; an empty one
+/// removes it.
+static void OCTPushPreviewStoreHashList(NSString *prefix, NSArray<NSString *> *hashes, NSString *publicKeyHex)
+{
+    NSString *account = OCTPushPreviewAccount(publicKeyHex);
+    if (account == nil) {
+        return;
+    }
+    NSString *defaultsKey = [prefix stringByAppendingString:account];
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    if (hashes.count == 0) {
+        [defaults removeObjectForKey:defaultsKey];
+        return;
+    }
+    if ([[defaults arrayForKey:defaultsKey] isEqualToArray:hashes]) {
+        return;
+    }
+    [defaults setObject:hashes forKey:defaultsKey];
+}
+
+static NSArray<NSString *> *OCTPushPreviewStoredHashList(NSString *prefix, NSString *publicKeyHex)
+{
+    NSString *account = OCTPushPreviewAccount(publicKeyHex);
+    if (account == nil) {
+        return @[];
+    }
+    NSMutableArray<NSString *> *hashes = [NSMutableArray new];
+    for (id hash in [[NSUserDefaults standardUserDefaults] arrayForKey:[prefix stringByAppendingString:account]]) {
+        if ([hash isKindOfClass:[NSString class]]) {
+            [hashes addObject:hash];
+        }
+    }
+    return hashes;
 }
 
 @implementation OCTPushPreview
@@ -317,7 +403,7 @@ static NSData *OCTPushPreviewSerialize(NSDictionary<NSString *, id> *fields)
         SecItemDelete((__bridge CFDictionaryRef)peers);
         NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
         for (NSString *key in defaults.dictionaryRepresentation.allKeys) {
-            if ([key hasPrefix:kOCTGroupPresenceDefaultsPrefix]) {
+            if ([key hasPrefix:kOCTGroupPresenceDefaultsPrefix] || [key hasPrefix:kOCTGroupWakeDefaultsPrefix]) {
                 [defaults removeObjectForKey:key];
             }
         }
@@ -395,25 +481,149 @@ static NSData *OCTPushPreviewSerialize(NSDictionary<NSString *, id> *fields)
 
 + (NSData *)groupPresencePacketWithHashes:(NSArray<NSString *> *)hashes
 {
-    NSMutableData *body = [NSMutableData new];
-    uint8_t count = 0;
-    for (NSString *hash in hashes) {
-        if (count == kOCTPushPreviewPresenceMaxHashes) {
-            break;
+    return OCTPushPreviewHashListPacket(kOCTPushPreviewSubtypePresence, hashes);
+}
+
+#pragma mark - Group message wakes
+
++ (NSData *)groupWakePacketWithHashes:(NSArray<NSString *> *)hashes
+{
+    return OCTPushPreviewHashListPacket(kOCTPushPreviewSubtypeWake, hashes);
+}
+
++ (NSArray<NSString *> *)groupWakeHashesForGroups:(NSArray<OCTPushPreviewGroup *> *)groups
+                             friendPresenceHashes:(NSArray<NSString *> *)friendPresenceHashes
+{
+    NSMutableSet<NSString *> *friendPresence = [NSMutableSet new];
+    for (id hash in friendPresenceHashes) {
+        if ([hash isKindOfClass:[NSString class]]) {
+            [friendPresence addObject:[hash lowercaseString]];
         }
-        NSData *bytes = OCTPushPreviewDataFromHex(hash, kOCTPushPreviewPresenceHashLength);
-        if (bytes == nil) {
-            continue;
-        }
-        [body appendData:bytes];
-        count++;
     }
 
-    NSMutableData *packet = [NSMutableData dataWithCapacity:4 + body.length];
-    const uint8_t header[4] = { kOCTPushPreviewPacketId, kOCTPushPreviewSubtypePresence, kOCTPushPreviewPacketVersion, count };
-    [packet appendBytes:header length:sizeof(header)];
-    [packet appendData:body];
-    return packet;
+    NSMutableArray<NSString *> *hashes = [NSMutableArray new];
+    for (OCTPushPreviewGroup *group in groups) {
+        if (hashes.count == kOCTPushPreviewPresenceMaxHashes) {
+            break;
+        }
+        NSString *hash = [self groupPresenceHashForChatIdHex:group.chatIdHex peerPublicKeyHex:group.ownPeerKeyHex];
+        if (hash == nil || group.muted || [hashes containsObject:hash]) {
+            continue;
+        }
+        // KHANDAQ (0.2.69, group message wakes): the friend's own 190/02 set tells which member there it is, so a
+        // member muted here wakes nothing of ours for the friend that member is.
+        BOOL friendMutedThere = NO;
+        for (NSString *memberKey in group.mutedMemberKeyHexes) {
+            NSString *memberHash = [self groupPresenceHashForChatIdHex:group.chatIdHex peerPublicKeyHex:memberKey];
+            if (memberHash != nil && [friendPresence containsObject:memberHash]) {
+                friendMutedThere = YES;
+                break;
+            }
+        }
+        if (! friendMutedThere) {
+            [hashes addObject:hash];
+        }
+    }
+    return hashes;
+}
+
++ (NSDictionary<NSString *, NSString *> *)groupWakeMembersForChatIdHex:(NSString *)chatIdHex
+                                                           memberKeys:(NSArray<NSString *> *)memberKeys
+                                                        connectedKeys:(NSArray<NSString *> *)connectedKeys
+                                                               ownKey:(NSString *)ownKey
+                                                             leftKeys:(NSArray<NSString *> *)leftKeys
+                                                      contactWakeSets:(NSDictionary<NSString *, NSArray<NSString *> *> *)contactWakeSets
+{
+    NSMutableSet<NSString *> *notWoken = [NSMutableSet new];
+    for (NSString *key in [connectedKeys arrayByAddingObjectsFromArray:leftKeys]) {
+        [notWoken addObject:key.lowercaseString];
+    }
+    if (ownKey.length > 0) {
+        [notWoken addObject:ownKey.lowercaseString];
+    }
+
+    NSMutableDictionary<NSString *, NSMutableSet<NSString *> *> *claimants = [NSMutableDictionary new];
+    for (NSString *contact in contactWakeSets) {
+        for (id hash in contactWakeSets[contact]) {
+            if (! [hash isKindOfClass:[NSString class]]) {
+                continue;
+            }
+            NSString *lower = [hash lowercaseString];
+            NSMutableSet<NSString *> *holders = claimants[lower];
+            if (holders == nil) {
+                holders = [NSMutableSet new];
+                claimants[lower] = holders;
+            }
+            [holders addObject:contact];
+        }
+    }
+
+    NSMutableDictionary<NSString *, NSString *> *woken = [NSMutableDictionary new];
+    for (NSString *memberKey in memberKeys) {
+        NSString *key = memberKey.lowercaseString;
+        if ([notWoken containsObject:key]) {
+            continue;
+        }
+        NSString *hash = [self groupPresenceHashForChatIdHex:chatIdHex peerPublicKeyHex:key];
+        NSSet<NSString *> *holders = hash ? claimants[hash] : nil;
+        if (holders.count != 1) {
+            continue;
+        }
+        NSString *contact = holders.anyObject;
+        if (woken[contact] == nil) {
+            woken[contact] = key;
+        }
+    }
+    return woken;
+}
+
++ (NSString *)groupTextEventKeyWithMessageId:(uint32_t)messageId senderPeerKeyHex:(NSString *)senderPeerKeyHex
+{
+    if (OCTPushPreviewDataFromHex(senderPeerKeyHex, kOCTPushPreviewPublicKeyLength) == nil) {
+        return nil;
+    }
+    return [NSString stringWithFormat:@"gt:%08X:%@", messageId, senderPeerKeyHex.uppercaseString];
+}
+
++ (NSString *)groupFileEventKeyWithMsgIdHex:(NSString *)msgIdHex
+{
+    if (OCTPushPreviewDataFromHex(msgIdHex, kOCTPushPreviewGroupFileIdLength) == nil) {
+        return nil;
+    }
+    return [@"gf:" stringByAppendingString:msgIdHex.uppercaseString];
+}
+
++ (NSDictionary<NSString *, id> *)groupWakeFieldsWithFields:(NSDictionary<NSString *, id> *)fields
+                                                       body:(NSString *)body
+                                                  groupName:(NSString *)groupName
+                                                  chatIdHex:(NSString *)chatIdHex
+                                                   eventKey:(NSString *)eventKey
+                                           senderPeerKeyHex:(NSString *)senderPeerKeyHex
+{
+    if (OCTPushPreviewDataFromHex(chatIdHex, kOCTPushPreviewChatIdLength) == nil) {
+        return nil;
+    }
+    NSMutableDictionary<NSString *, id> *group = [fields mutableCopy] ?: [NSMutableDictionary dictionary];
+    [group removeObjectsForKeys:@[@"h", @"gp"]];
+    if (body.length > 0) {
+        group[@"b"] = body;
+    }
+    if (groupName.length > 0) {
+        group[@"g"] = groupName;
+    }
+    group[@"gid"] = chatIdHex.uppercaseString;
+
+    if (eventKey.length > 0) {
+        group[@"h"] = eventKey;
+        return group;
+    }
+    // A text that waits: the recipient tells it by its sender's key in the group and what it says.
+    NSString *senderKey = OCTPushPreviewAccount(senderPeerKeyHex);
+    if (senderKey == nil || ! [group[@"k"] isEqual:kOCTPushPreviewKindText]) {
+        return nil;
+    }
+    group[@"gp"] = senderKey;
+    return group;
 }
 
 #pragma mark - Incoming packet 190
@@ -432,22 +642,12 @@ static NSData *OCTPushPreviewSerialize(NSDictionary<NSString *, id> *fields)
 
 + (NSArray<NSString *> *)groupPresenceHashesFromPacket:(NSData *)packet
 {
-    if (packet.length < 4) {
-        return nil;
-    }
-    const uint8_t *bytes = packet.bytes;
-    if (bytes[0] != kOCTPushPreviewPacketId || bytes[1] != kOCTPushPreviewSubtypePresence || bytes[2] != kOCTPushPreviewPacketVersion) {
-        return nil;
-    }
-    NSUInteger count = bytes[3];
-    if (count > kOCTPushPreviewPresenceMaxHashes || packet.length != 4 + count * kOCTPushPreviewPresenceHashLength) {
-        return nil;
-    }
-    NSMutableArray<NSString *> *hashes = [NSMutableArray arrayWithCapacity:count];
-    for (NSUInteger i = 0; i < count; i++) {
-        [hashes addObject:OCTPushPreviewHex(bytes + 4 + i * kOCTPushPreviewPresenceHashLength, kOCTPushPreviewPresenceHashLength)];
-    }
-    return hashes;
+    return OCTPushPreviewHashListFromPacket(kOCTPushPreviewSubtypePresence, packet);
+}
+
++ (NSArray<NSString *> *)groupWakeHashesFromPacket:(NSData *)packet
+{
+    return OCTPushPreviewHashListFromPacket(kOCTPushPreviewSubtypeWake, packet);
 }
 
 #pragma mark - What contacts sent us
@@ -477,20 +677,22 @@ static NSData *OCTPushPreviewSerialize(NSDictionary<NSString *, id> *fields)
 
 + (void)storeGroupPresence:(NSArray<NSString *> *)hashes forFriendPublicKey:(NSString *)publicKeyHex
 {
-    NSString *account = OCTPushPreviewAccount(publicKeyHex);
-    if (account == nil) {
-        return;
-    }
-    NSString *defaultsKey = [kOCTGroupPresenceDefaultsPrefix stringByAppendingString:account];
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    if (hashes.count == 0) {
-        [defaults removeObjectForKey:defaultsKey];
-        return;
-    }
-    if ([[defaults arrayForKey:defaultsKey] isEqualToArray:hashes]) {
-        return;
-    }
-    [defaults setObject:hashes forKey:defaultsKey];
+    OCTPushPreviewStoreHashList(kOCTGroupPresenceDefaultsPrefix, hashes, publicKeyHex);
+}
+
++ (NSArray<NSString *> *)groupPresenceHashesForFriendPublicKey:(NSString *)publicKeyHex
+{
+    return OCTPushPreviewStoredHashList(kOCTGroupPresenceDefaultsPrefix, publicKeyHex);
+}
+
++ (void)storeGroupWake:(NSArray<NSString *> *)hashes forFriendPublicKey:(NSString *)publicKeyHex
+{
+    OCTPushPreviewStoreHashList(kOCTGroupWakeDefaultsPrefix, hashes, publicKeyHex);
+}
+
++ (NSArray<NSString *> *)groupWakeHashesForFriendPublicKey:(NSString *)publicKeyHex
+{
+    return OCTPushPreviewStoredHashList(kOCTGroupWakeDefaultsPrefix, publicKeyHex);
 }
 
 + (BOOL)friendPublicKey:(NSString *)publicKeyHex hasGroupPresenceHash:(NSString *)hash
@@ -511,6 +713,7 @@ static NSData *OCTPushPreviewSerialize(NSDictionary<NSString *, id> *fields)
     }
     OCTPushPreviewKeychainDelete(kOCTPushPreviewPeerService, account);
     [[NSUserDefaults standardUserDefaults] removeObjectForKey:[kOCTGroupPresenceDefaultsPrefix stringByAppendingString:account]];
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:[kOCTGroupWakeDefaultsPrefix stringByAppendingString:account]];
 
     // Removed or blocked: whatever they still send is not shown.
     NSData *publicKey = OCTPushPreviewDataFromHex(publicKeyHex, kOCTPushPreviewPublicKeyLength);
@@ -728,6 +931,25 @@ static NSString * (^sOCTPushPreviewTextSanitizer)(NSString *) = nil;
         kOCTPushPreviewWakeFieldPreview : preview,
         kOCTPushPreviewWakeFieldPid : [self pidForEventKey:eventKey key:key],
     };
+}
+
+@end
+
+@implementation OCTPushPreviewGroup
+
+- (instancetype)initWithChatIdHex:(NSString *)chatIdHex
+                    ownPeerKeyHex:(NSString *)ownPeerKeyHex
+                            muted:(BOOL)muted
+              mutedMemberKeyHexes:(NSArray<NSString *> *)mutedMemberKeyHexes
+{
+    self = [super init];
+    if (self) {
+        _chatIdHex = [chatIdHex copy];
+        _ownPeerKeyHex = [ownPeerKeyHex copy];
+        _muted = muted;
+        _mutedMemberKeyHexes = [mutedMemberKeyHexes copy] ?: @[];
+    }
+    return self;
 }
 
 @end

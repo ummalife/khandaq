@@ -1866,6 +1866,35 @@ size_t xnet_unpack_u32(const uint8_t *bytes, uint32_t *v)
     return count;
 }
 
+/// KHANDAQ (0.2.69, group message wakes): GC_MAX_SAVED_PEERS of toxcore's group_common.h, which tox.h does not export.
+static const uint32_t kOCTToxGroupSavedPeerSlots = 100;
+
+- (NSArray<NSString *> *)groupSavedPeerPublicKeyHexesForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
+{
+    NSMutableArray<NSString *> *keys = [NSMutableArray array];
+
+    // KHANDAQ (0.2.69, group message wakes): toxcore checks a slot number against GC_MAX_SAVED_PEERS with `>`, so
+    // slot 100 would be read past the end of its array: only 0..99 are asked.
+    for (uint32_t slot = 0; slot < kOCTToxGroupSavedPeerSlots; slot++) {
+        uint8_t publicKey[TOX_GROUP_PEER_PUBLIC_KEY_SIZE];
+        Tox_Err_Group_Peer_Query cError;
+
+        if (tox_group_savedpeer_get_public_key(self.tox, groupNumber, slot, publicKey, &cError)) {
+            [keys addObject:[OCTTox binToHexString:publicKey length:TOX_GROUP_PEER_PUBLIC_KEY_SIZE]];
+        }
+        else if (cError == TOX_ERR_GROUP_PEER_QUERY_GROUP_NOT_FOUND) {
+            if (error) {
+                *error = [OCTTox createErrorWithCode:OCTToxErrorGroupStateQueriesGroupNotFound
+                                         description:@"Cannot query group saved peers"
+                                       failureReason:@"Group not found"];
+            }
+            return @[];
+        }
+    }
+
+    return keys;
+}
+
 - (NSArray<NSDictionary *> *)groupPeersForGroupNumber:(OCTToxGroupNumber)groupNumber error:(NSError **)error
 {
     Tox_Err_Group_Peer_Query cError;
@@ -4409,11 +4438,13 @@ void friendLosslessPacketCallback(
 
     if (pktType == 190) {
         // KHANDAQ (0.2.64): push previews (docs/PUSH_PREVIEWS.md). 190/01 is the friend's preview key,
-        // 190/02 the friend's group presence; any other shape is dropped, as the other clients drop it.
+        // 190/02 the friend's group presence, 190/03 (0.2.69) the groups that may wake the friend for our group
+        // messages; any other shape is dropped, as the other clients drop it.
         NSData *packet = [NSData dataWithBytes:data length:length];
         NSData *previewKey = [OCTPushPreview peerKeyFromPacket:packet];
         NSArray<NSString *> *presence = previewKey ? nil : [OCTPushPreview groupPresenceHashesFromPacket:packet];
-        if (previewKey == nil && presence == nil) {
+        NSArray<NSString *> *wake = (previewKey || presence) ? nil : [OCTPushPreview groupWakeHashesFromPacket:packet];
+        if (previewKey == nil && presence == nil && wake == nil) {
             OCTLogCDebug(@"dropping a malformed packet 190 of %zu bytes from friend %u", tox, length, friendNumber);
             return;
         }
@@ -4424,8 +4455,13 @@ void friendLosslessPacketCallback(
                     [tox.delegate tox:tox friendPushPreviewKey:previewKey friendNumber:friendNumber];
                 }
             }
-            else if ([tox.delegate respondsToSelector:@selector(tox:friendGroupPresence:friendNumber:)]) {
-                [tox.delegate tox:tox friendGroupPresence:presence friendNumber:friendNumber];
+            else if (presence != nil) {
+                if ([tox.delegate respondsToSelector:@selector(tox:friendGroupPresence:friendNumber:)]) {
+                    [tox.delegate tox:tox friendGroupPresence:presence friendNumber:friendNumber];
+                }
+            }
+            else if ([tox.delegate respondsToSelector:@selector(tox:friendGroupWake:friendNumber:)]) {
+                [tox.delegate tox:tox friendGroupWake:wake friendNumber:friendNumber];
             }
         });
 

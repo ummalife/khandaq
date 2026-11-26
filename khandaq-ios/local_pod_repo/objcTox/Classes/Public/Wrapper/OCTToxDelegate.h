@@ -124,6 +124,12 @@
 - (void)tox:(OCTTox *)tox friendGroupPresence:(NSArray<NSString *> *)hashes friendNumber:(OCTToxFriendNumber)friendNumber;
 
 /**
+ * KHANDAQ (0.2.69): the friend's group wake set (lossless packet 190/03): the presence hash of each group in which
+ * our group messages may wake that friend.
+ */
+- (void)tox:(OCTTox *)tox friendGroupWake:(NSArray<NSString *> *)hashes friendNumber:(OCTToxFriendNumber)friendNumber;
+
+/**
  * Friend's status message was updated.
  *
  * @param statusMessage Updated status message.

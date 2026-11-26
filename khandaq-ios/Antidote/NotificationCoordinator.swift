@@ -106,6 +106,33 @@ enum WakeBanners {
     }
 }
 
+/// KHANDAQ (0.2.69, group message wakes): the delivered notifications that already stood for a group text that came
+/// over Tox. A push of a text that had to wait knows it by what it says, its mark in `khq_tm`, not by an event key
+/// (docs/PUSH_PREVIEWS.md, "Group message wakes"), so a match uses the notification up: the next text that says the
+/// same alerts. Kept in memory, on the main queue.
+struct PushTextMarkMatches {
+    /// At most this many matches are kept; the oldest goes first.
+    static let capacity = 128
+
+    private(set) var matchedIdentifiers = [String]()
+
+    /// True when one of `delivered` (its request identifier and its `khq_tm`) carries one of `marks` and has not been
+    /// matched before; that one is matched now.
+    mutating func match(_ marks: [String], in delivered: [(identifier: String, mark: String?)]) -> Bool {
+        guard !marks.isEmpty,
+              let hit = delivered.first(where: { entry in
+                  entry.mark.map { marks.contains($0) } == true && !matchedIdentifiers.contains(entry.identifier)
+              }) else {
+            return false
+        }
+        matchedIdentifiers.append(hit.identifier)
+        if matchedIdentifiers.count > PushTextMarkMatches.capacity {
+            matchedIdentifiers.removeFirst(matchedIdentifiers.count - PushTextMarkMatches.capacity)
+        }
+        return true
+    }
+}
+
 class NotificationCoordinator: NSObject {
     weak var delegate: NotificationCoordinatorDelegate?
 
@@ -132,6 +159,9 @@ class NotificationCoordinator: NSObject {
     // KHANDAQ (#G6): last contentful local notification, to suppress rapid duplicates.
     fileprivate var lastLocalNotificationBody: String = ""
     fileprivate var lastLocalNotificationTime: TimeInterval = 0
+
+    // KHANDAQ (0.2.69, group message wakes): the pushes of group texts that had to wait which a text from Tox matched.
+    fileprivate var pushTextMarkMatches = PushTextMarkMatches()
 
     // KHANDAQ (#H3): when the app last became active. On foreground Realm flushes the backlog of
     // messages that arrived while away as a single insertion batch; those must not ring on entry
@@ -355,6 +385,44 @@ extension NotificationCoordinator {
         }
         return nil
     }
+
+    /// KHANDAQ (0.2.69, group message wakes): the event a group message wake names in `khq_ev`: a text by its message
+    /// id and its author's key in the group, a file by its 32-byte hash. None for a private message or a row from
+    /// history sync, which no wake names, nor for a text whose author key the row did not keep.
+    static func groupEventKey(of message: OCTMessageAbstract) -> String? {
+        guard !message.groupPrivateMessage, !message.groupHistorySync, !message.groupSystemMessage else {
+            return nil
+        }
+        if let text = message.messageText {
+            return OCTPushPreview.groupTextEventKey(withMessageId: UInt32(bitPattern: text.messageId),
+                                                    senderPeerKeyHex: AirGroupTranscript.authorKey(of: message))
+        }
+        return OCTPushPreview.groupFileEventKey(withMsgIdHex: message.messageFile?.groupMsgIdHashHex)
+    }
+
+    /// KHANDAQ (0.2.69, group message wakes): how many characters of a text the `b` of a preview keeps
+    /// (+[OCTPushPreview plaintextWithFields:]).
+    static let previewTextCharacters: UInt = 140
+
+    /// KHANDAQ (0.2.69, group message wakes): the marks a push of a group text that had to wait may carry in `khq_tm`,
+    /// by its author's key in the group and its first 140 characters, as the chat shows them and as they came, since
+    /// the sender may have put either into its preview; cut as the sender cuts them. None where groupEventKey(of:)
+    /// gives none for what it is, nor for a row that kept no author key.
+    static func groupTextMarks(of message: OCTMessageAbstract) -> [String] {
+        guard !message.groupPrivateMessage, !message.groupHistorySync, !message.groupSystemMessage,
+              let raw = message.messageText?.text else {
+            return []
+        }
+        let author = AirGroupTranscript.authorKey(of: message)
+        var marks = [String]()
+        for said in [OCTPushPreview.previewText(fromMessageText: raw), raw] {
+            let shown = OCTPushPreview.prefix(of: said, characters: previewTextCharacters)
+            if let mark = PushPreviewCrypto.textMark(senderKey: author, text: shown), !marks.contains(mark) {
+                marks.append(mark)
+            }
+        }
+        return marks
+    }
 }
 
 private extension NotificationCoordinator {
@@ -524,16 +592,21 @@ private extension NotificationCoordinator {
             }
         }
         else {
-            showLocalNotificationObject(object, eventKey: eventKey(of: notification), owner: bannerOwner(of: notification))
+            showLocalNotificationObject(object, eventKey: eventKey(of: notification),
+                                        textMarks: textMarks(of: notification), owner: bannerOwner(of: notification))
         }
     }
 
     /// The event a push preview names in `khq_ev` (docs/PUSH_PREVIEWS.md): a text by its msgV3 hash, a file
-    /// by its Tox file id, a reaction by its anchor and emoji. Group messages never come as previews.
+    /// by its Tox file id, a reaction by its anchor and emoji, a group message as groupEventKey(of:) says.
     func eventKey(of notification: NotificationType) -> String? {
         switch notification {
             case .newMessage(let message):
                 let chat = submanagerObjects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat
+                // KHANDAQ (0.2.69, group message wakes): the sender's device woke us with a preview of it.
+                if chat?.isGroup == true {
+                    return NotificationCoordinator.groupEventKey(of: message)
+                }
                 guard chat?.isGroup == false else {
                     return nil
                 }
@@ -576,6 +649,17 @@ private extension NotificationCoordinator {
         return (chat.friends.lastObject() as? OCTFriend)?.publicKey
     }
 
+    /// KHANDAQ (0.2.69, group message wakes): the marks a push names a group text by in `khq_tm` when the text had to
+    /// wait on its sender's device (groupTextMarks(of:)); none for anything else.
+    func textMarks(of notification: NotificationType) -> [String] {
+        guard case .newMessage(let message) = notification,
+              let chat = submanagerObjects.object(withUniqueIdentifier: message.chatUniqueIdentifier, for: .chat) as? OCTChat,
+              chat.isGroup else {
+            return []
+        }
+        return NotificationCoordinator.groupTextMarks(of: message)
+    }
+
     func showInAppNotificationObject(_ object: NotificationObject, chatUniqueIdentifier: String?) {
         // KHANDAQ: custom safe-area banner instead of LNNotificationsUI (which rendered under the
         // Dynamic Island / notch and got clipped). Presented in the existing NotificationWindow.
@@ -588,7 +672,8 @@ private extension NotificationCoordinator {
     }
 
     /// `owner`: whom it is about (bannerOwner), the generic wake banners of whom it stands in for.
-    func showLocalNotificationObject(_ object: NotificationObject, eventKey: String? = nil, owner: String?) {
+    func showLocalNotificationObject(_ object: NotificationObject, eventKey: String? = nil, textMarks: [String] = [],
+                                     owner: String?) {
         let body = "\(object.title): \(object.body)"
 
         // KHANDAQ (#G6): drop a duplicate of the SAME contentful notification fired within a short
@@ -601,7 +686,7 @@ private extension NotificationCoordinator {
         lastLocalNotificationBody = body
         lastLocalNotificationTime = now
 
-        guard let eventKey = eventKey else {
+        guard eventKey != nil || !textMarks.isEmpty else {
             presentLocalNotification(object, body: body, owner: owner)
             showNextNotification()
             return
@@ -610,11 +695,22 @@ private extension NotificationCoordinator {
         // KHANDAQ (0.2.64): the push extension may have shown this very event already, from the preview
         // the sender's wake carried; its notification names the event in `khq_ev`, and this one would only
         // repeat it.
+        // KHANDAQ (0.2.69, group message wakes): or, for a group text that had to wait, by what it says in
+        // `khq_tm`; that notification then stands for this text and no other (PushTextMarkMatches).
         UNUserNotificationCenter.current().getDeliveredNotifications { [weak self] delivered in
-            let shown = delivered.contains { ($0.request.content.userInfo["khq_ev"] as? String) == eventKey }
+            let shown = eventKey.map { key in
+                delivered.contains { ($0.request.content.userInfo["khq_ev"] as? String) == key }
+            } ?? false
+            let marked: [(identifier: String, mark: String?)] = textMarks.isEmpty ? [] : delivered.map {
+                (identifier: $0.request.identifier, mark: $0.request.content.userInfo["khq_tm"] as? String)
+            }
             DispatchQueue.main.async {
-                if !shown {
-                    self?.presentLocalNotification(object, body: body, owner: owner)
+                guard let self = self else {
+                    return
+                }
+                // On the main queue, so that two texts saying the same never both take one notification.
+                if !shown && !self.pushTextMarkMatches.match(textMarks, in: marked) {
+                    self.presentLocalNotification(object, body: body, owner: owner)
                 }
             }
         }

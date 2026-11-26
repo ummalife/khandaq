@@ -145,7 +145,7 @@ public class AirNewContactModelTest
     {
         // KHANDAQ (26.11.2026): the owner copied a member's key in a group and New contact said "12 characters
         // missing". That key is theirs in the group only; the verdict names the member and the group instead.
-        final String memberKey = "A1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8F90";
+        final String memberKey = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
         final AirNewContactModel.GroupMember hamza =
                 new AirNewContactModel.GroupMember("0123abcd", memberKey, "Hamza", "Khandaq QA");
         final AirNewContactModel.Verdict member = AirNewContactModel.Verdict.of(

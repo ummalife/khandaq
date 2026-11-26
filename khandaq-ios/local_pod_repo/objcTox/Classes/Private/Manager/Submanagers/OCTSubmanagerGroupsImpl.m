@@ -27,6 +27,7 @@
 #import "OCTNgcGroupLiveAudio.h"
 #import "OCTNgcGroupLiveVideo.h"
 #import "OCTGroupPendingLeaves.h"
+#import "OCTGroupMessageTombstones.h"
 #import "OCTSettingsStorageObject.h"
 #import <toxcore/tox.h>
 
@@ -110,6 +111,8 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 @property (nonatomic, strong) OCTNgcGroupHistSync *histSync;
 @property (nonatomic, strong) OCTNgcHskAnnounce *hskAnnounce;
 @property (nonatomic, strong) OCTNgcSignedHistory *signedHistory;
+// KHANDAQ (tester 21.11, 8256/8261): what was deleted here, so that history sync and resends do not bring it back.
+@property (nonatomic, strong) OCTGroupMessageTombstones *messageTombstones;
 @property (nonatomic, strong) NSMutableSet<NSString *> *groupJoinRetryRunning;
 @property (nonatomic, strong) NSMutableSet<NSString *> *groupJoinRetryCancelled;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *groupJoinAttemptByKey;
@@ -1435,6 +1438,23 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
         [self leaveGroupWithNumber:(OCTToxGroupNumber)chat.groupNumber partMessage:nil error:nil];
     }
 
+    if (! removeChat) {
+        // KHANDAQ (tester 21.11, 8256/8261): a cleared history stays cleared. The members serve their last 130 minutes
+        // at every join and the sync takes records up to 200 minutes old: those messages are remembered as deleted.
+        NSPredicate *predicate = [NSPredicate predicateWithFormat:@"chatUniqueIdentifier == %@ AND dateInterval > %@",
+                                  chat.uniqueIdentifier, @([[NSDate date] timeIntervalSince1970] - 210.0 * 60.0)];
+        RLMResults *recent = [[[self.dataSource managerGetRealmManager] objectsWithClass:[OCTMessageAbstract class]
+                                                                               predicate:predicate]
+                              sortedResultsUsingKeyPath:@"dateInterval" ascending:YES];
+        NSMutableArray<OCTMessageAbstract *> *messages = [NSMutableArray arrayWithCapacity:recent.count];
+
+        for (OCTMessageAbstract *message in recent) {
+            [messages addObject:message];
+        }
+
+        [self recordDeletedGroupMessages:messages inChat:chat];
+    }
+
     [[self.dataSource managerGetRealmManager] removeAllMessagesInChat:chat removeChat:removeChat];
 }
 
@@ -1670,9 +1690,17 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
         trimmed = peerName;
     }
 
-    return [[self.dataSource managerGetTox] groupSelfSetName:trimmed
-                                                 groupNumber:(OCTToxGroupNumber)chat.groupNumber
-                                                       error:error];
+    if (! [[self.dataSource managerGetTox] groupSelfSetName:trimmed
+                                                groupNumber:(OCTToxGroupNumber)chat.groupNumber
+                                                      error:error]) {
+        return NO;
+    }
+
+    // KHANDAQ (tester 21.11, 8257): toxcore keeps your name of each group in the profile's save, and nothing saved the
+    // profile after a rename: the next start loaded the name of before, and the members got that one from us again.
+    // Saved now, on the main queue, as after a create or a leave.
+    [self.dataSource managerSaveTox];
+    return YES;
 }
 
 - (BOOL)cancelGroupFileTransferForMessage:(OCTMessageAbstract *)message error:(NSError **)error
@@ -2638,6 +2666,18 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                                                               text:message];
     }
 
+    // KHANDAQ (tester 21.11, 8256/8261): nor a message deleted here that its author sends again, by the same rules.
+    if (! alreadyStored && [self isDeletedGroupTextInChat:chat
+                                                messageId:messageId
+                                                     text:message
+                                                authorKey:senderPubkeyHex
+                                               authorName:peerName
+                                             dateInterval:[[NSDate date] timeIntervalSince1970]
+                                            windowSeconds:45.0]) {
+        OCTLogInfo(@"NGC group message deleted here came again, not stored group=%u msgid=%u", groupNumber, messageId);
+        alreadyStored = YES;
+    }
+
     if (! alreadyStored) {
         OCTMessageAbstract *stored = [realmManager addGroupMessageWithText:message
                                                                       type:type
@@ -3126,6 +3166,9 @@ partMessage:(NSString *)partMessage
     }
     if (found) {
         OCTLogInfo(@"group delete: removing retracted %@ message", isFile ? @"file" : @"text");
+        // KHANDAQ (tester 21.11, 8256/8261): a member who missed the retraction serves the message in the history
+        // sync; it is not stored again.
+        [self recordDeletedGroupMessages:@[found] inChat:chat];
         [realmManager removeMessages:@[found]];
     }
     (void)tox;
@@ -3864,6 +3907,90 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     return pkt;
 }
 
+#pragma mark - Deleted messages (tester 21.11, 8256/8261)
+
+/// KHANDAQ (tester 21.11, 8256/8261): the tombstones of the profile's groups (OCTGroupMessageTombstones), made when
+/// first asked for. A removed row left nothing behind, so the copies the members serve at every join and reconnect
+/// stored a deleted message again.
+- (OCTGroupMessageTombstones *)groupMessageTombstones
+{
+    @synchronized(self) {
+        if (! self.messageTombstones) {
+            __weak typeof(self) weakSelf = self;
+
+            self.messageTombstones = [[OCTGroupMessageTombstones alloc] initWithGetValueBlock:^NSString *(NSString *key) {
+                return [[weakSelf.dataSource managerGetRealmManager] ngcValueForKey:key];
+            } setValueBlock:^BOOL (NSString *key, NSString *value) {
+                return [[weakSelf.dataSource managerGetRealmManager] setNgcValue:value forKey:key];
+            }];
+        }
+
+        return self.messageTombstones;
+    }
+}
+
+- (NSString *)groupMessageTombstoneKeyForChat:(OCTChat *)chat
+{
+    return [OCTGroupMessageTombstones storeKeyForChatIdHex:chat.groupChatIdHex chatUniqueIdentifier:chat.uniqueIdentifier];
+}
+
+/// Remembers the rows of the chat that are about to be removed; to be called while they are still there.
+- (void)recordDeletedGroupMessages:(NSArray<OCTMessageAbstract *> *)messages inChat:(OCTChat *)chat
+{
+    if (messages.count == 0 || ! chat || chat.isInvalidated) {
+        return;
+    }
+
+    [[self groupMessageTombstones] recordMessages:messages
+                                         storeKey:[self groupMessageTombstoneKeyForChat:chat]
+                                              now:[[NSDate date] timeIntervalSince1970]];
+}
+
+- (void)removeGroupMessages:(NSArray<OCTMessageAbstract *> *)messages inChat:(OCTChat *)chat
+{
+    if (messages.count == 0) {
+        return;
+    }
+
+    [self recordDeletedGroupMessages:messages inChat:chat];
+    // As OCTSubmanagerChatsImpl removes messages.
+    [[self.dataSource managerGetRealmManager] removeMessages:messages];
+    [[self.dataSource managerGetNotificationCenter] postNotificationName:kOCTScheduleFileTransferCleanupNotification object:nil];
+}
+
+- (BOOL)isDeletedGroupTextInChat:(OCTChat *)chat
+                       messageId:(uint32_t)messageId
+                            text:(NSString *)text
+                       authorKey:(NSString *)authorKey
+                      authorName:(NSString *)authorName
+                    dateInterval:(NSTimeInterval)dateInterval
+                   windowSeconds:(NSTimeInterval)windowSeconds
+{
+    if (! chat || chat.isInvalidated) {
+        return NO;
+    }
+
+    return [[self groupMessageTombstones] isDeletedTextInStoreKey:[self groupMessageTombstoneKeyForChat:chat]
+                                                        messageId:messageId
+                                                             text:text
+                                                        authorKey:authorKey
+                                                       authorName:authorName
+                                                     dateInterval:dateInterval
+                                                    windowSeconds:windowSeconds
+                                                              now:[[NSDate date] timeIntervalSince1970]];
+}
+
+- (BOOL)isDeletedGroupFileInChat:(OCTChat *)chat msgIdHashHex:(NSString *)msgIdHashHex
+{
+    if (! chat || chat.isInvalidated) {
+        return NO;
+    }
+
+    return [[self groupMessageTombstones] isDeletedFileInStoreKey:[self groupMessageTombstoneKeyForChat:chat]
+                                                     msgIdHashHex:msgIdHashHex
+                                                              now:[[NSDate date] timeIntervalSince1970]];
+}
+
 // KHANDAQ (#193/#179): SEND side of group delete-for-both (the RECEIVE side already exists at
 // handleIncomingGroupDeletePacketWithGroupNumber). Broadcasts the 16-byte 0x42 packet, byte-compatible
 // with Android's HelperMessageDelete.buildGroupDeletePacket. TEXT-only + own message (a file variant
@@ -3937,6 +4064,8 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     while (0);
 
     // local deletion always happens — even if the message can't be retracted for everyone
+    // KHANDAQ (tester 21.11, 8256/8261): and it stays deleted: a copy that comes again is not stored again.
+    [self recordDeletedGroupMessages:@[message] inChat:chat];
     [[self.dataSource managerGetRealmManager] removeMessages:@[message]];
 }
 
@@ -5417,6 +5546,19 @@ groupNumber:(OCTToxGroupNumber)groupNumber
 
             OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
 
+            // KHANDAQ (tester 21.11, 8256/8261): a message deleted here is one we have. The members that still hold
+            // it serve it at every join and reconnect, and it came back as "Relayed from history".
+            if ([self isDeletedGroupTextInChat:chat
+                                     messageId:messageId
+                                          text:text
+                                     authorKey:senderPubkeyHex
+                                    authorName:peerName
+                                  dateInterval:dateInterval
+                                 windowSeconds:120.0]) {
+                OCTLogInfo(@"NGC history copy of a message deleted here skipped msgid=%u", messageId);
+                return YES;
+            }
+
             // KHANDAQ (#15): share the live path's content dedup so a message that arrived live (with
             // a different messageId due to the sender's retries) is recognised here and not inserted
             // again by history-sync. Keyed by the stable sender pubkey (#155) so it actually matches
@@ -5467,7 +5609,9 @@ groupNumber:(OCTToxGroupNumber)groupNumber
                 return NO;
             }
 
-            return [[self.dataSource managerGetRealmManager] groupMessageWithGroupMsgIdHashHex:msgIdHashHex chat:chat] != nil;
+            // KHANDAQ (tester 21.11, 8256/8261): so is a file deleted here.
+            return [[self.dataSource managerGetRealmManager] groupMessageWithGroupMsgIdHashHex:msgIdHashHex chat:chat] != nil
+                || [self isDeletedGroupFileInChat:chat msgIdHashHex:msgIdHashHex];
         }
         insertSyncedMessageBlock:^OCTMessageAbstract *(OCTChat *chat,
                                                          NSString *text,
@@ -5532,6 +5676,18 @@ groupNumber:(OCTToxGroupNumber)groupNumber
             // slipped through. Collapse by content (size + base name) against what we already show.
             if ([realmManager groupReadyFileDuplicateExistsInChat:chat fileName:fileName fileSize:fileSize]) {
                 OCTLogInfo(@"NGC sync-file dup-skip name=%@ size=%llu", fileName, fileSize);
+                [[NSFileManager defaultManager] removeItemAtPath:filePath error:nil];
+                return nil;
+            }
+
+            // KHANDAQ (tester 21.11, 8256/8261): nor a copy of a file deleted here, by the same content rule.
+            if (! chat.isInvalidated
+                && [[self groupMessageTombstones] isDeletedFileInStoreKey:[self groupMessageTombstoneKeyForChat:chat]
+                                                                 baseName:OCTGroupFileBaseName(fileName)
+                                                                 fileSize:fileSize
+                                                             dateInterval:dateInterval
+                                                                      now:[[NSDate date] timeIntervalSince1970]]) {
+                OCTLogInfo(@"NGC sync-file of a deleted file skipped size=%llu", fileSize);
                 [[NSFileManager defaultManager] removeItemAtPath:filePath error:nil];
                 return nil;
             }
@@ -5725,6 +5881,13 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         return;
     }
 
+    // KHANDAQ (tester 21.11, 8256/8261): a file deleted here gets no row when its sender sends it again.
+    if ([self isDeletedGroupFileInChat:chat msgIdHashHex:msgIdHex]) {
+        OCTLogInfo(@"NGC group file %@ of group %u: BEGIN of a file deleted here, no row",
+                   [(msgIdHex.length > 8 ? [msgIdHex substringToIndex:8] : (msgIdHex ?: @"")) lowercaseString], groupNumber);
+        return;
+    }
+
     // KHANDAQ (0.2.57): the lookup below goes to the default Realm (+objectsWithPredicate:), which in the app is not
     // the manager's Realm and holds nothing, so it never found a finished row. A BEGIN of a file whose message is Ready
     // (a file sent again after a restart, which the transfer no longer remembers; a re-served copy of our own file)
@@ -5875,6 +6038,14 @@ static id OCTGroupRegularFileIdentifier(NSString *path)
     OCTChat *chat = [self chatForGroupNumber:groupNumber createIfNeeded:YES];
 
     if (! chat) {
+        return;
+    }
+
+    // KHANDAQ (tester 21.11, 8256/8261): nor when it is complete; the copy put together goes.
+    if ([self isDeletedGroupFileInChat:chat msgIdHashHex:msgIdHex]) {
+        OCTLogInfo(@"NGC group file %@ of group %u: completed copy of a file deleted here removed",
+                   [(msgIdHex.length > 8 ? [msgIdHex substringToIndex:8] : (msgIdHex ?: @"")) lowercaseString], groupNumber);
+        [[NSFileManager defaultManager] removeItemAtPath:filePath error:nil];
         return;
     }
 

@@ -45,7 +45,7 @@ enum KQColor {
     /// ground under danger
     static let dangerSoft = dynamic(light: 0xFBE4E1FF, dark: 0x3A1714FF)
     /// a private message in a group: its lock and the words who sees it
-    static let private = dynamic(light: 0x5A3FB4FF, dark: 0xB9A6FFFF)
+    static let `private` = dynamic(light: 0x5A3FB4FF, dark: 0xB9A6FFFF)
     /// ground under a private message in a group
     static let privateSoft = dynamic(light: 0xF0ECFBFF, dark: 0x211B38FF)
     /// keyboard focus ring only

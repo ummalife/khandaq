@@ -1518,6 +1518,12 @@ private extension ChatGroupController {
                 model.voiceDuration = VoiceMessageHelper.audioDuration(at: path)
             }
         }
+        // KHANDAQ (tester 8263): an audio file that is here plays in its entry, as in a chat with a person.
+        model.isAudioFile = hold == .none && messageFile.fileType == .ready
+            && VoiceMessageHelper.isInlineAudioFile(fileName: messageFile.fileName, filePath: messageFile.filePath())
+        if model.isAudioFile, let path = messageFile.filePath() {
+            model.voiceDuration = VoiceMessageHelper.cachedAudioDuration(at: path)
+        }
 
         switch messageFile.fileType {
             case .loading:
@@ -1563,6 +1569,32 @@ private extension ChatGroupController {
 
         model.openHandle = { [weak self] in
             self?.presentFilePreview(for: message)
+        }
+
+        if model.isAudioFile {
+            // KHANDAQ (tester 8263): the play button of an audio file plays it here; one the player does not
+            // read opens as before, in QuickLook.
+            model.voicePlayToggleHandle = { [weak self] in
+                guard let self = self,
+                      let path = message.messageFile?.filePath(),
+                      message.messageFile?.fileType == .ready else {
+                    return
+                }
+                if ChatVoiceMessagePlayer.shared.togglePlayback(messageId: message.uniqueIdentifier, filePath: path, atOwnSpeed: true) {
+                    self.refreshVisibleVoiceCells(for: message.uniqueIdentifier)
+                }
+                else {
+                    self.presentFilePreview(for: message)
+                }
+            }
+            model.voiceSeekHandle = { fraction in
+                guard let path = message.messageFile?.filePath(),
+                      message.messageFile?.fileType == .ready else {
+                    return
+                }
+                ChatVoiceMessagePlayer.shared.seek(
+                    messageId: message.uniqueIdentifier, filePath: path, fraction: fraction)
+            }
         }
 
         if isVoice {

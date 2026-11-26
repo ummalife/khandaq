@@ -554,6 +554,10 @@
 "media_send_button" = "发送";
 "media_send_caption_hint" = "添加说明...";
 "media_send_counter_format" = "%1$d / %2$d";
+/* KHANDAQ (tester 8264/8265): the send preview: more items, and the pencil's menu for a photo */
+"media_send_add_more" = "添加照片或视频";
+"media_edit_crop" = "裁剪和旋转";
+"media_edit_markup" = "涂鸦和文字";
 "call_error_codec" = "无法初始化音频或视频编解码器";
 "call_error_connection" = "无法与对方同步，请重试。";
 "call_error_bitrate" = "通话码率设置无效";

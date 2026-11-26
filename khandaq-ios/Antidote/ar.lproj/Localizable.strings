@@ -554,6 +554,10 @@
 "media_send_button" = "إرسال";
 "media_send_caption_hint" = "أضف تعليقا...";
 "media_send_counter_format" = "%1$d / %2$d";
+/* KHANDAQ (tester 8264/8265): the send preview: more items, and the pencil's menu for a photo */
+"media_send_add_more" = "إضافة صور أو فيديوهات";
+"media_edit_crop" = "قص وتدوير";
+"media_edit_markup" = "رسم ونص";
 "call_error_codec" = "تعذر تهيئة برامج ترميز الصوت أو الفيديو";
 "call_error_connection" = "تعذرت المزامنة مع المتصل. حاول مرة أخرى.";
 "call_error_bitrate" = "إعدادات معدل بت المكالمة غير صحيحة";

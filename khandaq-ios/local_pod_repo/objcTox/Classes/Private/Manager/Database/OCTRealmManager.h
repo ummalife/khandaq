@@ -76,6 +76,17 @@
  */
 - (BOOL)setNgcValue:(NSString *)value forKey:(NSString *)key;
 
+/**
+ * KHANDAQ (26.11.2026): every row whose key starts with `prefix`, key to value, copied out of Realm. Empty for an
+ * empty prefix.
+ */
+- (NSDictionary<NSString *, NSString *> *)ngcValuesWithKeyPrefix:(NSString *)prefix;
+
+/**
+ * KHANDAQ (26.11.2026): deletes the row with this key, if there is one.
+ */
+- (void)removeNgcValueForKey:(NSString *)key;
+
 - (RLMResults *)objectsWithClass:(Class)class predicate:(NSPredicate *)predicate;
 
 - (void)addObject:(OCTObject *)object;

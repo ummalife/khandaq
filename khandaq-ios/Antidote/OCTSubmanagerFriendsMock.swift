@@ -63,4 +63,8 @@ class OCTSubmanagerFriendsMock: NSObject, OCTSubmanagerFriends {
     func ensureFriend(forFriendNumber friendNumber: OCTToxFriendNumber) -> OCTFriend! {
         return nil
     }
+
+    func groupContactOffer(for friendRequest: OCTFriendRequest) -> OCTGroupContactOffer? {
+        return nil
+    }
 }

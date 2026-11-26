@@ -6,6 +6,7 @@
 #import <UIKit/UIKit.h>
 
 #import "OCTToxConstants.h"
+#import "OCTGroupContactExchange.h"
 
 @class OCTChat;
 @class OCTMessageAbstract;
@@ -314,6 +315,26 @@ extern NSString *const kOCTNgcSignedHistoryVerdictStoredNotification;
  * author name. Applied to Realm immediately.
  */
 - (void)editGroupMessage:(OCTMessageAbstract *)message inChat:(OCTChat *)chat newText:(NSString *)newText;
+
+/**
+ * KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): "Add to contacts" on a member. A member's key is
+ * theirs in this group only, so it never makes a contact: the offer asks the member over the group to exchange IDs,
+ * and they accept it as a contact request. Nothing goes while the member is not online in the group.
+ */
+- (OCTGroupContactOfferResult)sendContactOfferToMemberWithPublicKeyHex:(nonnull NSString *)memberPublicKeyHex
+                                                                inChat:(nonnull OCTChat *)chat;
+
+/**
+ * KHANDAQ (26.11.2026): the key (64 hex, upper case) of the contact behind a member of this group, once the two of you
+ * exchanged IDs and while that contact is still one of yours; nil otherwise.
+ */
+- (nullable NSString *)contactPublicKeyForMemberPublicKeyHex:(nonnull NSString *)memberPublicKeyHex inChat:(nonnull OCTChat *)chat;
+
+/**
+ * KHANDAQ (26.11.2026): the whole ID (76 hex, upper case) of the contact behind a member of this group, when the
+ * exchange brought it; nil otherwise.
+ */
+- (nullable NSString *)contactAddressForMemberPublicKeyHex:(nonnull NSString *)memberPublicKeyHex inChat:(nonnull OCTChat *)chat;
 
 /**
  * KHANDAQ (0.2.57): the folder of the files that come in the group with this chat id, files/group/<chat id in lower

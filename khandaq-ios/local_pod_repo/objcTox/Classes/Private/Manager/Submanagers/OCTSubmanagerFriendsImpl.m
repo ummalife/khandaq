@@ -11,6 +11,9 @@
 #import "OCTRealmManager.h"
 #import "OCTPushUrlValidator.h"
 #import "OCTPushPreview.h"
+#import "OCTChat.h"
+#import "OCTGroupContactExchange.h"
+#import "OCTGroupContactStore.h"
 #if __has_include(<Firebase/Firebase.h>)
 #import <Firebase/Firebase.h>
 #define OCTHasFirebase 1
@@ -103,21 +106,26 @@ static BOOL OCTIsGenericDefaultFriendName(NSString *name)
     return NO;
 }
 
-static void OCTApplyFriendName(OCTFriend *friend, NSString *name, NSString *publicKey)
+static void OCTApplyFriendName(OCTFriend *friend, NSString *name, NSString *publicKey, NSString *groupMemberName)
 {
     // KHANDAQ (#97): preserve a user-chosen nickname. Only keep the nickname tracking the friend's
     // name when the user hasn't set a custom alias (nickname empty, still equal to the previous name,
     // or still the auto-derived public-key label). This helper runs on friend load/connect/refresh, so
     // without the guard a restart or reconnect clobbers the alias back to the name.
+    // KHANDAQ (26.11.2026): a contact added from a group (groupMemberName, their name there) is named with it until
+    // their own name comes, and keeps it while their own name is the default one.
     BOOL nicknameTracksName = (friend.nickname.length == 0)
         || [friend.nickname isEqualToString:friend.name]
-        || [friend.nickname isEqualToString:OCTShortPublicKeyLabel(publicKey)];
+        || [friend.nickname isEqualToString:OCTShortPublicKeyLabel(publicKey)]
+        || (groupMemberName.length > 0 && [friend.nickname isEqualToString:groupMemberName]);
 
     friend.name = name ?: @"";
 
     if (nicknameTracksName) {
         if (!OCTIsGenericDefaultFriendName(name)) {
             friend.nickname = name;
+        } else if (groupMemberName.length > 0) {
+            friend.nickname = groupMemberName;
         } else {
             friend.nickname = OCTShortPublicKeyLabel(publicKey);
         }
@@ -160,7 +168,7 @@ static BOOL OCTIsValidFriendAddAddress(NSString *address, NSError **error)
     return YES;
 }
 
-static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFriendNumber friendNumber)
+static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFriendNumber friendNumber, NSString *groupMemberName)
 {
     NSError *error = nil;
     NSString *liveName = [tox friendNameWithFriendNumber:friendNumber error:&error];
@@ -169,7 +177,7 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
         return;
     }
 
-    OCTApplyFriendName(friend, liveName, friend.publicKey);
+    OCTApplyFriendName(friend, liveName, friend.publicKey, groupMemberName);
 }
 
 #pragma mark -  Public
@@ -307,6 +315,13 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
 {
     NSParameterAssert(friendRequest);
 
+    // KHANDAQ (26.11.2026): a member who asked in a group is added with their whole ID, and told so.
+    OCTGroupContactStore *store = [self groupContactStore];
+    OCTGroupContactIncomingOffer *groupOffer = [store incomingOfferFromContact:friendRequest.publicKey];
+    if (groupOffer != nil) {
+        return [self approveGroupContactRequest:friendRequest offer:groupOffer store:store error:error];
+    }
+
     OCTTox *tox = [self.dataSource managerGetTox];
 
     OCTToxFriendNumber friendNumber = [tox addFriendWithNoRequestWithPublicKey:friendRequest.publicKey error:error];
@@ -326,7 +341,72 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
 {
     NSParameterAssert(friendRequest);
 
+    // KHANDAQ (26.11.2026): declining an offer from a group sends nothing, as declining a request by ID does.
+    if (friendRequest.publicKey.length > 0) {
+        [[self groupContactStore] removeIncomingOfferFromContact:friendRequest.publicKey];
+    }
     [[self.dataSource managerGetRealmManager] deleteObject:friendRequest];
+}
+
+- (nullable OCTGroupContactOffer *)groupContactOfferForFriendRequest:(OCTFriendRequest *)friendRequest
+{
+    if (friendRequest == nil || friendRequest.isInvalidated || friendRequest.publicKey.length == 0) {
+        return nil;
+    }
+    return [[[self groupContactStore] incomingOfferFromContact:friendRequest.publicKey] offer];
+}
+
+- (BOOL)finishGroupContactOffer:(OCTGroupContactPendingOffer *)offer
+            contactPublicKeyHex:(NSString *)contactPublicKeyHex
+              contactAddressHex:(nullable NSString *)contactAddressHex
+{
+    NSString *contactKey = contactPublicKeyHex.uppercaseString;
+    if (contactKey.length != kOCTToxPublicKeyLength) {
+        return NO;
+    }
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    OCTGroupContactStore *store = [self groupContactStore];
+
+    BOOL added = NO;
+    if ([realmManager friendWithPublicKey:contactKey] == nil) {
+        // Kept first: the new contact is named with it (OCTApplyFriendName).
+        [store saveMemberName:offer.memberName forContact:contactKey];
+        OCTTox *tox = [self.dataSource managerGetTox];
+        OCTToxFriendNumber friendNumber = [tox addFriendWithNoRequestWithPublicKey:contactKey error:nil];
+        if (friendNumber == kOCTToxFriendNumberFailure) {
+            return NO;
+        }
+        [self.dataSource managerSaveTox];
+        if (! [self createFriendWithFriendNumber:friendNumber error:nil]) {
+            return NO;
+        }
+        added = YES;
+    }
+
+    // A request of theirs waiting here (both asked) is answered by this.
+    RLMResults *requests = [realmManager objectsWithClass:[OCTFriendRequest class]
+                                                predicate:[NSPredicate predicateWithFormat:@"publicKey ==[c] %@", contactKey]];
+    NSMutableArray<OCTFriendRequest *> *answered = [NSMutableArray array];
+    for (OCTFriendRequest *request in requests) {
+        [answered addObject:request];
+    }
+    for (OCTFriendRequest *request in answered) {
+        [realmManager deleteObject:request];
+    }
+    [store removeIncomingOfferFromContact:contactKey];
+    [store saveLink:[[OCTGroupContactLink alloc] initWithContactPublicKeyHex:contactKey contactAddressHex:contactAddressHex]
+          forMember:offer.memberPublicKeyHex
+            inGroup:offer.groupChatIdHex];
+
+    if (added) {
+        [[self.dataSource managerGetNotificationCenter] postNotificationName:kOCTGroupContactAddedNotification
+                                                                      object:nil
+                                                                    userInfo:@{
+                                                                        kOCTGroupContactAddedNameKey: offer.memberName ?: @"",
+                                                                        kOCTGroupContactAddedPublicKeyKey: contactKey,
+                                                                    }];
+    }
+    return YES;
 }
 
 - (BOOL)removeFriend:(OCTFriend *)friend error:(NSError **)error
@@ -383,6 +463,8 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
         }
 
         OCTFriend *friend = [results firstObject];
+        // Read before the write block: the store reads Realm on its queue.
+        NSString *groupMemberName = [self groupMemberNameForContact:publicKey];
 
         __block BOOL friendIsConnected = NO;
 
@@ -397,7 +479,7 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
             friendIsConnected = theFriend.isConnected;
 
             if (theFriend.isConnected) {
-                OCTRefreshFriendNameFromTox(tox, theFriend, number);
+                OCTRefreshFriendNameFromTox(tox, theFriend, number, groupMemberName);
 
                 OCTToxCapabilities f_caps = [tox friendGetCapabilitiesWithFriendNumber:number];
                 theFriend.capabilities2 = [NSString stringWithFormat:@"%lu", f_caps];
@@ -405,7 +487,7 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
             else {
                 NSDate *dateOffline = [tox friendGetLastOnlineWithFriendNumber:number error:nil];
                 theFriend.lastSeenOnlineInterval = [dateOffline timeIntervalSince1970];
-                OCTRefreshFriendNameFromTox(tox, theFriend, number);
+                OCTRefreshFriendNameFromTox(tox, theFriend, number, groupMemberName);
             }
         }];
 
@@ -484,12 +566,13 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
             continue;
         }
 
+        NSString *groupMemberName = [self groupMemberNameForContact:friend.publicKey];
         [realmManager updateObject:friend withBlock:^(OCTFriend *theFriend) {
             theFriend.connectionStatus = status;
             theFriend.isConnected = connected;
 
             if (connected) {
-                OCTRefreshFriendNameFromTox(tox, theFriend, theFriend.friendNumber);
+                OCTRefreshFriendNameFromTox(tox, theFriend, theFriend.friendNumber, groupMemberName);
             }
         }];
 
@@ -507,6 +590,19 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
 - (void)tox:(OCTTox *)tox friendRequestWithMessage:(NSString *)message publicKey:(NSString *)publicKey
 {
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+
+    // KHANDAQ (26.11.2026): a member we offered to add accepted: their request carries the nonce of our offer and is
+    // accepted without asking. A marker with a nonce we do not know makes an ordinary request, read without it. The
+    // offer is taken, not read: their accept over the group answers it too, and only the answer that takes it adds.
+    NSString *nonceHex = [OCTGroupContactExchange nonceHexInRequestMessage:message];
+    if (nonceHex != nil) {
+        OCTGroupContactPendingOffer *offer = [[self groupContactStore] takePendingOfferWithNonceHex:nonceHex
+                                                                                                 at:[[NSDate date] timeIntervalSince1970]];
+        if (offer != nil && [self finishGroupContactOffer:offer contactPublicKeyHex:publicKey contactAddressHex:nil]) {
+            return;
+        }
+    }
+    message = [OCTGroupContactExchange requestMessageWithoutMarker:message];
 
     NSPredicate *predicate = [NSPredicate predicateWithFormat:@"publicKey == %@", publicKey];
     RLMResults *results = [realmManager objectsWithClass:[OCTFriendRequest class] predicate:predicate];
@@ -540,9 +636,10 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
         return;
     }
 
+    NSString *groupMemberName = [self groupMemberNameForContact:publicKey];
     [realmManager updateObject:friend withBlock:^(OCTFriend *theFriend) {
         // KHANDAQ (#97): apply via the shared helper, which preserves a user-chosen nickname.
-        OCTApplyFriendName(theFriend, name, publicKey);
+        OCTApplyFriendName(theFriend, name, publicKey, groupMemberName);
     }];
 }
 
@@ -667,13 +764,14 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
         return;
     }
 
+    NSString *groupMemberName = [self groupMemberNameForContact:publicKey];
     [realmManager updateObject:friend withBlock:^(OCTFriend *theFriend) {
 
         if ((status != OCTToxConnectionStatusNone)
             && (theFriend.connectionStatus == OCTToxConnectionStatusNone))
         {
             // Friend is coming online now
-            OCTRefreshFriendNameFromTox(tox, theFriend, friendNumber);
+            OCTRefreshFriendNameFromTox(tox, theFriend, friendNumber, groupMemberName);
 
             OCTToxCapabilities f_caps = [tox friendGetCapabilitiesWithFriendNumber:friendNumber];
             OCTLogVerbose(@"f_caps=%lu", f_caps);
@@ -706,6 +804,68 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
 }
 
 #pragma mark -  Private
+
+- (OCTGroupContactStore *)groupContactStore
+{
+    return [[OCTGroupContactStore alloc] initWithRealmManager:[self.dataSource managerGetRealmManager]];
+}
+
+/// The name a contact added from a group had there, nil for any other contact.
+- (nullable NSString *)groupMemberNameForContact:(NSString *)publicKey
+{
+    return publicKey.length > 0 ? [[self groupContactStore] memberNameForContact:publicKey] : nil;
+}
+
+/// Accepting an offer from a group: our own contact request to the member's whole ID, with the nonce of the offer in
+/// its first line (toxcore resends it until they are online, wherever they are), and the accept over the group while
+/// they are online there. The new contact is named with their name in the group until their own comes.
+- (BOOL)approveGroupContactRequest:(OCTFriendRequest *)friendRequest
+                             offer:(OCTGroupContactIncomingOffer *)offer
+                             store:(OCTGroupContactStore *)store
+                             error:(NSError **)error
+{
+    OCTTox *tox = [self.dataSource managerGetTox];
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+
+    NSString *text = OCTGroupContactLocalizedString(@"air_group_contact_accept_message_format",
+                                                    @"I accepted your request from the group «%@»",
+                                                    offer.groupName);
+    NSString *message = [OCTGroupContactExchange requestMessageWithNonceHex:offer.nonceHex text:text];
+    if ([message lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > kOCTToxMaxFriendRequestLength) {
+        message = [OCTGroupContactExchange requestMessageWithNonceHex:offer.nonceHex text:@""];
+    }
+
+    [store saveMemberName:offer.memberName forContact:offer.contactPublicKeyHex];
+    OCTToxFriendNumber friendNumber = [tox addFriendWithAddress:offer.contactAddressHex message:message error:error];
+    if (friendNumber == kOCTToxFriendNumberFailure) {
+        return NO;
+    }
+    [self.dataSource managerSaveTox];
+
+    [realmManager deleteObject:friendRequest];
+    [store removeIncomingOfferFromContact:offer.contactPublicKeyHex];
+    if (! [self createFriendWithFriendNumber:friendNumber error:error]) {
+        return NO;
+    }
+    [store saveLink:[[OCTGroupContactLink alloc] initWithContactPublicKeyHex:offer.contactPublicKeyHex
+                                                           contactAddressHex:offer.contactAddressHex]
+          forMember:offer.memberPublicKeyHex
+            inGroup:offer.groupChatIdHex];
+    // Both asked: the offer we sent them is answered by this as well.
+    [store removePendingOfferToMember:offer.memberPublicKeyHex inGroup:offer.groupChatIdHex];
+
+    OCTChat *chat = [realmManager chatWithGroupChatIdHex:offer.groupChatIdHex];
+    if (chat != nil && chat.groupNumber >= 0) {
+        OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)chat.groupNumber;
+        NSError *peerError = nil;
+        uint32_t peerId = [tox groupPeerIdForPublicKeyHex:offer.memberPublicKeyHex groupNumber:groupNumber error:&peerError];
+        if (peerError == nil
+            && [tox groupPeerConnectionStatusForGroupNumber:groupNumber peerId:peerId error:nil] != OCTToxConnectionStatusNone) {
+            OCTGroupContactSendPacket(tox, groupNumber, peerId, OCTGroupContactPacketKindAccept, offer.nonceHex);
+        }
+    }
+    return YES;
+}
 
 - (BOOL)createFriendWithFriendNumber:(OCTToxFriendNumber)friendNumber error:(NSError **)userError
 {
@@ -766,7 +926,7 @@ static void OCTRefreshFriendNameFromTox(OCTTox *tox, OCTFriend *friend, OCTToxFr
     }
 
     friend.isConnected = (friend.connectionStatus != OCTToxConnectionStatusNone);
-    OCTApplyFriendName(friend, friend.name, friend.publicKey);
+    OCTApplyFriendName(friend, friend.name, friend.publicKey, [self groupMemberNameForContact:friend.publicKey]);
 
     OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
     OCTFriend *existingFriend = [realmManager friendWithPublicKey:friend.publicKey];

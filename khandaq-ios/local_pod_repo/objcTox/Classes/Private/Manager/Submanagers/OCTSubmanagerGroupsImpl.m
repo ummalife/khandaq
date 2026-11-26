@@ -26,6 +26,10 @@
 #import "OCTNgcGroupLiveAudio.h"
 #import "OCTNgcGroupLiveVideo.h"
 #import "OCTGroupPendingLeaves.h"
+#import "OCTGroupContactExchange.h"
+#import "OCTGroupContactStore.h"
+#import "OCTFriendRequest.h"
+#import "OCTSubmanagerFriendsImpl.h"
 #import "OCTSettingsStorageObject.h"
 #import <toxcore/tox.h>
 
@@ -55,6 +59,9 @@ static const NSTimeInterval kOCTGroupReconnectSuppressSec = 300.0;
 static const uint8_t kOCTGroupLeaveNotice[8] = {0x66, 0x77, 0x88, 0x11, 0x34, 0x35, 0x01, 0x44};
 // How long a notice waits for its exit: the QUIT follows at once, a timeout after a lost QUIT within a minute.
 static const NSTimeInterval kOCTGroupLeaveNoticeWindowSec = 300.0;
+// KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): a second contact offer of a member within this
+// many seconds is dropped.
+static const NSTimeInterval kOCTGroupContactOfferMinIntervalSec = 60.0;
 // KHANDAQ (QA live, F11): the chat ids of the leaves that wait for their notice's resends (OCTGroupPendingLeaves),
 // in the profile's ngc key-value table, so that a leave cut short by a kill or a crash is done at the next start.
 static NSString *const kOCTGroupPendingLeavesStoreKey = @"kqpendingleaves";
@@ -144,6 +151,9 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 // KHANDAQ (0.2.57): the chat ids (lowercase) of the groups joined here whose save waits for their first member
 // (-markGroupJoinedForFirstSaveWithChatIdHex:).
 @property (nonatomic, strong, readonly) NSMutableSet<NSString *> *groupsAwaitingFirstSave;
+// KHANDAQ (26.11.2026): when each member last offered to become a contact, by "<chat id>|<member key>" in lower case.
+// Main queue.
+@property (nonatomic, strong, readonly) NSMutableDictionary<NSString *, NSNumber *> *groupContactOffersSeenAt;
 #if TARGET_OS_IPHONE
 // KHANDAQ (QA live, F11): held while a leave is pending, so that the app is not suspended before it is done.
 @property (nonatomic, assign) UIBackgroundTaskIdentifier pendingGroupLeaveBackgroundTask;
@@ -200,6 +210,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     _pendingGroupLeaveDrains = [NSCountedSet set];
     _groupFileSendsInFlight = [NSMutableSet set];
     _groupsAwaitingFirstSave = [NSMutableSet set];
+    _groupContactOffersSeenAt = [NSMutableDictionary dictionary];
 #if TARGET_OS_IPHONE
     _pendingGroupLeaveBackgroundTask = UIBackgroundTaskInvalid;
 #endif
@@ -2449,6 +2460,217 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     }
 }
 
+#pragma mark - A member to contacts
+
+// KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): the key a group shows for a member is theirs in
+// that group only (toxcore makes a key pair per group), so "Add to contacts" asks the member over the group's private
+// channel to exchange IDs (packet 61) and they accept it as a contact request (packet 62, and a contact request that
+// carries the nonce of the offer). The records live in OCTGroupContactStore.
+
+- (OCTGroupContactStore *)groupContactStore
+{
+    return [[OCTGroupContactStore alloc] initWithRealmManager:[self.dataSource managerGetRealmManager]];
+}
+
+/// The group's chat id in lower case: the one the chat keeps, else toxcore's; nil when neither is known.
+- (nullable NSString *)groupContactChatIdHexForChat:(OCTChat *)chat
+{
+    NSString *chatIdHex = chat.groupChatIdHex;
+    if (chatIdHex.length != 64 && chat.groupNumber >= 0) {
+        chatIdHex = [[self.dataSource managerGetTox] groupChatIdHexForGroupNumber:(OCTToxGroupNumber)chat.groupNumber error:nil];
+    }
+    return chatIdHex.length == 64 ? chatIdHex.lowercaseString : nil;
+}
+
+- (nullable OCTGroupContactLink *)groupContactLinkForMemberPublicKeyHex:(NSString *)memberPublicKeyHex inChat:(OCTChat *)chat
+{
+    NSString *chatIdHex = chat.isGroup ? [self groupContactChatIdHexForChat:chat] : nil;
+    if (chatIdHex == nil || memberPublicKeyHex.length != 64) {
+        return nil;
+    }
+    OCTGroupContactLink *link = [[self groupContactStore] linkForMember:memberPublicKeyHex inGroup:chatIdHex];
+    // A contact removed since is no contact: the member is offered "Add to contacts" again.
+    if (link == nil || [[self.dataSource managerGetRealmManager] friendWithPublicKey:link.contactPublicKeyHex] == nil) {
+        return nil;
+    }
+    return link;
+}
+
+- (nullable NSString *)contactPublicKeyForMemberPublicKeyHex:(NSString *)memberPublicKeyHex inChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+    return [self groupContactLinkForMemberPublicKeyHex:memberPublicKeyHex inChat:chat].contactPublicKeyHex;
+}
+
+- (nullable NSString *)contactAddressForMemberPublicKeyHex:(NSString *)memberPublicKeyHex inChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+    return [self groupContactLinkForMemberPublicKeyHex:memberPublicKeyHex inChat:chat].contactAddressHex;
+}
+
+- (OCTGroupContactOfferResult)sendContactOfferToMemberWithPublicKeyHex:(NSString *)memberPublicKeyHex inChat:(OCTChat *)chat
+{
+    NSParameterAssert(chat);
+
+    NSString *memberKey = memberPublicKeyHex.lowercaseString;
+    NSString *chatIdHex = chat.isGroup ? [self groupContactChatIdHexForChat:chat] : nil;
+    if (chatIdHex == nil || memberKey.length != 64) {
+        return OCTGroupContactOfferResultFailed;
+    }
+    if ([self groupContactLinkForMemberPublicKeyHex:memberKey inChat:chat] != nil) {
+        return OCTGroupContactOfferResultAlreadyContact;
+    }
+    // The offer goes only to a member online in the group now: nothing waits to be sent later.
+    if (chat.groupNumber < 0 || ! [self isGroupConnectedForChat:chat]) {
+        return OCTGroupContactOfferResultMemberOffline;
+    }
+    OCTTox *tox = [self.dataSource managerGetTox];
+    OCTToxGroupNumber groupNumber = (OCTToxGroupNumber)chat.groupNumber;
+    NSError *peerError = nil;
+    uint32_t peerId = [tox groupPeerIdForPublicKeyHex:memberKey groupNumber:groupNumber error:&peerError];
+    if (peerError != nil || ! [self isGroupPeerOnlineWithId:peerId inChat:chat]) {
+        return OCTGroupContactOfferResultMemberOffline;
+    }
+
+    NSString *nonceHex = [OCTGroupContactExchange randomNonceHex];
+    if (! OCTGroupContactSendPacket(tox, groupNumber, peerId, OCTGroupContactPacketKindOffer, nonceHex)) {
+        return OCTGroupContactOfferResultFailed;
+    }
+    NSString *memberName = [self groupPeerNameByPubkeyForGroupNumber:groupNumber peerId:peerId chat:chat] ?: @"";
+    // One offer per member: a new one replaces the one before.
+    [[self groupContactStore] savePendingOffer:[[OCTGroupContactPendingOffer alloc] initWithGroupChatIdHex:chatIdHex
+                                                                                        memberPublicKeyHex:memberKey
+                                                                                                memberName:memberName
+                                                                                                  nonceHex:nonceHex
+                                                                                                    sentAt:[[NSDate date] timeIntervalSince1970]]];
+    return OCTGroupContactOfferResultSent;
+}
+
+- (void)handleGroupContactPacket:(NSData *)data groupNumber:(OCTToxGroupNumber)groupNumber peerId:(uint32_t)peerId
+{
+    // A length other than 54, or an address whose checksum does not hold, is dropped here.
+    OCTGroupContactPacket *packet = [OCTGroupContactExchange parsePacket:data];
+    if (packet == nil) {
+        return;
+    }
+    OCTTox *tox = [self.dataSource managerGetTox];
+    NSString *ownKey = tox.publicKey ?: @"";
+    if ([packet.publicKeyHex caseInsensitiveCompare:ownKey] == NSOrderedSame) {
+        return;
+    }
+    OCTChat *chat = [[self.dataSource managerGetRealmManager] chatWithGroupNumber:groupNumber];
+    NSString *chatIdHex = chat != nil ? [self groupContactChatIdHexForChat:chat] : nil;
+    NSString *memberKey = [tox groupPeerPublicKeyHexForGroupNumber:groupNumber peerId:peerId error:nil].lowercaseString;
+    if (chatIdHex == nil || memberKey.length != 64) {
+        return;
+    }
+
+    if (packet.kind == OCTGroupContactPacketKindOffer) {
+        [self handleGroupContactOffer:packet chat:chat chatIdHex:chatIdHex groupNumber:groupNumber peerId:peerId memberKey:memberKey];
+    }
+    else {
+        [self handleGroupContactAccept:packet chatIdHex:chatIdHex memberKey:memberKey];
+    }
+}
+
+/// Whether we muted this member in the group: their offers are dropped as their messages ring nothing.
+- (BOOL)isGroupContactSenderMutedWithKey:(NSString *)memberKey peerId:(uint32_t)peerId chat:(OCTChat *)chat
+{
+    RLMResults *peers = [[self.dataSource managerGetRealmManager] groupPeersForChatUniqueIdentifier:chat.uniqueIdentifier];
+    for (OCTGroupPeer *peer in peers) {
+        BOOL same = peer.peerPublicKeyHex.length > 0
+            ? [peer.peerPublicKeyHex caseInsensitiveCompare:memberKey] == NSOrderedSame
+            : (uint32_t)peer.peerId == peerId;
+        if (same) {
+            return peer.peerNotificationsSilent;
+        }
+    }
+    return NO;
+}
+
+- (void)handleGroupContactOffer:(OCTGroupContactPacket *)packet
+                           chat:(OCTChat *)chat
+                      chatIdHex:(NSString *)chatIdHex
+                    groupNumber:(OCTToxGroupNumber)groupNumber
+                         peerId:(uint32_t)peerId
+                      memberKey:(NSString *)memberKey
+{
+    if ([self isGroupContactSenderMutedWithKey:memberKey peerId:peerId chat:chat]) {
+        return;
+    }
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    NSString *seenKey = [NSString stringWithFormat:@"%@|%@", chatIdHex, memberKey];
+    NSNumber *seenAt = self.groupContactOffersSeenAt[seenKey];
+    if (seenAt != nil && fabs(now - seenAt.doubleValue) < kOCTGroupContactOfferMinIntervalSec) {
+        return;
+    }
+    self.groupContactOffersSeenAt[seenKey] = @(now);
+
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    OCTGroupContactStore *store = [self groupContactStore];
+    NSString *contactKey = packet.publicKeyHex;
+
+    // Their key is a contact of ours already: the accept goes at once and nothing is asked.
+    if ([realmManager friendWithPublicKey:contactKey] != nil) {
+        OCTGroupContactSendPacket([self.dataSource managerGetTox], groupNumber, peerId, OCTGroupContactPacketKindAccept, packet.nonceHex);
+        [store saveLink:[[OCTGroupContactLink alloc] initWithContactPublicKeyHex:contactKey contactAddressHex:packet.addressHex]
+              forMember:memberKey
+                inGroup:chatIdHex];
+        return;
+    }
+
+    NSString *memberName = [self groupPeerNameByPubkeyForGroupNumber:groupNumber peerId:peerId chat:chat] ?: @"";
+    NSString *groupName = chat.groupName.length > 0
+        ? chat.groupName
+        : ([[self.dataSource managerGetTox] groupNameForGroupNumber:groupNumber error:nil] ?: @"");
+    [store saveIncomingOffer:[[OCTGroupContactIncomingOffer alloc] initWithContactAddressHex:packet.addressHex
+                                                                                    nonceHex:packet.nonceHex
+                                                                              groupChatIdHex:chatIdHex
+                                                                                   groupName:groupName
+                                                                          memberPublicKeyHex:memberKey
+                                                                                  memberName:memberName
+                                                                                  receivedAt:now]];
+
+    // An incoming contact request, where the requests by ID wait: one per key.
+    NSPredicate *sameKey = [NSPredicate predicateWithFormat:@"publicKey ==[c] %@", contactKey];
+    if ([realmManager objectsWithClass:[OCTFriendRequest class] predicate:sameKey].count > 0) {
+        return;
+    }
+    OCTFriendRequest *request = [OCTFriendRequest new];
+    request.publicKey = contactKey;
+    request.message = OCTGroupContactLocalizedString(@"air_request_from_group_format", @"From the group «%@»", groupName);
+    request.dateInterval = now;
+    [realmManager addObject:request];
+}
+
+- (void)handleGroupContactAccept:(OCTGroupContactPacket *)packet chatIdHex:(NSString *)chatIdHex memberKey:(NSString *)memberKey
+{
+    OCTGroupContactStore *store = [self groupContactStore];
+    // It counts only as the answer of this member, in this group, to the offer with this nonce that we sent them, and
+    // only when it is the one that takes that offer: their contact request answers it too and may come at once.
+    OCTGroupContactPendingOffer *offer = [store takePendingOfferToMember:memberKey
+                                                                 inGroup:chatIdHex
+                                                                nonceHex:packet.nonceHex
+                                                                      at:[[NSDate date] timeIntervalSince1970]];
+    if (offer == nil) {
+        // Their contact request may have done the exchange already, with the key alone: the accept that comes after
+        // it brings the whole ID. Anything else is not an answer to an offer of ours.
+        OCTGroupContactLink *link = [store linkForMember:memberKey inGroup:chatIdHex];
+        if (link != nil && link.contactAddressHex == nil && [link.contactPublicKeyHex isEqualToString:packet.publicKeyHex]) {
+            [store saveLink:[[OCTGroupContactLink alloc] initWithContactPublicKeyHex:link.contactPublicKeyHex contactAddressHex:packet.addressHex]
+                  forMember:memberKey
+                    inGroup:chatIdHex];
+        }
+        return;
+    }
+    id<OCTSubmanagerFriends> friends = [self.dataSource managerGetFriends];
+    if ([friends isKindOfClass:[OCTSubmanagerFriendsImpl class]]) {
+        [(OCTSubmanagerFriendsImpl *)friends finishGroupContactOffer:offer
+                                                 contactPublicKeyHex:packet.publicKeyHex
+                                                   contactAddressHex:packet.addressHex];
+    }
+}
+
 #pragma mark - OCTToxDelegate
 
 - (void)selfConnectionBecameOnline:(NSNotification *)notification
@@ -3831,6 +4053,13 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     }
 
     if ([self isBlockedIncomingPeerId:peerId groupNumber:groupNumber]) {
+        return;
+    }
+
+    // KHANDAQ (26.11.2026): a member offering to become a contact, or accepting our offer (61/62). No other
+    // handler takes these ids; a malformed one is dropped there.
+    if ([OCTGroupContactExchange isContactPacket:data]) {
+        [self handleGroupContactPacket:data groupNumber:groupNumber peerId:peerId];
         return;
     }
 

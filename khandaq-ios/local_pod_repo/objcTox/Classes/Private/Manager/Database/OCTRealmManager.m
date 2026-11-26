@@ -203,6 +203,42 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     return ok;
 }
 
+- (NSDictionary<NSString *, NSString *> *)ngcValuesWithKeyPrefix:(NSString *)prefix
+{
+    NSMutableDictionary<NSString *, NSString *> *values = [NSMutableDictionary new];
+    if (prefix.length == 0) {
+        return values;
+    }
+
+    dispatch_sync(self.queue, ^{
+        RLMResults *rows = [OCTNgcKeyValue objectsInRealm:self.realm where:@"uniqueIdentifier BEGINSWITH %@", prefix];
+        for (OCTNgcKeyValue *row in rows) {
+            // Copied while still inside the queue, as -ngcValueForKey: does.
+            if (row.uniqueIdentifier.length > 0 && row.value != nil) {
+                values[[row.uniqueIdentifier copy]] = [row.value copy];
+            }
+        }
+    });
+    return values;
+}
+
+- (void)removeNgcValueForKey:(NSString *)key
+{
+    if (key.length == 0) {
+        return;
+    }
+
+    dispatch_sync(self.queue, ^{
+        OCTNgcKeyValue *row = [OCTNgcKeyValue objectInRealm:self.realm forPrimaryKey:key];
+        if (row == nil) {
+            return;
+        }
+        [self.realm beginWriteTransaction];
+        [self.realm deleteObject:row];
+        [self.realm commitWriteTransaction];
+    });
+}
+
 - (RLMResults *)objectsWithClass:(Class)class predicate:(NSPredicate *)predicate
 {
     NSParameterAssert(class);

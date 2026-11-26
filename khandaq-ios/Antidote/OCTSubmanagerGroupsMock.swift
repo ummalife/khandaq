@@ -77,6 +77,36 @@ class OCTSubmanagerGroupsMock: NSObject, OCTSubmanagerGroups {
         // nop
     }
 
+    /// The demo members are not asked over a network: the offer to one online now is said to have gone.
+    func sendContactOfferToMember(withPublicKeyHex memberPublicKeyHex: String, in chat: OCTChat) -> OCTGroupContactOfferResult {
+        if contactPublicKey(forMemberPublicKeyHex: memberPublicKeyHex, in: chat) != nil {
+            return .alreadyContact
+        }
+        guard let peers = peers(for: chat) else {
+            return .memberOffline
+        }
+        for index in 0..<peers.count {
+            if let peer = peers.object(at: index) as? OCTGroupPeer, !peer.isInvalidated,
+               peer.peerPublicKeyHex?.caseInsensitiveCompare(memberPublicKeyHex) == .orderedSame {
+                return isGroupPeerOnline(withId: UInt32(bitPattern: peer.peerId), in: chat) ? .sent : .memberOffline
+            }
+        }
+        return .memberOffline
+    }
+
+    /// In the demo world a member who is a contact has the same key in the group as their ID (Bilal).
+    func contactPublicKey(forMemberPublicKeyHex memberPublicKeyHex: String, in chat: OCTChat) -> String? {
+        guard let realm = realm,
+              let friend = OCTFriend.objects(in: realm, with: NSPredicate(format: "publicKey ==[c] %@", memberPublicKeyHex)).firstObject() as? OCTFriend else {
+            return nil
+        }
+        return friend.publicKey.uppercased()
+    }
+
+    func contactAddress(forMemberPublicKeyHex memberPublicKeyHex: String, in chat: OCTChat) -> String? {
+        return nil
+    }
+
     func createPublicGroup(withName groupName: String!, peerName: String!, error: NSErrorPointer) -> OCTToxGroupNumber {
         return 0
     }

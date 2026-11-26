@@ -37,3 +37,11 @@ a {
     color: @link;
     font-weight: bold
 }
+
+/* KHANDAQ (26.11.2026): an @mention in a group stands out in ink and bold, on either theme and on
+   the ground of a message that mentions you; it opens the member. */
+a.mention {
+    color: @mainText;
+    font-weight: bold;
+    text-decoration: none;
+}

@@ -8,6 +8,7 @@
 
 @class OCTFriendRequest;
 @class OCTFriend;
+@class OCTGroupContactOffer;
 
 @protocol OCTSubmanagerFriends <NSObject>
 
@@ -76,5 +77,12 @@
  * Returns an existing friend or creates one from tox state when missing (e.g. incoming message race).
  */
 - (nullable OCTFriend *)ensureFriendForFriendNumber:(OCTToxFriendNumber)friendNumber;
+
+/**
+ * KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): the group a contact request came through, when a
+ * member of a group asked with "Add to contacts"; nil for a request sent with an ID. Approving such a request sends
+ * our own contact request to the member's ID and answers them over the group.
+ */
+- (nullable OCTGroupContactOffer *)groupContactOfferForFriendRequest:(nonnull OCTFriendRequest *)friendRequest;
 
 @end

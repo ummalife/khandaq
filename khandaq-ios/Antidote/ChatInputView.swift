@@ -175,6 +175,30 @@ class ChatInputView: UIView {
     private(set) var isAirStyle = false
     /// The line under the field; nil until useAirStyle().
     private(set) var hintView: AirComposeHintView?
+    /// KHANDAQ (26.11.2026): the caret moved without the text changing (the members of a group that "@" offers
+    /// close once it leaves the word).
+    var onSelectionChanged: (() -> Void)?
+
+    /// Where the caret is, in UTF-16 as the text counts; its length is that of the selection.
+    var selectedRange: NSRange {
+        return textView.selectedRange
+    }
+
+    /// Whether the field has the keyboard.
+    var isEditingText: Bool {
+        return textView.isFirstResponder
+    }
+
+    /// Puts `replacement` in place of `range` of the text, the caret after it, as typing it would.
+    func replaceText(in range: NSRange, with replacement: String) {
+        let current = textView.text as NSString
+        guard range.location != NSNotFound, NSMaxRange(range) <= current.length else {
+            return
+        }
+        textView.text = current.replacingCharacters(in: range, with: replacement)
+        textView.selectedRange = NSRange(location: range.location + (replacement as NSString).length, length: 0)
+        textViewDidChange(textView)
+    }
     /// Called after every change of the text, typed or set.
     var onTextChanged: ((String) -> Void)?
     /// True while nothing can be sent from here now (the person is away): the send button stays
@@ -481,10 +505,16 @@ extension ChatInputView: UITextViewDelegate {
 
     func textViewDidBeginEditing(_ textView: UITextView) {
         applyAirFocus(true)
+        onSelectionChanged?()
+    }
+
+    func textViewDidChangeSelection(_ textView: UITextView) {
+        onSelectionChanged?()
     }
 
     func textViewDidEndEditing(_ textView: UITextView) {
         applyAirFocus(false)
+        onSelectionChanged?()
     }
 
     override func didMoveToWindow() {

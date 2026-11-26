@@ -617,7 +617,6 @@
 "group_member_status_offline" = "离线";
 "group_member_action_private_msg" = "群内私信";
 "group_member_action_open_chat" = "打开单聊";
-"group_member_action_add_friend" = "添加好友";
 "group_member_action_add_friend_sent" = "好友请求已发送。";
 "group_member_action_copy_id" = "复制ID";
 "group_member_action_copy_done" = "ID已复制";
@@ -817,6 +816,7 @@
 "air_section_messages" = "消息";
 "air_request_tag" = "收到的请求";
 "air_request_key_format" = "密钥 %@。接受请求后即可看到对方的名字";
+"air_request_from_group_format" = "来自群组“%@”";
 "air_reach_live" = "在线";
 "air_reach_relay" = "在线，经中继";
 "air_reach_pending" = "等待回复";
@@ -1083,9 +1083,14 @@
 "air_group_leave_message" = "成员会看到你已退出。要回来，需要邀请或群组密钥。";
 "air_group_write_privately" = "私信";
 "air_group_add_contact" = "添加为联系人";
-"air_group_contact_added_format" = "已将 %@ 添加为联系人";
-"air_group_copy_member_key" = "复制密钥";
 "air_group_member_key_copied" = "密钥已复制";
+"air_group_contact_offline_format" = "%@ 在此群组中不在线：请在对方回来后再发送请求";
+"air_group_contact_request_sent_format" = "请求已发送：%@ 接受后将出现在你的联系人中";
+"air_group_contact_now_format" = "%@ 已成为你的联系人";
+"air_group_contact_failed" = "请求未发出：请重试";
+"air_group_member_key_title" = "此群组中的密钥";
+"air_group_member_key_note" = "此密钥仅在此群组中属于对方：无法用它添加联系人。请使用“添加为联系人”。";
+"air_group_contact_accept_message_format" = "我已接受你在群组“%@”中发来的请求";
 "air_group_member_mute" = "在此群组中静音";
 "air_group_member_unmute" = "在此群组中取消静音";
 "air_group_member_muted_format" = "已在此群组中将 %@ 静音";
@@ -1425,6 +1430,9 @@
 /* Redesign stage 5: group settings, joining by key, private messages in a group */
 "air_group_private_note_format" = "群组“%1$@”中的私信：只有你和%2$@能看到。";
 "air_group_private_hint_away_format" = "%@ 不在线：请等对方上线后再写";
+"air_group_private_to_format" = "私密发给 %@：其他成员看不到";
+"air_group_private_to_you" = "私密发给你：其他成员看不到";
+"air_group_mention_hint" = "在消息中提及此成员";
 "air_group_settings_self_name" = "你在群组中的名字";
 "air_group_settings_self_name_note" = "本群成员可以看到它，你的个人资料名称不会改变。";
 "air_group_settings_topic" = "主题";
@@ -1461,6 +1469,8 @@
 "air_join_why_key" = "请先输入群组密钥";
 "air_cmd_join_group" = "用此密钥加入群组";
 "air_cmd_group_note" = "64 个字符，与群组密钥长度相同";
+"air_cmd_member_format" = "群组“%2$@”中的“%1$@”";
+"air_cmd_member_note" = "发送联系人请求";
 
 /* Stage 5: Password and PIN */
 "air_security_pin_section" = "PIN 码";

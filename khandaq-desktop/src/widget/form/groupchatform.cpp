@@ -30,6 +30,7 @@
 #include "src/model/group.h"
 #include "src/model/status.h"
 #include "src/model/air/airconversation.h"
+#include "src/model/air/airmention.h"
 #include "src/model/air/airmessagemarks.h"
 #include "src/model/air/airmodel.h"
 #include "src/widget/air/aircomposer.h"
@@ -61,6 +62,8 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QStyle>
+#include <QTextCursor>
 #include <QTimer>
 #include <QToolButton>
 #include <QPushButton>
@@ -180,6 +183,26 @@ GroupChatForm::GroupChatForm(Core& core_, Group* chatGroup, IChatLog& chatLog_,
     connect(dossier, &AirGroupDossier::memberActionRequested, this, &GroupChatForm::applyMemberAction);
     connect(dossier, &AirGroupDossier::writePrivatelyRequested, this,
             [this](const Air::GroupMember& member) { showPrivate(member.name, member.publicKey); });
+    // KHANDAQ (26.11.2026): a member to contacts, from their menu or their private messages.
+    connect(dossier, &AirGroupDossier::addContactRequested, this,
+            [this](const Air::GroupMember& member) {
+                emit contactOfferRequested(group->getPersistentId(), ToxPk(member.publicKey));
+            });
+    connect(dossier, &AirGroupDossier::openContactRequested, this,
+            [this](const QString& contactKey) {
+                emit contactConversationRequested(ToxPk(contactKey));
+            });
+    connect(privateThread, &AirPrivateThread::addContactRequested, this,
+            [this](const QString& peerKey) {
+                emit contactOfferRequested(group->getPersistentId(), ToxPk(peerKey));
+            });
+    connect(privateThread, &AirPrivateThread::openContactRequested, this,
+            [this](const QString& peerKey) {
+                const Air::LocalStore::MemberContact contact = contactOf(peerKey);
+                if (!contact.isNull()) {
+                    emit contactConversationRequested(ToxPk(contact.contactKey));
+                }
+            });
     connect(dossier, &AirGroupDossier::memberMuteRequested, this,
             [this](const Air::GroupMember& member, bool muted) {
                 if (!airLocal || member.publicKey.isEmpty()) {
@@ -216,6 +239,26 @@ GroupChatForm::GroupChatForm(Core& core_, Group* chatGroup, IChatLog& chatLog_,
     connect(chatWidget, &ChatWidget::heldFileAccepted, this,
             [this](const ToxFile& file) { emit heldFileAccepted(group->getPersistentId(), file); });
     connect(chatWidget, &ChatWidget::authorClicked, this, &GroupChatForm::showAuthorMenu);
+    // KHANDAQ (26.11.2026): a mention opens the member's menu as their name does.
+    connect(chatWidget, &ChatWidget::mentionClicked, this,
+            [this](const QString& memberKey, QPoint globalPos) {
+                showMemberMenu(memberKey, group->resolveToxPk(ToxPk(memberKey)), globalPos);
+            });
+
+    // KHANDAQ (26.11.2026): "@" at the start of a word offers the members over the field.
+    mentionList = new AirMentionList(msgEdit, this);
+    connect(mentionList, &AirMentionList::chosen, this, &GroupChatForm::insertMention);
+    connect(mentionList, &AirMentionList::dismissed, this, [this] {
+        int start = -1;
+        QString query;
+        mentionDismissedAt =
+            Air::mentionQueryAt(msgEdit->toPlainText(), msgEdit->textCursor().position(), &start,
+                                &query)
+                ? start
+                : -1;
+    });
+    connect(msgEdit, &ChatTextEdit::textChanged, this, &GroupChatForm::refreshMentions);
+    connect(msgEdit, &QTextEdit::cursorPositionChanged, this, &GroupChatForm::refreshMentions);
 
     connect(msgEdit, &ChatTextEdit::tabPressed, tabber, &TabCompleter::complete);
     connect(msgEdit, &ChatTextEdit::keyPressed, tabber, &TabCompleter::reset);
@@ -294,6 +337,9 @@ void GroupChatForm::setAir(AirLocal* local, AirSource* source)
                         privateThread->setLines(airLocal->privateLines(changedGroup, peerKey));
                     }
                 });
+        // KHANDAQ (26.11.2026): a member who became a contact is offered as one from now on.
+        connect(airLocal, &AirLocal::memberContactsChanged, &refreshLater,
+                QOverload<>::of(&QTimer::start));
     }
     refreshMembers();
 }
@@ -442,6 +488,12 @@ void GroupChatForm::refreshMembers()
     }
     refreshPrivateRight();
     refreshCounter();
+    if (privateThread->isOpen()) {
+        privateThread->setContact(!contactOf(privateThread->peerKey()).isNull());
+    }
+    if (mentionList->isVisible()) {
+        refreshMentions();
+    }
 
     if (dossier->isOpen()) {
         dossier->setInfo(dossierInfo());
@@ -524,7 +576,27 @@ AirGroupInfo GroupChatForm::dossierInfo() const
     }
     info.muted = airLocal && airLocal->isMuted(ToxPk(group->getPersistentId().getByteArray()));
     info.candidates = inviteCandidates();
+    for (const Air::GroupMember& member : members) {
+        const Air::LocalStore::MemberContact contact =
+            member.isSelf ? Air::LocalStore::MemberContact() : contactOf(member.publicKey);
+        if (!contact.isNull()) {
+            info.memberContacts.insert(member.publicKey, contact);
+        }
+    }
     return info;
+}
+
+Air::LocalStore::MemberContact GroupChatForm::contactOf(const QString& memberKey) const
+{
+    if (!airLocal || memberKey.isEmpty()) {
+        return Air::LocalStore::MemberContact();
+    }
+    const Air::LocalStore::MemberContact contact = airLocal->memberContact(groupKey(), memberKey);
+    // Removed since, they are a member only.
+    if (contact.isNull() || !friendList.findFriend(ToxPk(contact.contactKey))) {
+        return Air::LocalStore::MemberContact();
+    }
+    return contact;
 }
 
 QVector<Air::InviteCandidate> GroupChatForm::inviteCandidates() const
@@ -727,6 +799,7 @@ void GroupChatForm::showPrivate(const QString& name, const QString& peerKey)
     }
     dossier->close();
     privateThread->showMember(name, peerKey);
+    privateThread->setContact(!contactOf(peerKey).isNull());
     privateThread->setLines(airLocal ? airLocal->privateLines(groupKey(), peerKey)
                                      : QVector<Air::LocalStore::PrivateLine>());
     refreshPrivateRight();
@@ -757,6 +830,8 @@ void GroupChatForm::sendPrivate(const QString& peerKey, const QString& text)
         airLocal->addPrivateLine(groupKey(), peerKey, true, text);
     }
     privateThread->sent();
+    // KHANDAQ (26.11.2026): it stands in the feed too, as ours and private to them.
+    emit privateMessageSent(group->getPersistentId(), peerKey, privateThread->peerName(), text);
 }
 
 void GroupChatForm::onTitleChanged(const QString& author, const QString& title)
@@ -1166,31 +1241,120 @@ void GroupChatForm::showAuthorMenu(ChatLogIdx idx, const QPoint& globalPos)
     }
     const ChatLogItem& item = chatLog.at(idx);
     const ToxPk sender = item.getSender();
-    if (sender.isEmpty() || isSelfKey(sender)
-        || item.getContentType() == ChatLogItem::ContentType::systemMessage) {
+    if (sender.isEmpty() || item.getContentType() == ChatLogItem::ContentType::systemMessage) {
+        return;
+    }
+    // KHANDAQ (0.2.63): named as the transcript names them, a relayed author with no name too.
+    const QString key = sender.toString();
+    showMemberMenu(key,
+                   Air::authorUnnamed(item.getDisplayName(), key) ? Air::unnamedAuthorName(key)
+                                                                   : item.getDisplayName(),
+                   globalPos);
+}
+
+void GroupChatForm::showMemberMenu(const QString& memberKey, const QString& absentName,
+                                   const QPoint& globalPos)
+{
+    const ToxPk key(memberKey);
+    if (key.isEmpty() || isSelfKey(key)) {
         return;
     }
     Air::GroupMember member;
-    const bool present = Air::memberWithKey(members, sender.toString(), &member);
+    const bool present = Air::memberWithKey(members, key.toString(), &member);
     if (present && member.isSelf) {
         return;
     }
     AirGroupInfo info = dossierInfo();
     if (!present) {
         // Gone from the group, or not listed yet: the key still takes a mute and a hide.
-        member.publicKey = sender.toString();
-        // KHANDAQ (0.2.63): named as the transcript names them, a relayed author with no name too.
-        member.name = Air::authorUnnamed(item.getDisplayName(), member.publicKey)
-                          ? Air::unnamedAuthorName(member.publicKey)
-                          : item.getDisplayName();
-        if (airLocal && airLocal->isMuted(sender)) {
+        member.publicKey = key.toString();
+        member.name = absentName.trimmed().isEmpty() ? Air::unnamedAuthorName(member.publicKey)
+                                                     : absentName;
+        if (airLocal && airLocal->isMuted(key)) {
             info.mutedMembers.insert(member.publicKey);
         }
         if (settings.getBlackList().contains(member.publicKey)) {
             info.hiddenMembers.insert(member.publicKey);
         }
+        const Air::LocalStore::MemberContact contact = contactOf(member.publicKey);
+        if (!contact.isNull()) {
+            info.memberContacts.insert(member.publicKey, contact);
+        }
     }
     dossier->showMemberMenu(member, globalPos, info, present);
+}
+
+QString GroupChatForm::mentionBlockFor(const QString& words) const
+{
+    return Air::mentionBlock(Air::collectMentions(words, members));
+}
+
+bool GroupChatForm::repliesElsewhere(ChatLogIdx idx) const
+{
+    return !chatLog.privateEntry(idx).isNull();
+}
+
+void GroupChatForm::replyElsewhere(ChatLogIdx idx)
+{
+    const Air::PrivateEntry entry = chatLog.privateEntry(idx);
+    if (!entry.isNull()) {
+        openPrivate(entry.peerKey);
+    }
+}
+
+void GroupChatForm::refreshMentions()
+{
+    int start = -1;
+    QString query;
+    const QString text = msgEdit->toPlainText();
+    const bool typing = right == Air::ComposeRight::Write && msgEdit->hasFocus()
+                        && Air::mentionQueryAt(text, msgEdit->textCursor().position(), &start,
+                                               &query);
+    if (!typing) {
+        mentionDismissedAt = -1;
+        mentionList->setChoices({});
+        return;
+    }
+    // Escape closed it over this "@": it stays closed until the caret leaves the word.
+    if (start == mentionDismissedAt) {
+        mentionList->setChoices({});
+        return;
+    }
+    mentionDismissedAt = -1;
+    mentionList->setChoices(Air::mentionChoices(members, query));
+    if (mentionList->isVisible()) {
+        placeMentions();
+        mentionList->raise();
+    }
+}
+
+void GroupChatForm::insertMention(const Air::MentionChoice& choice)
+{
+    int start = -1;
+    QString query;
+    const QString text = msgEdit->toPlainText();
+    if (choice.handle.isEmpty()
+        || !Air::mentionQueryAt(text, msgEdit->textCursor().position(), &start, &query)) {
+        return;
+    }
+    QTextCursor cursor = msgEdit->textCursor();
+    cursor.setPosition(start);
+    cursor.setPosition(Air::mentionTokenEnd(text, start), QTextCursor::KeepAnchor);
+    cursor.insertText(QStringLiteral("@") + choice.handle + QLatin1Char(' '));
+    msgEdit->setTextCursor(cursor);
+    mentionList->setChoices({});
+    msgEdit->setFocus();
+}
+
+void GroupChatForm::placeMentions()
+{
+    const QPoint composerTop = composer->mapTo(this, QPoint(0, 0));
+    const int width = std::min(composer->width() - 2 * AirTokens::Space::s16,
+                               AirTokens::Size::listColumn);
+    const int height = mentionList->sizeHint().height();
+    const QRect logical(composerTop.x() + AirTokens::Space::s16,
+                        composerTop.y() - height - AirTokens::Space::s4, std::max(0, width), height);
+    mentionList->setGeometry(QStyle::visualRect(layoutDirection(), rect(), logical));
 }
 
 bool GroupChatForm::prepareReport(ChatLogIdx idx)

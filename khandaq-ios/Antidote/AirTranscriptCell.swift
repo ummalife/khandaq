@@ -464,6 +464,12 @@ final class AirEntryTextCellModel: ChatBaseTextCellModel {
     /// KHANDAQ (0.2.57): an entry of a 1:1 conversation with a friend (AirStatusMarkView.takesReadReceipts).
     /// The group controllers and the Saved chat leave it false and keep the marks of 0.2.56.
     var takesReadReceipts = false
+    /// KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): the members a group message names, drawn in
+    /// ink and bold, and what a tap on one of them opens (the member's key, and the view tapped).
+    var mentions: [GroupMentionHelper.MentionEntry] = []
+    var onMentionTap: ((String, UIView) -> Void)?
+    /// Who sees a private message of the group feed, over its text behind a lock; nil for any other entry.
+    var privateNote: String?
 }
 
 final class AirEntryTextCell: ChatBaseTextCell {
@@ -576,6 +582,21 @@ final class AirEntryTextCell: ChatBaseTextCell {
         bubbleView.tintColor = KQColor.ink
         bubbleNormalBackground = nil
         bubbleView.backgroundColor = .clear
+        bubbleView.bindPrivateNote(entry.privateNote)
+        // KHANDAQ (26.11.2026): the mentions after the font and the colour of the whole text, which would undo them.
+        let mentionRanges = entry.hasLocation ? [] : GroupMentionHelper.mentionRanges(in: entry.message, mentions: entry.mentions)
+        bubbleView.styleMentions(mentionRanges, color: KQColor.ink, font: KQFont.font(.body, weight: 600))
+        if let open = entry.onMentionTap, !mentionRanges.isEmpty {
+            bubbleView.onMentionTap = { [weak self] key in
+                guard let self = self else {
+                    return
+                }
+                open(key, self.bubbleView)
+            }
+        }
+        else {
+            bubbleView.onMentionTap = nil
+        }
 
         // A tabular font has a fixed size: made again when the text size has changed since.
         let category = UIApplication.shared.preferredContentSizeCategory
@@ -660,6 +681,9 @@ final class AirEntryTextCell: ChatBaseTextCell {
         var value = [String]()
         if let marks = transcriptMarksSpoken {
             value.append(marks)
+        }
+        if let note = entry.privateNote {
+            value.append(note)
         }
         // A reply says whom and what it answers before its own words, as the desktop reads it.
         if let quote = MessageReplyHelper.spokenQuote(entry.replyMeta) {

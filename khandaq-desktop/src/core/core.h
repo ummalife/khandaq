@@ -32,6 +32,7 @@
 
 #include "util/strongtype.h"
 #include "util/compatiblerecursivemutex.h"
+#include "src/model/air/airgroupcontact.h"
 #include "src/model/air/airgroupfilequeue.h"
 #include "src/model/air/airgroupfilerepair.h"
 #include "src/model/air/airgroupleave.h"
@@ -76,6 +77,15 @@ class Core : public QObject,
 {
     Q_OBJECT
 public:
+    /** KHANDAQ (26.11.2026): what became of an offer or an accept of a member to contacts. */
+    enum class ContactPacketResult
+    {
+        Sent,
+        /** The member is not online in the group now: nothing went. */
+        Offline,
+        /** toxcore refused it, or our own ID could not be read. */
+        Failed,
+    };
     enum class ToxCoreErrors
     {
         BAD_PROXY,
@@ -108,7 +118,7 @@ public:
     QString getGroupPeerName(int groupId, int peerId) const override;
     ToxPk getGroupPeerPk(int groupId, int peerId) const override;
     /** Our own key in a group, which the members know us by; empty when the group is unknown. */
-    ToxPk getGroupSelfPublicKey(int groupId) const;
+    ToxPk getGroupSelfPublicKey(int groupId) const override;
     /**
      * KHANDAQ (beta feedback 2026-11-22): our name in the group, as its members see it
      * (tox_group_self_get_name); empty when the group is unknown.
@@ -192,6 +202,16 @@ public:
     void handleSyncedGroupText(uint32_t groupId, uint32_t peerId, const uint8_t* data,
                                size_t length);
     /**
+     * KHANDAQ (26.11.2026): an offer or an accept of a member to contacts (Air::GroupContactPacket),
+     * as toxcore's private packet callback hands it over on the thread of the node. Dropped for any
+     * length but 54, an address whose checksum fails, a packet of ours, of an observer or of a
+     * member who is gone, our own ID, and an offer of a member within a minute of the last one
+     * taken (Air::ContactOfferGate); told otherwise (groupContactPacketReceived). Public so that
+     * the tests can hand packets over without a network.
+     */
+    void handleGroupContactPacket(uint32_t groupId, uint32_t peerId, const uint8_t* data,
+                                  size_t length);
+    /**
      * 0.2.57: the files of more than one packet that come, at nowMs of a steady clock: one whose
      * chunks stopped asks its sender for those it misses, and one that does not come is given up
      * (Air::FileArrival). process() calls it; public so that the tests can move the clock.
@@ -261,6 +281,13 @@ public slots:
     SendResult sendGroupMessage(int groupId, const QString& message, uint32_t& wireId) override;
     SendResult sendGroupAction(int groupId, const QString& message, uint32_t& wireId) override;
     void sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t messageId) override;
+    /**
+     * KHANDAQ (26.11.2026): sends our own Tox ID to the member of the group who has this key there, as an offer to
+     * become contacts or as the accept of their offer (Air::groupContactPacket), with the nonce
+     * of the offer: a lossless private packet, which goes only while the member is online.
+     */
+    ContactPacketResult sendGroupContactPacket(int groupId, const ToxPk& member, bool accept,
+                                               const QByteArray& nonce);
     bool sendGroupFile(int groupId, const QString& fileName, const QString& localPath,
                        const QByteArray& fileData);
     /**
@@ -416,6 +443,12 @@ signals:
     /** A peer of the group wrote to us alone. */
     void groupPrivateMessageReceived(int groupnumber, const ToxPk& peerPk, const QString& message,
                                      bool isAction);
+    /**
+     * KHANDAQ (26.11.2026): the member of the group with this key sent us their Tox ID, as an
+     * offer to become contacts or as the accept of ours, with the nonce of the offer.
+     */
+    void groupContactPacketReceived(int groupnumber, const ToxPk& member, bool accept,
+                                    const QByteArray& address, const QByteArray& nonce);
     // KHANDAQ (external audit 2026-08-21, K-01): `wasSynced` says whether this row arrived through
     // HISTORY SYNC rather than live. It matters because the two carry completely different
     // guarantees: a live packet is authenticated by toxcore, while a synced one names an author that
@@ -704,6 +737,9 @@ private:
     Air::SyncedTextLedger syncedGroupTexts;
     Air::SyncedTextBudget syncedGroupBudget;
     Air::HistoryRequestPace groupHistoryRequests;
+    // KHANDAQ (26.11.2026): when the offer of each member to contacts was last taken, by the chat
+    // id of the group and the member's key. Under coreLoopLock.
+    Air::ContactOfferGate groupContactOffers;
 
     std::unique_ptr<QThread> coreThread;
     const IBootstrapListGenerator& bootstrapListGenerator;

@@ -204,6 +204,19 @@ class ActiveSessionCoordinator: NSObject {
             object: nil)
 
         NotificationCenter.default.addObserver(self, selector: #selector(ActiveSessionCoordinator.applicationWillTerminate), name: NSNotification.Name.UIApplicationWillTerminate, object: nil)
+        // KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): a member we asked in a group accepted.
+        NotificationCenter.default.addObserver(self, selector: #selector(ActiveSessionCoordinator.groupContactAdded(_:)), name: .octGroupContactAdded, object: nil)
+        notificationCoordinator.groupSelfIdentity = { [weak self] chat in
+            guard let groups = self?.toxManager?.groups, !chat.isInvalidated else {
+                return (nil, nil)
+            }
+            let members = AirGroupMembers.load(chat: chat, submanagerGroups: groups)
+            let name = members.first(where: { $0.isSelf })?.name
+            return (AirGroupMembers.selfKey(in: members), name)
+        }
+        notificationCoordinator.groupContactOffer = { [weak self] request in
+            return self?.toxManager?.friends.groupContactOffer(for: request)
+        }
 
         MessageDeliveryWatchdog.shared.bind(toxManager: toxManager)
         MessageDeliveryWatchdog.shared.start()
@@ -373,6 +386,18 @@ class ActiveSessionCoordinator: NSObject {
 
     @objc func applicationWillTerminate() {
         shutdownForToxRestart()
+    }
+
+    /// A member we offered to add from a group accepted and is a contact now: said over whatever is open.
+    @objc func groupContactAdded(_ notification: Notification) {
+        let name = notification.userInfo?[kOCTGroupContactAddedNameKey] as? String ?? ""
+        DispatchQueue.main.async { [weak self] in
+            guard let window = self?.window else {
+                return
+            }
+            let shown = name.isEmpty ? String(localized: "air_group_author_unknown") : name
+            AirToast.show(String(localized: "air_group_contact_now_format", shown), in: window)
+        }
     }
 
     func shutdownForToxRestart() {

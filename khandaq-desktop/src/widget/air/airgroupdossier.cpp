@@ -543,8 +543,16 @@ void AirGroupDossier::showMemberMenu(const Air::GroupMember& shown, const QPoint
     QMenu menu(this);
     QAction* const write =
         present ? menu.addAction(AirStrings::text(Text::GroupWritePrivately)) : nullptr;
-    QAction* const copy =
-        member.publicKey.isEmpty() ? nullptr : menu.addAction(AirStrings::text(Text::DossierCopyKey));
+    // KHANDAQ (26.11.2026): their key in the group adds nobody: the two of them trade IDs instead.
+    const Air::LocalStore::MemberContact contact = groupInfo.memberContacts.value(member.publicKey);
+    QAction* const addContact = contact.isNull() && present && !member.publicKey.isEmpty()
+                                    ? menu.addAction(AirStrings::text(Text::GroupContactAdd))
+                                    : nullptr;
+    QAction* const openContact =
+        contact.isNull() ? nullptr : menu.addAction(AirStrings::text(Text::GroupContactOpen));
+    QAction* const copy = contact.address.isEmpty()
+                              ? nullptr
+                              : menu.addAction(AirStrings::text(Text::YouCopyId));
     const bool muted = groupInfo.mutedMembers.contains(member.publicKey);
     QAction* const mute = member.publicKey.isEmpty()
                               ? nullptr
@@ -575,9 +583,13 @@ void AirGroupDossier::showMemberMenu(const Air::GroupMember& shown, const QPoint
     }
     if (write && chosen == write) {
         emit writePrivatelyRequested(member);
+    } else if (addContact && chosen == addContact) {
+        emit addContactRequested(member);
+    } else if (openContact && chosen == openContact) {
+        emit openContactRequested(contact.contactKey);
     } else if (copy && chosen == copy) {
-        QApplication::clipboard()->setText(member.publicKey);
-        AirToast::post(this, AirStrings::text(Text::DossierKeyCopied));
+        QApplication::clipboard()->setText(contact.address);
+        AirToast::post(this, AirStrings::text(Text::YouIdCopied));
     } else if (mute && chosen == mute) {
         emit memberMuteRequested(member, !muted);
     } else if (hide && chosen == hide) {
@@ -716,7 +728,51 @@ AirPrivateThread::AirPrivateThread(QWidget* parent)
     blockedLabel->setObjectName(QStringLiteral("groupPrivateBlocked"));
     blockedLabel->hide();
     sections->addWidget(blockedLabel);
+
+    // KHANDAQ (26.11.2026): the member's key in this group, with Copy and why it adds nobody, and
+    // the way that does: Add to contacts, or the conversation with the contact they are.
+    auto* const keyBox = new QVBoxLayout();
+    keyBox->setContentsMargins(0, Space::s12, 0, 0);
+    keyBox->setSpacing(Space::s4);
+    keyTitle = makeLabel(TextRole::Label, Color::Ink3, pageWidget);
+    keyText = makeLabel(TextRole::Mono, Color::Ink, pageWidget);
+    keyText->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    keyText->setObjectName(QStringLiteral("groupPrivateKey"));
+    keyNote = makeLabel(TextRole::Caption, Color::Ink2, pageWidget);
+    keyBox->addWidget(keyTitle);
+    keyBox->addWidget(keyText);
+    keyBox->addWidget(keyNote);
+    auto* const keyActions = new QHBoxLayout();
+    keyActions->setContentsMargins(0, Space::s4, 0, 0);
+    keyActions->setSpacing(Space::s8);
+    copyKeyButton = new AirButton(AirButton::Kind::Plain, pageWidget);
+    copyKeyButton->setObjectName(QStringLiteral("groupPrivateCopyKey"));
+    contactButton = new AirButton(AirButton::Kind::Plain, pageWidget);
+    contactButton->setObjectName(QStringLiteral("groupPrivateContact"));
+    keyActions->addWidget(contactButton);
+    keyActions->addWidget(copyKeyButton);
+    keyActions->addStretch();
+    keyBox->addLayout(keyActions);
+    sections->addLayout(keyBox);
     sections->addStretch();
+
+    connect(copyKeyButton, &AirButton::clicked, this, [this] {
+        if (key.isEmpty()) {
+            return;
+        }
+        QApplication::clipboard()->setText(key);
+        AirToast::post(this, AirStrings::text(Text::DossierKeyCopied));
+    });
+    connect(contactButton, &AirButton::clicked, this, [this] {
+        if (key.isEmpty()) {
+            return;
+        }
+        if (contact) {
+            emit openContactRequested(key);
+        } else {
+            emit addContactRequested(key);
+        }
+    });
 
     connect(field, &AirTextField::changed, this, [this] {
         errorLabel->hide();
@@ -743,8 +799,20 @@ void AirPrivateThread::showMember(const QString& name_, const QString& peerKey_)
     if (other) {
         field->setText(QString());
         errorLabel->hide();
+        contact = false;
     }
+    keyText->setText(Air::keyLines(key));
     retranslate();
+}
+
+void AirPrivateThread::setContact(bool contact_)
+{
+    if (contact == contact_) {
+        return;
+    }
+    contact = contact_;
+    contactButton->setText(AirStrings::text(contact ? Text::GroupContactOpen : Text::GroupContactAdd));
+    contactButton->updateGeometry();
 }
 
 QString AirPrivateThread::peerKey() const
@@ -822,6 +890,11 @@ void AirPrivateThread::retranslate()
     field->setPlaceholder(AirStrings::text(Text::GroupWritePrivately));
     field->edit()->setAccessibleName(AirStrings::text(Text::GroupWritePrivately));
     sendButton->setText(AirStrings::text(Text::ComposeSend));
+    keyTitle->setText(AirStrings::text(Text::GroupMemberKeyTitle));
+    keyText->setAccessibleName(AirStrings::text(Text::GroupMemberKeyTitle));
+    keyNote->setText(AirStrings::text(Text::GroupMemberKeyNote));
+    copyKeyButton->setText(AirStrings::text(Text::GroupCopyKey));
+    contactButton->setText(AirStrings::text(contact ? Text::GroupContactOpen : Text::GroupContactAdd));
     if (errorLabel->isVisibleTo(this)) {
         errorLabel->setText(AirStrings::text(Text::PrivateFailed));
     }
@@ -842,6 +915,12 @@ void AirPrivateThread::restyle()
     AirPaint::textColor(emptyLabel, air().color(Color::Ink3));
     errorLabel->setFont(air().font(TextRole::Caption));
     AirPaint::textColor(errorLabel, air().color(Color::Danger));
+    keyTitle->setFont(air().font(TextRole::Label));
+    AirPaint::textColor(keyTitle, air().color(Color::Ink3));
+    keyText->setFont(air().font(TextRole::Mono));
+    AirPaint::textColor(keyText, air().color(Color::Ink));
+    keyNote->setFont(air().font(TextRole::Caption));
+    AirPaint::textColor(keyNote, air().color(Color::Ink2));
     rebuildLines();
 }
 

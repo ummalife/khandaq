@@ -19,4 +19,14 @@
 
 #include "icoregroupmessagesender.h"
 
+#include "toxpk.h"
+
+#include <tuple>
+
 ICoreGroupMessageSender::~ICoreGroupMessageSender() = default;
+
+ToxPk ICoreGroupMessageSender::getGroupSelfPublicKey(int groupId) const
+{
+    std::ignore = groupId;
+    return ToxPk();
+}

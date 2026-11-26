@@ -25,6 +25,7 @@
 #include "src/core/toxpk.h"
 #include "src/friendlist.h"
 #include "src/grouplist.h"
+#include "src/model/air/airmessagemarks.h"
 #include "src/model/chatlogitem.h"
 #include "src/model/friend.h"
 #include "src/model/group.h"
@@ -182,6 +183,19 @@ public:
         std::ignore = emoji;
         std::ignore = ownAfter;
         return false;
+    }
+
+    /**
+     * @brief KHANDAQ (26.11.2026): the private message with a member of a group that the item at
+     * idx is: the feed of the group draws it apart, and a reply to it goes privately
+     * @param[in] idx index of an item of this log
+     * @return The member and the side; a null one for any other item, and in a log that keeps no
+     * marks
+     */
+    virtual Air::PrivateEntry privateEntry(ChatLogIdx idx) const
+    {
+        std::ignore = idx;
+        return Air::PrivateEntry();
     }
 
 signals:

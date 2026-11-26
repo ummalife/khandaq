@@ -617,7 +617,6 @@
 "group_member_status_offline" = "غير متصل";
 "group_member_action_private_msg" = "رسالة خاصة داخل المجموعة";
 "group_member_action_open_chat" = "فتح محادثة مباشرة";
-"group_member_action_add_friend" = "إضافة صديق";
 "group_member_action_add_friend_sent" = "تم إرسال طلب الصداقة.";
 "group_member_action_copy_id" = "نسخ المعرف";
 "group_member_action_copy_done" = "تم نسخ المعرف";
@@ -817,6 +816,7 @@
 "air_section_messages" = "الرسائل";
 "air_request_tag" = "طلب وارد";
 "air_request_key_format" = "المفتاح %@. سيظهر الاسم بعد أن تقبل الطلب";
+"air_request_from_group_format" = "من المجموعة «%@»";
 "air_reach_live" = "متصل";
 "air_reach_relay" = "متصل، عبر وسيط";
 "air_reach_pending" = "بانتظار الرد";
@@ -1083,9 +1083,14 @@
 "air_group_leave_message" = "سيرى الأعضاء أنك غادرت. للعودة تحتاج إلى دعوة أو إلى مفتاح المجموعة.";
 "air_group_write_privately" = "راسله على انفراد";
 "air_group_add_contact" = "إضافة إلى جهات الاتصال";
-"air_group_contact_added_format" = "أُضيف %@ إلى جهات الاتصال";
-"air_group_copy_member_key" = "نسخ المفتاح";
 "air_group_member_key_copied" = "نُسخ المفتاح";
+"air_group_contact_offline_format" = "%@ غير متصل في هذه المجموعة: اطلب مرة أخرى عند عودته";
+"air_group_contact_request_sent_format" = "أُرسل الطلب: سيصبح %@ في جهات اتصالك عندما يقبله";
+"air_group_contact_now_format" = "أصبح %@ في جهات اتصالك";
+"air_group_contact_failed" = "لم يُرسل الطلب: حاول مرة أخرى";
+"air_group_member_key_title" = "المفتاح في هذه المجموعة";
+"air_group_member_key_note" = "هذا المفتاح له في هذه المجموعة فقط: لا يضيفه إلى جهات الاتصال. استخدم «إضافة إلى جهات الاتصال».";
+"air_group_contact_accept_message_format" = "قبلتُ طلبك من المجموعة «%@»";
 "air_group_member_mute" = "كتم في هذه المجموعة";
 "air_group_member_unmute" = "إلغاء الكتم في هذه المجموعة";
 "air_group_member_muted_format" = "كُتم %@ في هذه المجموعة";
@@ -1425,6 +1430,9 @@
 /* Redesign stage 5: group settings, joining by key, private messages in a group */
 "air_group_private_note_format" = "رسائل خاصة في المجموعة «%1$@»: لا يراها إلا أنت و%2$@.";
 "air_group_private_hint_away_format" = "%@ غير متصل: اكتب حين يتصل";
+"air_group_private_to_format" = "خاصة إلى %@: لا يراها الأعضاء الآخرون";
+"air_group_private_to_you" = "خاصة إليك: لا يراها الأعضاء الآخرون";
+"air_group_mention_hint" = "يذكر هذا العضو في الرسالة";
 "air_group_settings_self_name" = "اسمك في المجموعة";
 "air_group_settings_self_name_note" = "يراه أعضاء هذه المجموعة، ويبقى اسم ملفك الشخصي كما هو.";
 "air_group_settings_topic" = "الموضوع";
@@ -1461,6 +1469,8 @@
 "air_join_why_key" = "مفتاح المجموعة أولًا";
 "air_cmd_join_group" = "الانضمام إلى المجموعة بهذا المفتاح";
 "air_cmd_group_note" = "64 حرفًا، بعدد أحرف مفتاح المجموعة";
+"air_cmd_member_format" = "«%1$@» في المجموعة «%2$@»";
+"air_cmd_member_note" = "إرسال طلب اتصال";
 
 /* Stage 5: Password and PIN */
 "air_security_pin_section" = "رمز PIN";

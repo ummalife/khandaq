@@ -659,6 +659,11 @@ void AirIdRuler::paintEvent(QPaintEvent*)
 
 // ---- AirCommandIdRow ----
 
+bool AirMemberMatch::isNull() const
+{
+    return memberKey.isEmpty();
+}
+
 AirCommandIdRow::AirCommandIdRow(QWidget* parent)
     : QAbstractButton(parent)
 {
@@ -701,6 +706,7 @@ void AirCommandIdRow::setIdStart(const QString& hex_, const Air::IdVerdict& verd
     hex = hex_;
     verdict = verdict_;
     group.clear();
+    memberMatch = AirMemberMatch();
     retranslate();
 }
 
@@ -716,6 +722,7 @@ void AirCommandIdRow::setGroup(const QString& key, bool listed, const QString& n
     groupName = name;
     hex.clear();
     verdict = Air::IdVerdict{};
+    memberMatch = AirMemberMatch();
     retranslate();
 }
 
@@ -724,8 +731,22 @@ QString AirCommandIdRow::groupKey() const
     return group;
 }
 
+void AirCommandIdRow::setMember(const AirMemberMatch& match)
+{
+    memberMatch = match;
+    retranslate();
+}
+
+AirMemberMatch AirCommandIdRow::member() const
+{
+    return memberMatch;
+}
+
 QString AirCommandIdRow::note() const
 {
+    if (!memberMatch.isNull()) {
+        return AirStrings::text(Text::CmdMemberNote);
+    }
     if (group.isEmpty()) {
         return noteFor(verdict, hex.size());
     }
@@ -734,7 +755,10 @@ QString AirCommandIdRow::note() const
 
 void AirCommandIdRow::retranslate()
 {
-    if (group.isEmpty()) {
+    if (!memberMatch.isNull()) {
+        setText(AirStrings::text(Text::CmdMemberTitle)
+                    .arg(memberMatch.memberName, memberMatch.groupName));
+    } else if (group.isEmpty()) {
         setText(AirStrings::text(Text::CmdNewContact));
     } else if (!groupListed) {
         setText(AirStrings::text(Text::CmdJoinGroup));
@@ -960,6 +984,10 @@ AirNewContact::AirNewContact(Lookup lookup_, QWidget* column_, QWidget* parent)
         idField->edit()->setFocus(Qt::OtherFocusReason);
     });
     connect(verdictLink, &AirButton::clicked, this, [this] {
+        if (!memberMatch.isNull()) {
+            emit memberOfferRequested(memberMatch.groupKey, memberMatch.memberKey);
+            return;
+        }
         if (verdict.kind == Air::IdVerdict::Kind::Contact) {
             const QString key = verdict.value;
             close();
@@ -1189,6 +1217,13 @@ void AirNewContact::refresh(bool fromUser)
         ruler->shakeCheck();
     }
 
+    // KHANDAQ (26.11.2026): the whole key of a member of one of our groups adds nobody: the line
+    // offers to send them a request over the group instead of counting what is missing.
+    memberMatch = verdict.kind == Kind::Partial && hex.size() == Air::toxKeyHexLength
+                          && lookup.memberOf
+                      ? lookup.memberOf(hex)
+                      : AirMemberMatch();
+
     QString words;
     QString link;
     Color color = Color::Ink2;
@@ -1198,6 +1233,12 @@ void AirNewContact::refresh(bool fromUser)
         color = Color::Ink3;
         break;
     case Kind::Partial:
+        if (!memberMatch.isNull()) {
+            words = AirStrings::text(Text::CmdMemberTitle)
+                        .arg(memberMatch.memberName, memberMatch.groupName);
+            link = AirStrings::text(Text::CmdMemberNote);
+            break;
+        }
         words = AirStrings::text(Text::NcVerdictLeft, verdict.left);
         break;
     case Kind::BadCheck:
@@ -1264,6 +1305,9 @@ void AirNewContact::refresh(bool fromUser)
     case Kind::Ok:
         why = tooLong ? AirStrings::text(Text::NcMessageTooLong) : QString();
         break;
+    }
+    if (!memberMatch.isNull()) {
+        why.clear();
     }
     whyLabel->setText(why);
     whyLabel->setVisible(!canSend && !sending && !why.isEmpty());

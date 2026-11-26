@@ -19,6 +19,7 @@
 
 #include "text.h"
 #include "../documentcache.h"
+#include "src/model/air/airmention.h"
 #include "src/widget/air/airoverlay.h"
 #include "src/widget/air/airstrings.h"
 
@@ -320,6 +321,10 @@ void Text::mouseReleaseEvent(QGraphicsSceneMouseEvent* event)
     // is that the target is not what the sentence around it implies.
     const QUrl url(anchor);
     const QString scheme = url.scheme().toLower();
+    // KHANDAQ (26.11.2026): a mention opens the member, which the transcript does (ChatWidget).
+    if (!Air::mentionLinkKey(anchor).isEmpty()) {
+        return;
+    }
     if (scheme == QStringLiteral("file") || scheme == QStringLiteral("smb")) {
         // Asked over the window the transcript is in (E21), Cancel first, as a dangerous verb is.
         QWidget* const view = event->widget();
@@ -364,6 +369,11 @@ QString Text::getText() const
  * @param scenePos Position in scene coordinates
  * @return The link target URL, or an empty string if there is no link there
  */
+QString Text::anchorAt(QPointF scenePos) const
+{
+    return doc ? doc->documentLayout()->anchorAt(mapFromScene(scenePos)) : QString();
+}
+
 QString Text::getLinkAt(QPointF scenePos) const
 {
     QTextCursor cursor(doc);

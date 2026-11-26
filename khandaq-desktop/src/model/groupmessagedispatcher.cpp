@@ -18,10 +18,13 @@
 */
 
 #include "groupmessagedispatcher.h"
+#include "src/model/air/airmention.h"
 #include "src/model/air/airmessagemarks.h"
 #include "src/persistence/igroupsettings.h"
 
 #include <QtCore>
+
+#include <algorithm>
 
 constexpr int GroupMessageDispatcher::joinGraceMs;
 constexpr int GroupMessageDispatcher::joinGraceLimit;
@@ -193,6 +196,7 @@ void GroupMessageDispatcher::onMessageReceived(const ToxPk& sender, bool isActio
     }
 
     Message message = processor.processIncomingCoreMessage(isAction, content);
+    markMentionOfUs(message);
     if (wireId != 0) {
         message.wireId = Air::groupWireId(wireId);
         // Only a message that is shown here is confirmed: none from ourselves or a blocked peer.
@@ -215,8 +219,27 @@ void GroupMessageDispatcher::onSyncedMessageReceived(const ToxPk& author, const 
     }
 
     Message message = processor.processIncomingCoreMessage(false, content);
+    markMentionOfUs(message);
     message.timestamp = sentAt;
     message.wireId = Air::groupWireId(wireId);
     messageSender.sendGroupDeliveryReceipt(static_cast<int>(group.getId()), author, wireId);
     emit messageSynced(author, message);
+}
+
+void GroupMessageDispatcher::markMentionOfUs(Message& message) const
+{
+    const bool named = std::any_of(message.metadata.cbegin(), message.metadata.cend(),
+                                   [](const MessageMetadata& metadata) {
+                                       return metadata.type == MessageMetadataType::selfMention;
+                                   });
+    if (named) {
+        return;
+    }
+    // KHANDAQ (26.11.2026): an @mention names us by the key the group knows us by, in the block
+    // before the words (Air::readMentions), whatever handle it shows.
+    const ToxPk self = messageSender.getGroupSelfPublicKey(static_cast<int>(group.getId()));
+    if (!self.isEmpty() && Air::mentionsKey(message.content, self.toString())) {
+        message.metadata.push_back(
+            {MessageMetadataType::selfMention, 0, static_cast<size_t>(message.content.size())});
+    }
 }

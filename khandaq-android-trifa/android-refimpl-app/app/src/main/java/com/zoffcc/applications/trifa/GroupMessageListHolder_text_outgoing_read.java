@@ -297,7 +297,7 @@ public class GroupMessageListHolder_text_outgoing_read extends RecyclerView.View
         entry.authorColor = AirUi.youColor(context); // KHANDAQ (0.2.60): tone-5, as everywhere
         if (m.private_message == 1)
         {
-            entry.privateNote = context.getString(R.string.air_group_private_to_format, privateRecipientName(m));
+            entry.privateNote = context.getString(R.string.air_group_private_note_to_format, privateRecipientName(m));
         }
         final boolean leaving = MessageStatusHelper.resolveGroupOutgoing(m) == MessageStatusHelper.OutgoingStatus.SENDING;
         entry.status = AirTranscript.groupStatus(m, !leaving || groupTakesMessageNow(m.group_identifier));

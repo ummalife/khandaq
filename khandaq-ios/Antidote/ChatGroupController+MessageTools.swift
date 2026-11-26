@@ -97,7 +97,21 @@ extension ChatGroupController {
         MessageReplyHelper.previewText(for: message)
     }
 
+    /// Whether Reply is offered on `message`. KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): a reply
+    /// into the group would quote private words to everyone, so a private entry is answered privately, to the other
+    /// one of the two, while they are in the group and you may write to them.
+    func canReply(to message: OCTMessageAbstract) -> Bool {
+        guard message.groupPrivateMessage else {
+            return quoteText(for: message) != nil
+        }
+        return groupComposeRight.canWritePrivately && privateAnswerPeer(for: message) != nil
+    }
+
     func startReply(to message: OCTMessageAbstract) {
+        if message.groupPrivateMessage {
+            openPrivateAnswer(to: message)
+            return
+        }
         // KHANDAQ (redesign stage 3, E13): no reply where you may only read; the field is not there.
         guard groupComposeRight == .write else {
             return
@@ -204,7 +218,7 @@ extension ChatGroupController {
 
         let alert = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
 
-        if quoteText(for: message) != nil {
+        if canReply(to: message) {
             alert.addAction(UIAlertAction(title: String(localized: "chat_reply_action"), style: .default) { [weak self] _ in
                 self?.startReply(to: message)
             })
@@ -232,11 +246,16 @@ extension ChatGroupController {
 
 extension ChatGroupController: ChatReplySwipeDelegate {
     func chatCellCanReply(_ cell: ChatMovableDateCell) -> Bool {
-        // As startReply and the message menu: only where you may write, and only what can be quoted.
-        guard groupComposeRight == .write, !tableView.isEditing, let indexPath = tableView.indexPath(for: cell) else {
+        // As startReply and the message menu: only where you may write, and only what can be quoted; a private entry,
+        // answered privately, where you may write privately.
+        guard !tableView.isEditing, let indexPath = tableView.indexPath(for: cell) else {
             return false
         }
-        return quoteText(for: messageEntry(atDisplayIndex: indexPath.row).message) != nil
+        let message = messageEntry(atDisplayIndex: indexPath.row).message
+        guard message.groupPrivateMessage || groupComposeRight == .write else {
+            return false
+        }
+        return canReply(to: message)
     }
 
     func chatCellDidRequestReply(_ cell: ChatMovableDateCell) {
@@ -446,6 +465,7 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
                                   currentEmoji: ChatReactionsFormat.ownEmoji(from: message.reactionsJSON),
                                   dark: ThemeAppearance.isDarkMode, actions: actions,
                                   bubbleSnapshot: snapshot,
+                                  showsReactions: !message.groupPrivateMessage,
                                   onPick: { [weak self] emoji in
                                       guard let self = self else { return }
                                       self.submanagerGroups.toggleReaction(onGroupMessage: message, emoji: emoji, in: self.chat)
@@ -456,7 +476,7 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
     /// The actions of the long-press menu of a message, under its reaction bar.
     func groupContextActions(for cell: ChatMovableDateCell, message: OCTMessageAbstract, indexPath: IndexPath) -> [ChatContextMenuAction] {
         var actions: [ChatContextMenuAction] = []
-        if quoteText(for: message) != nil {
+        if canReply(to: message) {
             actions.append(ChatContextMenuAction(title: String(localized: "chat_reply_action"), systemImageName: "arrowshape.turn.up.left") { [weak self] in self?.startReply(to: message) })
         }
         // KHANDAQ (ideas 1): Edit, on the terms of a chat with one person: the cell offers it for a text of

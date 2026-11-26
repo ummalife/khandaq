@@ -1518,6 +1518,19 @@ void TestAirModel::aScreenReaderHearsACardAMessageAndAnEntry()
                                                            QStringLiteral("Марьям Хасанова"), true,
                                                            QStringLiteral("11:52"), 1000)),
              QStringLiteral("Group invitation, 11:52, Книжный клуб, Марьям Хасанова invites you."));
+    // KHANDAQ (26.11.2026): a member of a group who offers to become contacts: a card of a person,
+    // under their name in the group, which says the group.
+    const Request offer = Request::fromMember(key, QStringLiteral(" Maryam "),
+                                              QStringLiteral("Study circle"),
+                                              QStringLiteral("12:06"), 3000);
+    QVERIFY(offer.fromGroup());
+    QVERIFY(!offer.isInvitation());
+    QCOMPARE(offer.id, key.toUpper());
+    QCOMPARE(offer.memberName, QStringLiteral("Maryam"));
+    QVERIFY(!Request::make(key, QString(), QStringLiteral("12:05"), 2000).fromGroup());
+    QVERIFY(!(offer == Request::make(key, QString(), QStringLiteral("12:06"), 3000)));
+    QCOMPARE(AirStrings::spokenRequest(offer),
+             QStringLiteral("Incoming request, 12:06, Maryam, From the group \u00abStudy circle\u00bb"));
 
     MessageHit hit;
     hit.title = QStringLiteral("Учебный кружок");

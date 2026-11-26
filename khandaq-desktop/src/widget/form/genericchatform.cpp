@@ -105,17 +105,20 @@ QString formatQuoteForSend(const QString& quote)
 /**
  * The words of the field as Send hands them over: after the lines of a quote, or after the header
  * of a reply (KHANDAQ 0.2.58). A /me action takes no reply: the header would stand in the line of
- * the action on every reader, so the reply waits for the next message.
+ * the action on every reader, so the reply waits for the next message. KHANDAQ (26.11.2026): the
+ * block of mentions goes right after the header of a reply, and first of all before the lines of a
+ * quote, where every reader looks for it.
  */
-QString withQuote(const ChatQuotePreview& preview, const QString& words, bool isAction)
+QString withQuote(const ChatQuotePreview& preview, const QString& words, bool isAction,
+                  const QString& mentions)
 {
     if (!preview.hasQuote()) {
-        return words;
+        return mentions + words;
     }
     if (preview.isReply()) {
-        return isAction ? words : Air::replyHead(preview.reply()) + words;
+        return isAction ? words : Air::replyHead(preview.reply()) + mentions + words;
     }
-    return formatQuoteForSend(preview.quoteText()) + words;
+    return mentions + formatQuoteForSend(preview.quoteText()) + words;
 }
 
 /**
@@ -625,7 +628,7 @@ void GenericChatForm::onChatContextMenuRequested(QPoint pos)
     ChatLogIdx entry{0};
     const bool onEntry = chatWidget->entryAtGlobalPos(pos, entry);
     menuEntry = entry;
-    replyAction->setVisible(onEntry && canReplyTo(entry));
+    replyAction->setVisible(onEntry && (canReplyTo(entry) || repliesElsewhere(entry)));
     const bool reacts = onEntry && canReactTo(entry);
     reactMenu->menuAction()->setVisible(reacts);
     if (reacts) {
@@ -875,7 +878,24 @@ QString GenericChatForm::outgoingText() const
     if (isAction) {
         msg.remove(0, ChatForm::ACTION_PREFIX.length());
     }
-    return withQuote(*quotePreview, msg, isAction);
+    return withQuote(*quotePreview, msg, isAction, isAction ? QString() : mentionBlockFor(msg));
+}
+
+QString GenericChatForm::mentionBlockFor(const QString& words) const
+{
+    std::ignore = words;
+    return QString();
+}
+
+bool GenericChatForm::repliesElsewhere(ChatLogIdx idx) const
+{
+    std::ignore = idx;
+    return false;
+}
+
+void GenericChatForm::replyElsewhere(ChatLogIdx idx)
+{
+    std::ignore = idx;
 }
 
 GenericChatForm::ReplyAuthor GenericChatForm::replyAuthorOf(const ChatLogItem& item) const
@@ -890,7 +910,7 @@ GenericChatForm::ReplyAuthor GenericChatForm::replyAuthorOf(const ChatLogItem& i
 bool GenericChatForm::canReplyTo(ChatLogIdx idx) const
 {
     if (!takesReplies || composer->isReadOnly() || idx < chatLog.getFirstIdx()
-        || idx >= chatLog.getNextIdx()) {
+        || idx >= chatLog.getNextIdx() || repliesElsewhere(idx)) {
         return false;
     }
     const ChatLogItem& item = chatLog.at(idx);
@@ -941,6 +961,11 @@ bool GenericChatForm::startReply(ChatLogIdx idx, const QString& words)
 
 void GenericChatForm::replyToMenuEntry()
 {
+    // KHANDAQ (26.11.2026): an entry that may not be quoted here is answered where it can be.
+    if (repliesElsewhere(menuEntry)) {
+        replyElsewhere(menuEntry);
+        return;
+    }
     if (startReply(menuEntry)) {
         msgEdit->setFocus();
     }
@@ -1009,7 +1034,7 @@ void GenericChatForm::onSendTriggered()
         return;
     }
     const bool keepsQuote = replying && isAction;
-    msg = withQuote(*quotePreview, msg, isAction);
+    msg = withQuote(*quotePreview, msg, isAction, isAction ? QString() : mentionBlockFor(msg));
 
     if (msg.trimmed().isEmpty()) {
         return;
@@ -1219,7 +1244,23 @@ void GenericChatForm::quoteSelectedText()
     // KHANDAQ (0.2.58): words chosen in one message answer it, with those words as its quote; a
     // choice across several entries, or where a reply cannot go, stays a quote of the old kind.
     ChatLogIdx idx{0};
-    if (!chatWidget->selectedEntry(idx) || !startReply(idx, selectedText)) {
+    const bool oneEntry = chatWidget->selectedEntry(idx);
+    // KHANDAQ (26.11.2026): words of an entry that may not be quoted here (a private message of a
+    // group) are answered where they can be, and a choice across one quotes nothing.
+    if (oneEntry && repliesElsewhere(idx)) {
+        replyElsewhere(idx);
+        return;
+    }
+    ChatLogIdx first{0};
+    ChatLogIdx last{0};
+    if (!oneEntry && chatWidget->selectedRange(first, last)) {
+        for (ChatLogIdx i = first; i <= last; ++i) {
+            if (repliesElsewhere(i)) {
+                return;
+            }
+        }
+    }
+    if (!oneEntry || !startReply(idx, selectedText)) {
         quotePreview->setQuoteText(selectedText);
     }
     msgEdit->setFocus();

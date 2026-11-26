@@ -421,6 +421,9 @@ enum AirRequestKind: Equatable {
     /// A contact invites you to a group (E12). Joining goes through them, so it works only while
     /// they are online.
     case group(name: String, inviter: String, inviterOnline: Bool)
+    /// KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): a member of a group asks to become a contact
+    /// ("Add to contacts" on you there): their name in the group and the group's name.
+    case member(name: String, group: String)
 }
 
 /// An incoming friend request or group invitation, drawn as a card above the sections.

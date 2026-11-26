@@ -94,6 +94,7 @@
 #include "src/model/friend.h"
 #include "src/model/group.h"
 #include "src/model/air/aircommunity.h"
+#include "src/model/air/airgroupcontact.h"
 #include "src/model/air/airgroupfilerepair.h"
 #include "src/model/air/airhistorysync.h"
 #include "src/model/air/airmedia.h"
@@ -1032,6 +1033,7 @@ void Widget::onCoreChanged(Core& core_)
     connect(core, &Core::groupInviteAcceptFailed, this, &Widget::onGroupInviteAcceptFailed);
     connect(core, &Core::groupRejoinFailed, this, &Widget::onGroupRejoinFailed);
     connect(core, &Core::groupPrivateMessageReceived, this, &Widget::onGroupPrivateMessageReceived);
+    connect(core, &Core::groupContactPacketReceived, this, &Widget::onGroupContactPacket);
     connect(core, &Core::friendTypingChanged, this, &Widget::onFriendTypingChanged);
     connect(core, &Core::groupSentFailed, this, &Widget::onGroupSendFailed);
     connect(core, &Core::usernameSet, this, &Widget::refreshPeerListsLocal);
@@ -1771,6 +1773,13 @@ void Widget::addFriend(uint32_t friendId, const ToxPk& friendPk)
     const QString username = core->getFriendUsername(friendId);
     if (!username.isEmpty()) {
         onFriendUsernameChanged(friendId, username);
+    } else if (airLocal) {
+        // KHANDAQ (26.11.2026): a member of a group who became a contact goes by their name in the
+        // group until their own name comes.
+        const QString memberName = airLocal->memberOfContact(friendPk).memberName.trimmed();
+        if (!memberName.isEmpty()) {
+            newfriend->setName(memberName);
+        }
     }
 }
 
@@ -1921,6 +1930,10 @@ void Widget::onFriendUsernameChanged(int friendId, const QString& username)
 
     QString str = username;
     str.replace('\n', ' ').remove('\r').remove(QChar('\0'));
+    // KHANDAQ (26.11.2026): no name of their own yet: a member of a group keeps their name there.
+    if (str.trimmed().isEmpty() && airLocal) {
+        str = airLocal->memberOfContact(friendPk).memberName.trimmed();
+    }
     f->setName(str);
 }
 
@@ -2556,24 +2569,47 @@ void Widget::reportSeenInFront()
 
 void Widget::onFriendRequestReceived(const ToxPk& friendPk, const QString& message)
 {
+    if (!airLocal) {
+        return;
+    }
+    // KHANDAQ (26.11.2026): a member who accepted our offer over a group asks with its nonce: the
+    // offer is taken in one step and they become a contact without asking (the accept over the
+    // group, should it come too, finds nothing). The second answer to an offer answered already
+    // finds the contact there and changes nothing; a nonce of no offer of ours makes an ordinary
+    // request, shown without its marker.
+    QByteArray nonce;
+    QString words;
+    const bool marked = Air::readContactRequestMarker(message, &nonce, &words);
+    if (marked) {
+        const Air::LocalStore::ContactOffer offer = airLocal->takeContactOffer(nonce);
+        if (!offer.isNull()) {
+            finishContactOffer(offer.groupKey, offer.memberKey, offer.memberName, friendPk,
+                               QString());
+            return;
+        }
+        if (!airLocal->memberOfContact(friendPk).isNull()) {
+            return;
+        }
+    }
+    const QString shown = marked ? words : message;
     // A request from a blocked key is dropped as it lands, the way Decline drops one: no card, no
     // badge, no notification, and nothing goes back.
-    if (!airLocal || airLocal->isBlocked(friendPk)) {
+    if (airLocal->isBlocked(friendPk)) {
         return;
     }
     // Nothing is accepted without the person (E12): the request waits as a card, with its words,
     // until Accept or Decline. The same request again (toxcore asks anew after a restart) is not
     // news.
-    if (!airLocal->addRequest(friendPk, message)) {
+    if (!airLocal->addRequest(friendPk, shown)) {
         return;
     }
     newMessageAlert(window(), isActiveWindow(), true, true);
     // A notification of its own kind, as the card is a row of its own (E22).
     if (QWidget* const front = bandWindow(this, settings.getNotify())) {
-        showRequestBand(front, message);
+        showRequestBand(front, shown);
         return;
     }
-    auto notificationData = notificationGenerator->friendRequestNotification(friendPk, message);
+    auto notificationData = notificationGenerator->friendRequestNotification(friendPk, shown);
     notifier.notifyMessage(notificationData);
 }
 
@@ -3139,6 +3175,11 @@ void Widget::onGroupPrivateMessageReceived(int groupnumber, const ToxPk& peerPk,
     }
     const QString text = isAction ? ChatForm::ACTION_PREFIX + message : message;
     airLocal->addPrivateLine(groupId.toString(), peerPk.toString(), false, text);
+    // KHANDAQ (26.11.2026): it stands in the feed of the group too, private to us.
+    Air::PrivateEntry entry;
+    entry.peerKey = peerPk.toString();
+    entry.peerName = group->resolveToxPk(peerPk);
+    addPrivateFeedEntry(groupId, peerPk, text, entry);
 
     const QSharedPointer<GroupChatForm> form = groupChatForms.value(groupId);
     if (form && form->isVisible() && form->isPrivateOpen(peerPk.toString())) {
@@ -3176,6 +3217,221 @@ void Widget::onGroupPrivateMessageReceived(int groupnumber, const ToxPk& peerPk,
             shown->openPrivate(key);
         }
     });
+}
+
+void Widget::addPrivateFeedEntry(const GroupId& groupId, const ToxPk& author, const QString& text,
+                                 const Air::PrivateEntry& entry)
+{
+    // Every log of a group is a ChatHistory (createGroup), as the files of a group find it too.
+    const auto chatLog = groupChatLogs.find(groupId);
+    if (chatLog == groupChatLogs.end() || !chatLog.value()) {
+        return;
+    }
+    std::static_pointer_cast<ChatHistory>(chatLog.value())
+        ->addPrivateEntry(author, text, QDateTime::currentDateTime(), entry);
+}
+
+void Widget::onGroupContactPacket(int groupnumber, const ToxPk& member, bool accept,
+                                  const QByteArray& address, const QByteArray& nonce)
+{
+    const GroupId groupId = groupList->id2Key(static_cast<uint32_t>(groupnumber));
+    Group* const group = groupList->findGroup(groupId);
+    const QString memberKey = member.toString();
+    // A member whose messages are hidden on this device is not heard over the group either.
+    if (!group || !airLocal || !core || settings.getBlackList().contains(memberKey)) {
+        return;
+    }
+    const ToxId contactId(address);
+    const ToxPk contactPk = contactId.getPublicKey();
+    const QString groupKey = groupId.toString();
+    const QString memberName = group->resolveToxPk(member);
+    if (accept) {
+        // It counts only from the member our offer with this nonce went to, in this group, and it
+        // takes the offer in one step: the request with the nonce, should it come too, finds
+        // nothing and adds nothing.
+        const Air::LocalStore::ContactOffer offer =
+            airLocal->takeContactOffer(nonce, groupKey, memberKey);
+        if (!offer.isNull()) {
+            finishContactOffer(offer.groupKey, offer.memberKey, offer.memberName, contactPk,
+                               contactId.toString());
+            return;
+        }
+        // Their request came first and made them a contact: the whole ID fills what is kept.
+        const Air::LocalStore::MemberContact known = airLocal->memberContact(groupKey, memberKey);
+        if (!known.isNull() && known.contactKey == contactPk.toString()
+            && known.address.isEmpty()) {
+            Air::LocalStore::MemberContact filled = known;
+            filled.address = contactId.toString();
+            airLocal->keepMemberContact(filled);
+        }
+        return;
+    }
+
+    // An offer: from a blocked person it goes the way their requests go.
+    if (airLocal->isBlocked(contactPk)) {
+        return;
+    }
+    if (friendList->findFriend(contactPk)) {
+        // A contact already: the accept goes back at once, and nothing is asked.
+        Air::LocalStore::MemberContact contact;
+        contact.groupKey = groupKey;
+        contact.memberKey = memberKey;
+        contact.contactKey = contactPk.toString();
+        contact.address = contactId.toString();
+        contact.memberName = memberName;
+        airLocal->keepMemberContact(contact);
+        if (core->sendGroupContactPacket(groupnumber, member, true, nonce)
+            != Core::ContactPacketResult::Sent) {
+            qDebug() << "The accept of an offer of a contact did not go to group" << groupnumber;
+        }
+        return;
+    }
+    Air::LocalStore::WaitingRequest offer;
+    offer.publicKey = contactPk.toString();
+    offer.address = contactId.toString();
+    offer.groupKey = groupKey;
+    offer.groupName = group->getDisplayedName();
+    offer.memberKey = memberKey;
+    offer.memberName = memberName;
+    offer.nonce = nonce;
+    if (!airLocal->addGroupRequest(offer)) {
+        return;
+    }
+    // As a request: a card of its own kind, which says who they are in which group.
+    newMessageAlert(window(), isActiveWindow(), true, true);
+    const QString words =
+        AirStrings::text(AirStrings::Text::GroupContactBand)
+            .arg(memberName.trimmed().isEmpty() ? Air::unnamedAuthorName(memberKey) : memberName,
+                 offer.groupName);
+    if (QWidget* const front = bandWindow(this, settings.getNotify())) {
+        showRequestBand(front, words);
+        return;
+    }
+    notifier.notifyMessage(notificationGenerator->friendRequestNotification(contactPk, words));
+}
+
+bool Widget::offerGroupContact(const GroupId& groupId, const ToxPk& member, QWidget* anchor)
+{
+    Group* const group = groupList->findGroup(groupId);
+    if (!group || !airLocal || !core || member.isEmpty()) {
+        return false;
+    }
+    using AirStrings::Text;
+    const QString memberKey = member.toString();
+    QString name = group->resolveToxPk(member).trimmed();
+    if (name.isEmpty()) {
+        name = Air::unnamedAuthorName(memberKey);
+    }
+    // A member who is a contact already: their conversation.
+    const Air::LocalStore::MemberContact known =
+        airLocal->memberContact(groupId.toString(), memberKey);
+    if (!known.isNull() && friendList->findFriend(ToxPk(known.contactKey))) {
+        openAirEntry(AirSource::friendEntryId(ToxPk(known.contactKey)));
+        return true;
+    }
+    const QByteArray nonce = Air::newContactOfferNonce();
+    switch (core->sendGroupContactPacket(static_cast<int>(group->getId()), member, false, nonce)) {
+    case Core::ContactPacketResult::Offline:
+        AirToast::post(anchor, AirStrings::text(Text::GroupContactOffline).arg(name));
+        return false;
+    case Core::ContactPacketResult::Failed:
+        AirToast::post(anchor, AirStrings::text(Text::GroupContactFailed));
+        return false;
+    case Core::ContactPacketResult::Sent:
+        break;
+    }
+    // Their answer comes through this thread after this, so the offer waits for it already.
+    Air::LocalStore::ContactOffer offer;
+    offer.groupKey = groupId.toString();
+    offer.memberKey = memberKey;
+    offer.memberName = name;
+    offer.nonce = nonce;
+    offer.date = QDateTime::currentMSecsSinceEpoch();
+    airLocal->keepContactOffer(offer);
+    AirToast::post(anchor, AirStrings::text(Text::GroupContactSent).arg(name));
+    return true;
+}
+
+void Widget::acceptGroupOffer(const ToxPk& contactPk)
+{
+    const Air::LocalStore::WaitingRequest offer = airLocal->request(contactPk);
+    if (!offer.fromGroup()) {
+        return;
+    }
+    // Who they are in the group is kept before Core adds them, so the new contact takes their name
+    // there until their own comes (addFriend).
+    Air::LocalStore::MemberContact contact;
+    contact.groupKey = offer.groupKey;
+    contact.memberKey = offer.memberKey;
+    contact.contactKey = offer.publicKey;
+    contact.address = offer.address;
+    contact.memberName = offer.memberName;
+    airLocal->keepMemberContact(contact);
+    // The request reaches them wherever they are; the accept over the group reaches them at once
+    // while they are there. Either one makes us their contact.
+    const QString words =
+        AirStrings::text(AirStrings::Text::GroupContactWords).arg(offer.groupName);
+    emit friendRequested(ToxId(offer.address), Air::contactRequestMessage(offer.nonce, words));
+    const Group* const group =
+        groupList->findGroup(GroupId(QByteArray::fromHex(offer.groupKey.toLatin1())));
+    if (group
+        && core->sendGroupContactPacket(static_cast<int>(group->getId()), ToxPk(offer.memberKey),
+                                        true, offer.nonce)
+               != Core::ContactPacketResult::Sent) {
+        qDebug() << "The member who offered a contact is not in the group now: the request goes";
+    }
+}
+
+void Widget::finishContactOffer(const QString& groupKey, const QString& memberKey,
+                                const QString& memberName, const ToxPk& contactPk,
+                                const QString& address)
+{
+    Air::LocalStore::MemberContact contact;
+    contact.groupKey = groupKey;
+    contact.memberKey = memberKey;
+    contact.contactKey = contactPk.toString();
+    contact.address = address;
+    contact.memberName = memberName;
+    airLocal->keepMemberContact(contact);
+    // We asked them: that lifts a block of their key, as sending a request does.
+    if (airLocal->isBlocked(contactPk)) {
+        airLocal->unblock(contactPk.toString());
+    }
+    if (!friendList->findFriend(contactPk)) {
+        emit friendRequestAccepted(contactPk);
+    }
+    AirToast::post(airList, AirStrings::text(AirStrings::Text::GroupContactAdded)
+                                .arg(memberName.trimmed().isEmpty()
+                                         ? Air::unnamedAuthorName(memberKey)
+                                         : memberName));
+}
+
+AirMemberMatch Widget::groupMemberWithKey(const QString& key) const
+{
+    if (key.size() != Air::toxKeyHexLength || !core) {
+        return AirMemberMatch();
+    }
+    const ToxPk memberPk(key);
+    if (memberPk.isEmpty()) {
+        return AirMemberMatch();
+    }
+    for (Group* const group : groupList->getAllGroups()) {
+        const QMap<ToxPk, QString>& peers = group->getPeerList();
+        const auto peer = peers.constFind(memberPk);
+        // The key the group knows us by is nobody to ask.
+        if (peer == peers.constEnd()
+            || core->getGroupSelfPublicKey(static_cast<int>(group->getId())) == memberPk) {
+            continue;
+        }
+        AirMemberMatch match;
+        match.groupKey = group->getPersistentId().toString();
+        match.groupName = group->getDisplayedName();
+        match.memberKey = memberPk.toString();
+        match.memberName = peer.value().trimmed().isEmpty() ? Air::unnamedAuthorName(match.memberKey)
+                                                            : peer.value();
+        return match;
+    }
+    return AirMemberMatch();
 }
 
 void Widget::onGroupPeerlistChanged(uint32_t groupnumber)
@@ -3977,6 +4233,24 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
     // The form goes with the group, so leaving waits until the dossier's click is over.
     connect(form, &GroupChatForm::leaveRequested, this, &Widget::leaveGroup, Qt::QueuedConnection);
     connect(form, &GroupChatForm::heldFileAccepted, this, &Widget::saveHeldGroupFile);
+    // KHANDAQ (26.11.2026): a member to contacts, and our private messages in the feed.
+    connect(form, &GroupChatForm::contactOfferRequested, this,
+            [this, form](const GroupId& offerGroup, const ToxPk& member) {
+                offerGroupContact(offerGroup, member, form);
+            });
+    connect(form, &GroupChatForm::contactConversationRequested, this,
+            [this](const ToxPk& contactKey) {
+                openAirEntry(AirSource::friendEntryId(contactKey));
+            });
+    connect(form, &GroupChatForm::privateMessageSent, this,
+            [this](const GroupId& sentGroup, const QString& peerKey, const QString& peerName,
+                   const QString& text) {
+                Air::PrivateEntry entry;
+                entry.peerKey = peerKey;
+                entry.peerName = peerName;
+                entry.ours = true;
+                addPrivateFeedEntry(sentGroup, core->getSelfPublicKey(), text, entry);
+            });
     groupMessageDispatchers[groupId] = messageDispatcher;
     groupChatLogs[groupId] = chatHistory;
     groupWidgets[groupId] = widget;
@@ -4701,7 +4975,14 @@ void Widget::setupAir()
         const Friend* const frnd = friendList->findFriend(ToxPk(key));
         return frnd ? frnd->getDisplayedName() : QString();
     };
+    lookup.memberOf = [this](const QString& key) { return groupMemberWithKey(key); };
     newContact = new AirNewContact(std::move(lookup), ui->statusPanel, ui->centralwidget);
+    // KHANDAQ (26.11.2026): the whole key of a member of one of our groups: a request over it.
+    connect(newContact, &AirNewContact::memberOfferRequested, this,
+            [this](const QString& groupKey, const QString& memberKey) {
+                offerGroupContact(GroupId(QByteArray::fromHex(groupKey.toLatin1())),
+                                  ToxPk(memberKey), newContact);
+            });
     connect(newContact, &AirNewContact::sendRequested, this,
             [this](const QString& address, const QString& message) {
                 emit friendRequested(ToxId(address), message);
@@ -4750,6 +5031,15 @@ void Widget::setupAir()
     ui->statusLayout->insertWidget(ui->statusLayout->indexOf(airList), commandGroupRow);
     connect(airBand, &AirBand::idStartChanged, this, &Widget::showCommandIdStart);
     connect(commandIdRow, &AirCommandIdRow::clicked, this, [this] {
+        const AirMemberMatch member = commandIdRow->member();
+        if (!member.isNull()) {
+            // The line keeps the key while nothing went, to ask again.
+            if (offerGroupContact(GroupId(QByteArray::fromHex(member.groupKey.toLatin1())),
+                                  ToxPk(member.memberKey), airList)) {
+                airBand->commandLine()->clear();
+            }
+            return;
+        }
         const QString idStart = commandIdRow->idStart();
         airBand->commandLine()->clear();
         openNewContact(idStart);
@@ -4781,6 +5071,15 @@ void Widget::setupAir()
                 const Air::CommandOffer offer = commandOffer(address);
                 if (offer.groupListed) {
                     openGroupByKey(offer.groupKey);
+                    return;
+                }
+                // KHANDAQ (26.11.2026): so does the key of a member of one of our groups.
+                const AirMemberMatch member = groupMemberWithKey(offer.contactId);
+                if (!member.isNull()) {
+                    if (offerGroupContact(GroupId(QByteArray::fromHex(member.groupKey.toLatin1())),
+                                          ToxPk(member.memberKey), airList)) {
+                        airBand->commandLine()->clear();
+                    }
                     return;
                 }
                 openNewContact(address);
@@ -5044,6 +5343,11 @@ void Widget::showCommandIdStart(const QString& hex)
         commandIdRow->hide();
     } else {
         commandIdRow->setIdStart(offer.contactId, newContact->commandVerdict(offer.contactId));
+        // KHANDAQ (26.11.2026): the whole key of a member of one of our groups asks them over it.
+        const AirMemberMatch member = groupMemberWithKey(offer.contactId);
+        if (!member.isNull()) {
+            commandIdRow->setMember(member);
+        }
         commandIdRow->show();
     }
     if (offer.groupKey.isEmpty()) {
@@ -5062,9 +5366,11 @@ Air::CommandOffer Widget::commandOffer(const QString& text) const
     const auto isGroup = [this](const QString& key) {
         return groupList->findGroup(GroupId(QByteArray::fromHex(key.toLatin1()))) != nullptr;
     };
-    // A key that is a contact's, a request's or your own is no group to join.
+    // A key that is a contact's, a request's or your own is no group to join; nor is the key of a
+    // member of one of our groups (KHANDAQ 26.11.2026).
     const auto isContact = [this](const QString& key) {
-        if (friendList->findFriend(ToxPk(key)) || core->getSelfPublicKey().toString() == key) {
+        if (friendList->findFriend(ToxPk(key)) || core->getSelfPublicKey().toString() == key
+            || !groupMemberWithKey(key).isNull()) {
             return true;
         }
         const QVector<Air::Request> requests = airSource->requests();
@@ -5113,6 +5419,11 @@ void Widget::acceptAirRequest(const QString& requestId)
     // The card leaves at once; the person's row comes when Core has added them (addFriend), and
     // the card comes back if it could not (addFriendFailed).
     airSource->setRequestHidden(requestId, true);
+    // KHANDAQ (26.11.2026): the offer of a member of a group is answered with our own request.
+    if (airLocal->request(friendPk).fromGroup()) {
+        acceptGroupOffer(friendPk);
+        return;
+    }
     emit friendRequestAccepted(friendPk);
 }
 

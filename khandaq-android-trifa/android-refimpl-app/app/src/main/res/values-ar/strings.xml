@@ -914,7 +914,7 @@
     <string name="group_member_action_private_msg_sent">تم إرسال الرسالة الخاصة</string>
     <string name="group_member_action_private_msg_failed">فشل الإرسال</string>
     <string name="group_member_action_open_chat">فتح محادثة مباشرة</string>
-    <string name="group_member_action_add_friend">إضافة جهة اتصال</string>
+    <string name="group_member_action_add_friend">إضافة إلى جهات الاتصال</string>
     <string name="group_member_action_copy_id">نسخ المعرف</string>
     <string name="group_member_action_copy_done">تم نسخ المعرف</string>
     <string name="group_member_action_mute">كتم الإشعارات</string>

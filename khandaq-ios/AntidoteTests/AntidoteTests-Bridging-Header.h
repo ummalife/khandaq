@@ -7,6 +7,7 @@
 #import <objcTox/OCTDefaultFileStorage.h>
 #import <objcTox/OCTFriend.h>
 #import <objcTox/OCTFriendRequest.h>
+#import <objcTox/OCTGroupContactExchange.h>
 #import <objcTox/OCTManager.h>
 #import <objcTox/OCTManagerFactory.h>
 #import <objcTox/OCTManagerConfiguration.h>
@@ -98,6 +99,63 @@
                                   sentPush:(BOOL)sentPush
                                     tssent:(UInt32)tssent
                                     tsrcvd:(UInt32)tsrcvd;
+// 26.11.2026 (DESIGN-group-contacts-private-mentions.md): the two queries the group history sync serves from, which
+// must never hand out a private message.
+- (NSArray<OCTMessageAbstract *> *)groupMessagesForHistorySyncInChat:(OCTChat *)chat;
+- (NSArray<NSData *> *)groupHistorySyncPacketsForGroupNumber:(uint32_t)groupNumber
+                                         packetFromMessage:(NSData *(^)(OCTMessageAbstract *message))packetBlock;
+@end
+
+// 26.11.2026 (DESIGN-group-contacts-private-mentions.md): the builder of the group history sync's packets, which
+// refuses a private message as the queries above do. objcTox is unchanged by these declarations.
+@interface OCTNgcGroupHistSync : NSObject
+- (instancetype)initWithSendPrivatePacketBlock:(BOOL (^)(uint32_t groupNumber, uint32_t peerId, NSData *packet, NSError **error))sendPrivatePacketBlock
+                            peerPublicKeyBlock:(NSString *(^)(uint32_t groupNumber, uint32_t peerId))peerPublicKeyBlock
+                        peerNameForPeerIdBlock:(NSString *(^)(uint32_t groupNumber, uint32_t peerId))peerNameForPeerIdBlock
+                          defaultPeerNameBlock:(NSString *(^)(void))defaultPeerNameBlock
+                            selfPublicKeyBlock:(NSString *(^)(uint32_t groupNumber))selfPublicKeyBlock
+                       peerIdForPublicKeyBlock:(uint32_t (^)(uint32_t groupNumber, NSString *publicKeyHex))peerIdForPublicKeyBlock
+                            isPublicGroupBlock:(BOOL (^)(uint32_t groupNumber))isPublicGroupBlock
+                               selfPeerIdBlock:(uint32_t (^)(uint32_t groupNumber))selfPeerIdBlock
+                                  peerIdsBlock:(NSArray<NSNumber *> *(^)(uint32_t groupNumber))peerIdsBlock
+                             chatForGroupBlock:(OCTChat *(^)(uint32_t groupNumber, BOOL createIfNeeded))chatForGroupBlock
+                           messagesToSyncBlock:(NSArray<OCTMessageAbstract *> *(^)(OCTChat *chat))messagesToSyncBlock
+                            messageExistsBlock:(BOOL (^)(OCTChat *chat, uint32_t messageId, uint32_t peerId, NSString *senderPubkeyHex, NSString *peerName, NSString *text, NSTimeInterval dateInterval))messageExistsBlock
+                               fileExistsBlock:(BOOL (^)(OCTChat *chat, NSString *msgIdHashHex))fileExistsBlock
+                      insertSyncedMessageBlock:(OCTMessageAbstract *(^)(OCTChat *chat, NSString *text, OCTToxMessageType type, uint32_t peerId, NSString *peerName, NSString *senderPubkeyHex, uint32_t messageId, NSTimeInterval dateInterval))insertSyncedMessageBlock
+                         insertSyncedFileBlock:(OCTMessageAbstract *(^)(OCTChat *chat, NSString *fileName, NSString *filePath, uint64_t fileSize, NSString *fileUTI, uint32_t peerId, NSString *peerName, NSString *senderPubkeyHex, NSString *msgIdHashHex, NSTimeInterval dateInterval))insertSyncedFileBlock
+                   incomingFilesDirectoryBlock:(NSString *(^)(uint32_t groupNumber))incomingFilesDirectoryBlock
+                                  fileUTIBlock:(NSString *(^)(NSString *fileName))fileUTIBlock
+                            isBlockedPeerBlock:(BOOL (^)(uint32_t groupNumber, uint32_t peerId))isBlockedPeerBlock
+                          deliveryReceiptBlock:(void (^)(OCTChat *chat, uint32_t messageId, uint32_t peerId))deliveryReceiptBlock
+                     fileSyncConfirmationBlock:(void (^)(OCTChat *chat, NSString *msgIdHashHex, uint32_t syncerPeerId))fileSyncConfirmationBlock;
+- (NSData *)buildSyncPacketForMessage:(OCTMessageAbstract *)message groupNumber:(uint32_t)groupNumber
+    NS_SWIFT_NAME(syncPacket(for:groupNumber:));
+// Tester 21.11 (8256/8261): the history sync of a group, handed a member's packet as toxcore hands it over.
+- (void)handleIncomingPrivatePacketWithGroupNumber:(uint32_t)groupNumber peerId:(uint32_t)peerId data:(NSData *)data;
+@end
+
+// 26.11.2026 (DESIGN-group-contacts-private-mentions.md): the offers of the member-to-contact exchange, which the
+// accept over the group and the contact request with the offer's nonce each take, only one of them. objcTox is
+// unchanged by these declarations.
+@interface OCTGroupContactPendingOffer : NSObject
+@property (nonatomic, copy, readonly) NSString *memberPublicKeyHex;
+@property (nonatomic, copy, readonly) NSString *nonceHex;
+- (instancetype)initWithGroupChatIdHex:(NSString *)groupChatIdHex
+                    memberPublicKeyHex:(NSString *)memberPublicKeyHex
+                            memberName:(NSString *)memberName
+                              nonceHex:(NSString *)nonceHex
+                                sentAt:(NSTimeInterval)sentAt;
+@end
+
+@interface OCTGroupContactStore : NSObject
+- (instancetype)initWithRealmManager:(OCTRealmManager *)realmManager;
+- (void)savePendingOffer:(OCTGroupContactPendingOffer *)offer;
+- (OCTGroupContactPendingOffer *)takePendingOfferToMember:(NSString *)memberPublicKeyHex
+                                                  inGroup:(NSString *)groupChatIdHex
+                                                 nonceHex:(NSString *)nonceHex
+                                                       at:(NSTimeInterval)now;
+- (OCTGroupContactPendingOffer *)takePendingOfferWithNonceHex:(NSString *)nonceHex at:(NSTimeInterval)now;
 @end
 
 // Tester 21.11 (8256/8261): the group messages deleted on this device, which the history sync and a resend do not
@@ -157,11 +215,6 @@ void friendLosslessPacketCallback(void *cTox, uint32_t friendNumber, const uint8
 - (NSArray *)allEntries;
 - (NSTimeInterval)nextDueAt;
 - (NSString *)serializedChatIds;
-@end
-
-// Tester 21.11 (8256/8261): the history sync of a group, handed a member's packet as toxcore hands it over.
-@interface OCTNgcGroupHistSync : NSObject
-- (void)handleIncomingPrivatePacketWithGroupNumber:(uint32_t)groupNumber peerId:(uint32_t)peerId data:(NSData *)data;
 @end
 
 @interface OCTSubmanagerGroupsImpl : NSObject

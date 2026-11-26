@@ -12,6 +12,7 @@
         <file alias="copy.svg">../img/air/copy.svg</file>
         <file alias="eye.svg">../img/air/eye.svg</file>
         <file alias="file.svg">../img/air/file.svg</file>
+        <file alias="lock.svg">../img/air/lock.svg</file>
         <file alias="mic.svg">../img/air/mic.svg</file>
         <file alias="panel.svg">../img/air/panel.svg</file>
         <file alias="paperclip.svg">../img/air/paperclip.svg</file>

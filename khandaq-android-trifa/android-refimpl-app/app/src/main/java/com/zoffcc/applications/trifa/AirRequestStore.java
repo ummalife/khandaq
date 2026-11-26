@@ -55,11 +55,82 @@ final class AirRequestStore
     private static final String FIELD_PUBLIC_KEY = "public_key";
     private static final String FIELD_MESSAGE = "message";
     private static final String FIELD_RECEIVED_MS = "received_ms";
-    private static final Pattern PUBLIC_KEY = Pattern.compile("[0-9A-F]{64}");
+    // KHANDAQ (26.11.2026): an offer from a member of a group (GroupContactExchange).
+    private static final String FIELD_GROUP_ADDRESS = "group_address";
+    private static final String FIELD_GROUP_ID = "group_id";
+    private static final String FIELD_GROUP_MEMBER = "group_member";
+    private static final String FIELD_GROUP_NONCE = "group_nonce";
+    private static final String FIELD_GROUP_MEMBER_NAME = "group_member_name";
+    private static final String FIELD_GROUP_NAME = "group_name";
+    static final Pattern ADDRESS = Pattern.compile("[0-9A-F]{76}");
+    static final Pattern NONCE = Pattern.compile("[0-9a-f]{16}");
+    static final Pattern PUBLIC_KEY = Pattern.compile("[0-9A-F]{64}");
 
     interface Listener
     {
         void onAirRequestsChanged();
+    }
+
+    /**
+     * KHANDAQ (26.11.2026): what an offer from a member of a group adds to a request: their whole ID, the
+     * group and their key in it, the offer's nonce, and the names the card shows. Accepting it sends our
+     * contact request to that ID instead of adding the key (GroupContactExchange).
+     */
+    static final class GroupOffer
+    {
+        final String address;
+        final String groupId;
+        final String memberKey;
+        final String nonce;
+        final String memberName;
+        final String groupName;
+
+        GroupOffer(String address, String groupId, String memberKey, String nonce, String memberName,
+                   String groupName)
+        {
+            this.address = address == null ? "" : address.trim().toUpperCase(Locale.ROOT);
+            this.groupId = groupId == null ? "" : groupId.trim().toLowerCase(Locale.ROOT);
+            this.memberKey = memberKey == null ? "" : memberKey.trim().toUpperCase(Locale.ROOT);
+            this.nonce = nonce == null ? "" : nonce.trim().toLowerCase(Locale.ROOT);
+            this.memberName = memberName == null ? "" : memberName.trim();
+            this.groupName = groupName == null ? "" : groupName.trim();
+        }
+
+        /** Whole: an ID of 76 hex characters, a group, a member key of 64 and a nonce of 16. */
+        boolean valid()
+        {
+            return ADDRESS.matcher(address).matches() && PUBLIC_KEY.matcher(memberKey).matches()
+                   && NONCE.matcher(nonce).matches() && !groupId.isEmpty();
+        }
+
+        @Override
+        public boolean equals(Object other)
+        {
+            if (this == other)
+            {
+                return true;
+            }
+            if (!(other instanceof GroupOffer))
+            {
+                return false;
+            }
+            final GroupOffer that = (GroupOffer) other;
+            return address.equals(that.address) && groupId.equals(that.groupId) && memberKey.equals(that.memberKey)
+                   && nonce.equals(that.nonce) && memberName.equals(that.memberName)
+                   && groupName.equals(that.groupName);
+        }
+
+        @Override
+        public int hashCode()
+        {
+            int result = address.hashCode();
+            result = 31 * result + groupId.hashCode();
+            result = 31 * result + memberKey.hashCode();
+            result = 31 * result + nonce.hashCode();
+            result = 31 * result + memberName.hashCode();
+            result = 31 * result + groupName.hashCode();
+            return result;
+        }
     }
 
     /** One pending request. The key is the sender's 64-hex public key, upper case. */
@@ -68,12 +139,34 @@ final class AirRequestStore
         final String publicKey;
         final String message;
         final long receivedMs;
+        /** The offer behind it when it came from a member of a group; null for a Tox contact request. */
+        final GroupOffer group;
 
         private Pending(String publicKey, String message, long receivedMs)
+        {
+            this(publicKey, message, receivedMs, null);
+        }
+
+        Pending(String publicKey, String message, long receivedMs, GroupOffer group)
         {
             this.publicKey = publicKey;
             this.message = message;
             this.receivedMs = receivedMs;
+            this.group = group;
+        }
+
+        /**
+         * An offer from a member of a group: its key is the one of the ID inside the offer. Null when the
+         * offer is not whole or its ID is not that key's.
+         */
+        static Pending fromGroup(String publicKey, GroupOffer offer, long receivedMs)
+        {
+            final Pending plain = of(publicKey, "", receivedMs);
+            if (plain == null || offer == null || !offer.valid() || !offer.address.startsWith(plain.publicKey))
+            {
+                return null;
+            }
+            return new Pending(plain.publicKey, "", plain.receivedMs, offer);
         }
 
         /** Returns null when the key is not a 64-hex public key. */
@@ -113,7 +206,8 @@ final class AirRequestStore
                 return false;
             }
             final Pending that = (Pending) other;
-            return receivedMs == that.receivedMs && publicKey.equals(that.publicKey) && message.equals(that.message);
+            return receivedMs == that.receivedMs && publicKey.equals(that.publicKey) && message.equals(that.message)
+                   && (group == null ? that.group == null : group.equals(that.group));
         }
 
         @Override
@@ -122,6 +216,7 @@ final class AirRequestStore
             int result = publicKey.hashCode();
             result = 31 * result + message.hashCode();
             result = 31 * result + Long.hashCode(receivedMs);
+            result = 31 * result + (group == null ? 0 : group.hashCode());
             return result;
         }
 
@@ -172,7 +267,12 @@ final class AirRequestStore
     /** Keeps a request; a second request from the same key replaces the first. */
     static void add(String publicKey, String message, long receivedMs)
     {
-        final Pending incoming = Pending.of(publicKey, message, receivedMs);
+        add(Pending.of(publicKey, message, receivedMs));
+    }
+
+    /** Keeps a request as it is, also an offer from a member of a group; a second one from the key replaces it. */
+    static void add(Pending incoming)
+    {
         if (incoming == null)
         {
             Log.i(TAG, "add: ignored a request without a valid public key");
@@ -219,7 +319,21 @@ final class AirRequestStore
     {
         if (pending != null)
         {
-            add(pending.publicKey, pending.message, pending.receivedMs);
+            add(pending);
+        }
+    }
+
+    /** The waiting request from this key, or null. */
+    static Pending find(String publicKey)
+    {
+        final Pending probe = Pending.of(publicKey, "", 0);
+        if (probe == null)
+        {
+            return null;
+        }
+        synchronized (LOCK)
+        {
+            return find(loadedLocked(), probe.publicKey);
         }
     }
 
@@ -417,9 +531,12 @@ final class AirRequestStore
         {
             if (existing.publicKey.equals(incoming.publicKey))
             {
-                // A repeated request keeps the newer time; an empty repeat keeps the earlier words.
+                // A repeated request keeps the newer time; an empty repeat keeps the earlier words, and a Tox
+                // request after an offer from a group keeps the offer, which Accept answers in full.
                 final String message = incoming.message.isEmpty() ? existing.message : incoming.message;
-                merged = new Pending(incoming.publicKey, message, Math.max(existing.receivedMs, incoming.receivedMs));
+                final GroupOffer group = incoming.group != null ? incoming.group : existing.group;
+                merged = new Pending(incoming.publicKey, message, Math.max(existing.receivedMs, incoming.receivedMs),
+                                     group);
             }
             else
             {
@@ -480,6 +597,15 @@ final class AirRequestStore
             object.addProperty(FIELD_PUBLIC_KEY, pending.publicKey);
             object.addProperty(FIELD_MESSAGE, pending.message);
             object.addProperty(FIELD_RECEIVED_MS, pending.receivedMs);
+            if (pending.group != null)
+            {
+                object.addProperty(FIELD_GROUP_ADDRESS, pending.group.address);
+                object.addProperty(FIELD_GROUP_ID, pending.group.groupId);
+                object.addProperty(FIELD_GROUP_MEMBER, pending.group.memberKey);
+                object.addProperty(FIELD_GROUP_NONCE, pending.group.nonce);
+                object.addProperty(FIELD_GROUP_MEMBER_NAME, pending.group.memberName);
+                object.addProperty(FIELD_GROUP_NAME, pending.group.groupName);
+            }
             array.add(object);
         }
         return array.toString();
@@ -519,8 +645,17 @@ final class AirRequestStore
                 continue;
             }
             final JsonObject object = element.getAsJsonObject();
-            final Pending pending = Pending.of(stringField(object, FIELD_PUBLIC_KEY), stringField(object, FIELD_MESSAGE),
-                                               longField(object, FIELD_RECEIVED_MS));
+            Pending pending = Pending.of(stringField(object, FIELD_PUBLIC_KEY), stringField(object, FIELD_MESSAGE),
+                                         longField(object, FIELD_RECEIVED_MS));
+            final String groupAddress = stringField(object, FIELD_GROUP_ADDRESS);
+            if (pending != null && groupAddress != null)
+            {
+                // A damaged offer is no request at all: its Accept could not answer it.
+                pending = Pending.fromGroup(pending.publicKey, new GroupOffer(
+                        groupAddress, stringField(object, FIELD_GROUP_ID), stringField(object, FIELD_GROUP_MEMBER),
+                        stringField(object, FIELD_GROUP_NONCE), stringField(object, FIELD_GROUP_MEMBER_NAME),
+                        stringField(object, FIELD_GROUP_NAME)), pending.receivedMs);
+            }
             if (pending != null)
             {
                 result = withAdded(result, pending, max);

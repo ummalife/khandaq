@@ -524,7 +524,8 @@ public final class AirNewContactActivity extends AirScreenActivity
         return AirNewContactModel.Verdict.of(hex, ownAddress,
                                              key -> HelperFriend.lookup_friendlist_by_pubkey(key) != null,
                                              AirNewContactActivity::hasRequest,
-                                             AirBlockList::isBlocked);
+                                             AirBlockList::isBlocked,
+                                             GroupContactExchange::findMember);
     }
 
     private static boolean hasRequest(final String publicKey)
@@ -600,6 +601,15 @@ public final class AirNewContactActivity extends AirScreenActivity
                 words = getString(R.string.air_nc_verdict_blocked);
                 color = R.color.kq_ink_2;
                 break;
+            case GROUP_MEMBER:
+                // KHANDAQ (26.11.2026): a member's key in a group, never an ID: the request goes through the group.
+                words = verdict.member.groupName.isEmpty()
+                        ? getString(R.string.air_nc_verdict_member_unnamed_format, verdict.member.name)
+                        : getString(R.string.air_nc_verdict_member_format, verdict.member.name,
+                                    verdict.member.groupName);
+                color = R.color.kq_ink_2;
+                link = R.string.air_nc_send_member_request;
+                break;
             default:
                 words = getString(R.string.air_nc_verdict_ok);
                 color = R.color.kq_live;
@@ -632,6 +642,9 @@ public final class AirNewContactActivity extends AirScreenActivity
                 break;
             case THEY_ASKED:
                 reason = R.string.air_nc_why_they_asked;
+                break;
+            case GROUP_MEMBER:
+                reason = 0;
                 break;
             case OK:
             case BLOCKED:
@@ -666,6 +679,7 @@ public final class AirNewContactActivity extends AirScreenActivity
                 return 2;
             case CONTACT:
             case THEY_ASKED:
+            case GROUP_MEMBER:
                 return 3;
             default:
                 return 4;
@@ -699,6 +713,26 @@ public final class AirNewContactActivity extends AirScreenActivity
         {
             FriendListHolder.show_messagelist_acticvity_for_friend(this, verdict.publicKey);
             finish();
+        }
+        else if (verdict.kind == AirNewContactModel.Verdict.Kind.GROUP_MEMBER && verdict.member != null)
+        {
+            // The offer with our ID goes to the member over the group: sent, the words come as a toast and
+            // the screen is done; offline or failed, they stand under the verdict.
+            final AirNewContactModel.GroupMember member = verdict.member;
+            final CharSequence[] said = new CharSequence[1];
+            final boolean sent = GroupContactExchange.offer(this, member.groupId, member.memberKey, member.name,
+                                                            (text, failed) -> said[0] = text);
+            if (sent)
+            {
+                HelperGeneric.display_toast(String.valueOf(said[0]), false, 0);
+                finish();
+            }
+            else if (said[0] != null)
+            {
+                why.setText(AirUi.localDigits(this, said[0].toString()));
+                why.setVisibility(View.VISIBLE);
+                why.announceForAccessibility(said[0]);
+            }
         }
         else if (verdict.kind == AirNewContactModel.Verdict.Kind.THEY_ASKED)
         {

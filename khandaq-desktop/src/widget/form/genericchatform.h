@@ -159,6 +159,19 @@ protected:
      */
     QString outgoingText() const;
     /**
+     * KHANDAQ (26.11.2026): the block of mentions (Air::mentionBlock) that goes with words, the
+     * text of the field; a form of a group makes it, none by default.
+     */
+    virtual QString mentionBlockFor(const QString& words) const;
+    /**
+     * KHANDAQ (26.11.2026): whether Reply on the entry at idx answers it away from this
+     * conversation, because a reply here would quote it to people it was not meant for (a private
+     * message of a group). Then the entry is never quoted here. None by default.
+     */
+    virtual bool repliesElsewhere(ChatLogIdx idx) const;
+    /** Answers the entry at idx where repliesElsewhere says; nothing by default. */
+    virtual void replyElsewhere(ChatLogIdx idx);
+    /**
      * KHANDAQ (0.2.58): who wrote an entry, as a reply to it names them on the wire. The name is
      * the one the others know them by (ours too, never "You") and the key the one this
      * conversation knows them by.

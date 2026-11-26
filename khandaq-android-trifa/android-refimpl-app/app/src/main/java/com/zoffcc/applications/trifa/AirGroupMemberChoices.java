@@ -39,14 +39,21 @@ final class AirGroupMemberChoices
      * message, the direct chat or adding them, copying their ID, muting them in this group, removing
      * them in the danger colour, the changes of role; then, on Android, the member's own screen and, for
      * a test client, what it is.
+     * <p>
+     * KHANDAQ (26.11.2026): a member's key is theirs in this group only and adds no contact, so Copy ID is
+     * there only when their whole ID is known ({@code copyable}: the two of them traded IDs through the
+     * group, GroupContactExchange); their key in the group stays on their own screen.
      */
-    static List<Choice> sheet(final boolean friend, final boolean muted, final int target, final int actor,
-                              final boolean probableBot)
+    static List<Choice> sheet(final boolean friend, final boolean copyable, final boolean muted, final int target,
+                              final int actor, final boolean probableBot)
     {
         final List<Choice> choices = new ArrayList<>();
         choices.add(Choice.PRIVATE_MESSAGE);
         choices.add(friend ? Choice.OPEN_CHAT : Choice.ADD_FRIEND);
-        choices.add(Choice.COPY_ID);
+        if (copyable)
+        {
+            choices.add(Choice.COPY_ID);
+        }
         choices.add(muted ? Choice.UNMUTE : Choice.MUTE);
         final List<AirGroupModel.MemberAction> allowed = AirGroupModel.MemberAction.available(target, actor);
         if (allowed.contains(AirGroupModel.MemberAction.KICK))

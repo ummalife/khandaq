@@ -52,7 +52,11 @@ class LocalStore
 public:
     static constexpr qint64 keepSeconds = 7 * 86400;
 
-    /** A friend request waiting for Accept or Decline: toxcore hands it over once. */
+    /**
+     * A friend request waiting for Accept or Decline: toxcore hands it over once. A member of a
+     * group may offer their ID over the group as well (airgroupcontact.h): that offer waits here
+     * too, with the group it came from (fromGroup).
+     */
     struct WaitingRequest
     {
         /** 64 hexadecimal characters in upper case. */
@@ -60,9 +64,66 @@ public:
         QString message;
         /** When it came, in milliseconds since 1970. */
         qint64 date = 0;
+        /**
+         * An offer of a member of a group: their whole Tox ID, 76 hexadecimal characters in upper
+         * case, which Accept sends a request to. Empty for a Tox request.
+         */
+        QString address;
+        /** The group the offer came in (its chat id, upper case) and its name then. */
+        QString groupKey;
+        QString groupName;
+        /** The member's key in that group, upper case, and their name in it. */
+        QString memberKey;
+        QString memberName;
+        /** The 8 bytes of the offer, which the accept and the request that answers it repeat. */
+        QByteArray nonce;
 
+        bool fromGroup() const;
         bool operator==(const WaitingRequest& other) const;
     };
+
+    /**
+     * An offer of ours to a member of a group to become contacts (airgroupcontact.h), waiting for
+     * their accept: one per member of a group, kept for Air::contactOfferKeepMs.
+     */
+    struct ContactOffer
+    {
+        /** The group's chat id and the member's key in it, upper case. */
+        QString groupKey;
+        QString memberKey;
+        /** Their name in the group, which the contact takes until their own name comes. */
+        QString memberName;
+        /** The 8 bytes of the offer. */
+        QByteArray nonce;
+        /** When it went, in milliseconds since 1970. */
+        qint64 date = 0;
+
+        bool isNull() const;
+        bool operator==(const ContactOffer& other) const;
+    };
+    /** The most offers kept; the oldest make room. */
+    static constexpr int contactOfferLimit = 256;
+
+    /**
+     * A member of a group who became a contact through the exchange, on either side: the group
+     * and the member's key in it, the contact's key and whole ID, and the member's name, which the
+     * contact keeps until their own name comes.
+     */
+    struct MemberContact
+    {
+        QString groupKey;
+        QString memberKey;
+        /** 64 hexadecimal characters in upper case. */
+        QString contactKey;
+        /** 76 hexadecimal characters in upper case; empty while only the key is known. */
+        QString address;
+        QString memberName;
+
+        bool isNull() const;
+        bool operator==(const MemberContact& other) const;
+    };
+    /** The most members kept; the oldest make room. */
+    static constexpr int memberContactLimit = 4096;
 
     /**
      * An invitation to a group waiting for Join or Decline. toxcore hands it over once, and Join
@@ -150,7 +211,7 @@ public:
 
     /** Forgets the marks of a contact, when the contact itself is removed, and the invitations
      * that came from them: Join goes through the inviter. A block stays: it is about the key, not
-     * the contact. */
+     * the contact. The members a contact or a group stood for, and our offers in a group, go too. */
     bool forget(const QString& publicKey);
 
     /** Drops the hours older than keepSeconds before now; true if any went. */
@@ -193,7 +254,48 @@ public:
      * that key take the place of the old ones, with the new time.
      */
     bool addRequest(const QString& publicKey, const QString& message, const QDateTime& at);
+    /**
+     * Keeps the offer of a member of a group as a request (WaitingRequest::fromGroup) until it is
+     * answered: under the key of its address, in place of any request from that key. False, and
+     * nothing kept, for an address that is not 76 hexadecimal characters, keys that are not keys,
+     * a nonce not of 8 bytes, a blocked key, or the same offer again.
+     */
+    bool addGroupRequest(const WaitingRequest& offer, const QDateTime& at);
+    /** The request waiting from the key; one with an empty key when none waits. */
+    WaitingRequest request(const QString& publicKey) const;
     bool removeRequest(const QString& publicKey);
+
+    /** Our offers to members of groups that wait for their accept, oldest first. */
+    QVector<ContactOffer> contactOffers() const;
+    /** The offer with this nonce; a null one when none waits. */
+    ContactOffer contactOffer(const QByteArray& nonce) const;
+    /**
+     * Keeps an offer, in place of an earlier one to the same member of the same group. False for
+     * keys that are not keys, a nonce not of 8 bytes, or an offer older than the keep at now.
+     */
+    bool keepContactOffer(const ContactOffer& offer, const QDateTime& now);
+    /**
+     * Takes the offer with this nonce: returns it and drops it in one step, so that of the two
+     * answers that may come to one offer (the accept over the group, the Tox request with its
+     * marker) only the first one adds the contact, and the other finds nothing. With groupKey and
+     * memberKey, only an offer that went to that member of that group is taken; any other stays.
+     * A null offer when none is taken.
+     */
+    ContactOffer takeContactOffer(const QByteArray& nonce, const QString& groupKey = QString(),
+                                  const QString& memberKey = QString());
+    /** Drops the offers older than Air::contactOfferKeepMs at now. */
+    bool pruneContactOffers(const QDateTime& now);
+
+    /** The contact a member of a group is; a null one when they are none. */
+    MemberContact memberContact(const QString& groupKey, const QString& memberKey) const;
+    /** The member behind a contact, the newest kept; a null one for a contact made otherwise. */
+    MemberContact memberOfContact(const QString& contactKey) const;
+    /**
+     * Keeps who a member is, in place of what was kept of the member; an address that comes later
+     * fills one kept without it. False for keys that are not keys, an address that is not 76
+     * hexadecimal characters of the contact's key, or nothing new.
+     */
+    bool keepMemberContact(const MemberContact& member);
 
     /** The group invitations waiting for an answer, oldest first. */
     QVector<WaitingInvite> invites() const;
@@ -256,6 +358,15 @@ public:
     bool isRelayed(const QString& entryKey) const;
     /** Keeps the mark of a relayed entry; false for a text that is no entry key, or a key kept. */
     bool markRelayed(const QString& entryKey);
+    /**
+     * The private messages of groups that their feeds show (Air::PrivateEntry), by textEntryKey.
+     * The privateEntryLimit marked last are kept; a group left takes its own along (forget), an
+     * erased history all of them (forgetEntries).
+     */
+    static constexpr int privateEntryLimit = 4096;
+    PrivateEntry privateEntry(const QString& entryKey) const;
+    /** False for a text that is no entry key, a member key that is not a key, or nothing new. */
+    bool markPrivateEntry(const QString& entryKey, const PrivateEntry& entry);
     /** The history was erased: no entry is left for marks or ids to belong to. */
     bool forgetEntries();
 
@@ -336,6 +447,11 @@ private:
     /** The relayed entry keys, and by the hash of their group those keys, oldest first. */
     QSet<QString> relayedKeys;
     QHash<QString, QStringList> relayedOrder;
+    QVector<ContactOffer> offers;
+    QVector<MemberContact> memberContacts;
+    /** The private entries of groups by entry key, and the keys from the oldest to the newest. */
+    QHash<QString, PrivateEntry> privateEntries;
+    QStringList privateEntryOrder;
     bool communityJoined = false;
     bool communityGone = false;
     bool communitySoundOn = false;

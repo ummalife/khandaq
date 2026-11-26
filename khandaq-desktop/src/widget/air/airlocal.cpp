@@ -175,6 +175,20 @@ bool AirLocal::addRequest(const ToxPk& publicKey, const QString& message)
     return true;
 }
 
+bool AirLocal::addGroupRequest(const Air::LocalStore::WaitingRequest& offer)
+{
+    if (!store.addGroupRequest(offer, QDateTime::currentDateTime())) {
+        return false;
+    }
+    saveRequests();
+    return true;
+}
+
+Air::LocalStore::WaitingRequest AirLocal::request(const ToxPk& publicKey) const
+{
+    return store.request(publicKey.toString());
+}
+
 void AirLocal::removeRequest(const ToxPk& publicKey)
 {
     if (store.removeRequest(publicKey.toString())) {
@@ -251,6 +265,55 @@ void AirLocal::forgetGroup(const QString& groupKey)
     if (store.forgetGroup(groupKey)) {
         saveLater.stop();
         save();
+    }
+}
+
+Air::LocalStore::ContactOffer AirLocal::contactOffer(const QByteArray& nonce) const
+{
+    return store.contactOffer(nonce);
+}
+
+void AirLocal::keepContactOffer(const Air::LocalStore::ContactOffer& offer)
+{
+    const QDateTime now = QDateTime::currentDateTime();
+    const bool pruned = store.pruneContactOffers(now);
+    if (store.keepContactOffer(offer, now) || pruned) {
+        saveLater.stop();
+        save();
+        emit memberContactsChanged();
+    }
+}
+
+Air::LocalStore::ContactOffer AirLocal::takeContactOffer(const QByteArray& nonce,
+                                                         const QString& groupKey,
+                                                         const QString& memberKey)
+{
+    const Air::LocalStore::ContactOffer taken = store.takeContactOffer(nonce, groupKey, memberKey);
+    if (!taken.isNull()) {
+        saveLater.stop();
+        save();
+        emit memberContactsChanged();
+    }
+    return taken;
+}
+
+Air::LocalStore::MemberContact AirLocal::memberContact(const QString& groupKey,
+                                                       const QString& memberKey) const
+{
+    return store.memberContact(groupKey, memberKey);
+}
+
+Air::LocalStore::MemberContact AirLocal::memberOfContact(const ToxPk& contactKey) const
+{
+    return store.memberOfContact(contactKey.toString());
+}
+
+void AirLocal::keepMemberContact(const Air::LocalStore::MemberContact& member)
+{
+    if (store.keepMemberContact(member)) {
+        saveLater.stop();
+        save();
+        emit memberContactsChanged();
     }
 }
 
@@ -348,6 +411,21 @@ void AirLocal::markRelayed(const QString& key)
 {
     if (store.markRelayed(key)) {
         saveLater.start();
+    }
+}
+
+Air::PrivateEntry AirLocal::privateEntry(const QString& key) const
+{
+    return store.privateEntry(key);
+}
+
+void AirLocal::markPrivateEntry(const QString& key, const Air::PrivateEntry& entry)
+{
+    if (store.markPrivateEntry(key, entry)) {
+        // Before the entry shows: a feed drawn from a store without the mark would show the words
+        // as a message to the group.
+        saveLater.stop();
+        save();
     }
 }
 

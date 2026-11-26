@@ -142,6 +142,23 @@ private:
 };
 
 /**
+ * KHANDAQ (26.11.2026): a member of one of our groups whose key there is the whole key New contact
+ * or the command line holds. That key adds nobody (DESIGN-group-contacts-private-mentions.md), so
+ * the line offers to send them a contact request over the group instead.
+ */
+struct AirMemberMatch
+{
+    /** The group's chat id and its name. */
+    QString groupKey;
+    QString groupName;
+    /** The member's key in the group, upper case, and their name there. */
+    QString memberKey;
+    QString memberName;
+
+    bool isNull() const;
+};
+
+/**
  * The row over the Air list while the command line holds the start of an ID (E3): a dashed tile
  * with the add-person icon, "New contact with this ID" and what is missing or wrong so far. A click
  * on it, or Enter in the command line, opens New contact with those characters. For a whole group
@@ -168,6 +185,13 @@ public:
     void setGroup(const QString& key, bool listed, const QString& name = QString());
     /** The key of the group the row offers, or a null string while it offers New contact. */
     QString groupKey() const;
+    /**
+     * KHANDAQ (26.11.2026): the row offers a contact request to the member of a group whose key
+     * the line holds: "«B» in the group «G»", "Send a contact request".
+     */
+    void setMember(const AirMemberMatch& match);
+    /** The member the row offers the request to; a null one otherwise. */
+    AirMemberMatch member() const;
 
     QSize sizeHint() const override;
 
@@ -186,6 +210,7 @@ private:
     QString group;
     bool groupListed = false;
     QString groupName;
+    AirMemberMatch memberMatch;
     bool hovered = false;
 };
 
@@ -213,6 +238,8 @@ public:
         Air::IdVerdict::KeyTest isBlocked;
         /** The contact's name as the list shows it, or empty. */
         std::function<QString(const QString& publicKey)> contactName;
+        /** KHANDAQ (26.11.2026): the member of one of our groups with this key; a null one for none. */
+        std::function<AirMemberMatch(const QString& key)> memberOf;
     };
 
     /**
@@ -252,6 +279,11 @@ signals:
     void openChatRequested(const QString& publicKey);
     void openRequestsRequested();
     void importRequested();
+    /**
+     * KHANDAQ (26.11.2026): "Send a contact request" to the member of a group whose key the field
+     * holds.
+     */
+    void memberOfferRequested(const QString& groupKey, const QString& memberKey);
 
 protected:
     void aboutToFold() override;
@@ -279,6 +311,8 @@ private:
     Lookup lookup;
     Page page = Page::Form;
     Air::IdVerdict verdict;
+    /** KHANDAQ (26.11.2026): the member of a group whose key the field holds; null for none. */
+    AirMemberMatch memberMatch;
     QString sentKey;
     /** The accepted person's name as the list shows it; empty while it is not known. */
     QString acceptedName;

@@ -75,6 +75,13 @@ public:
         Air::EntryStatus status = Air::EntryStatus::None;
         /** Who wrote it, as a screen reader says it: "You" or the whole name; empty in notes. */
         QString spokenWho;
+        /**
+         * KHANDAQ (26.11.2026): a private message of a group, what its first line says of who gets
+         * it ("Privately to Maryam: other members don't see this"); empty for any other entry.
+         */
+        QString privateNote;
+        /** KHANDAQ (26.11.2026): its mention block names the key the group knows us by. */
+        bool mentionsYou = false;
     };
 
     /**
@@ -145,10 +152,15 @@ protected:
     static QString wrapDiv(const QString& str, const QString& div);
 
 private:
-    /** The text of a message entry, content 1: words is what it shows, sender signs an action. */
-    static Text* createBody(const QString& words, const QString& sender, MessageType type,
+    /**
+     * The text of a message entry, content 1: the words rawMessage shows (AirStrings::messageWords),
+     * sender signs an action. KHANDAQ (26.11.2026): each @handle its mention block names stands out
+     * as a link to the member (Air::mentionLink).
+     */
+    static Text* createBody(const QString& rawMessage, const QString& sender, MessageType type,
                             DocumentCache& documentCache, SmileyPack& smileyPack,
                             Settings& settings, Style& style);
+
 
     bool action = false;
     QString spokenWho;

@@ -109,6 +109,8 @@ class ChatGroupController: PortraitChatController {
     var groupAirObservers: [NSObjectProtocol] = []
     /// The mark each of our messages showed when last drawn, so a change cross-fades.
     var groupStatusMemory: [String: AirEntryStatus] = [:]
+    /// KHANDAQ (26.11.2026): the members "@" offers above the field (AirMentionPicker.swift).
+    let mentionPicker = AirMentionPickerView()
     /// KHANDAQ (0.2.58): the actions on the member whose name over an entry was tapped (openAuthor): the
     /// sheet of the member's row in the dossier, its toasts above the field.
     lazy var authorSheet: AirGroupMemberSheet = {
@@ -334,7 +336,8 @@ class ChatGroupController: PortraitChatController {
             guard let self = self else {
                 return text
             }
-            let composed = self.replyController.composeOutgoingText(text)
+            // KHANDAQ (26.11.2026): the members it mentions go in the block before the text, after a reply's header.
+            let composed = self.replyController.composeOutgoingText(self.textWithMentionBlock(text))
             // KHANDAQ (dup fix): purge the PERSISTED reply too — see ChatPrivateController
             self.replyController.savePending(forChatId: self.chat.uniqueIdentifier)
             return composed
@@ -359,7 +362,9 @@ class ChatGroupController: PortraitChatController {
         self.flickBack = flickBack
         chatInputView.onTextChanged = { [weak self] _ in
             self?.updateGroupComposeLimit()
+            self?.updateMentionPicker()
         }
+        installMentionPicker()
 
         messagesToken = messages.addNotificationBlock { [weak self] _ in
             self?.handleMessagesChange()
@@ -1056,6 +1061,12 @@ extension ChatGroupController: UITableViewDataSource {
         let parsed = GroupMentionHelper.parse(message.messageText?.text)
         let body = parsed.bodyText
         model.mentionHandles = parsed.mentions.map { $0.handle }
+        model.mentions = parsed.mentions
+        let mentions = parsed.mentions
+        model.onMentionTap = { [weak self] key, source in
+            self?.openMentioned(key: key, mentions: mentions, from: source)
+        }
+        model.privateNote = message.groupPrivateMessage ? privateNote(for: message) : nil
         if let location = LocationMessage.parse(body) {
             // Cross-platform: matches the Android "khandaq-location:" format.
             model.locationLatitude = location.latitude
@@ -1106,7 +1117,12 @@ extension ChatGroupController: UITableViewDataSource {
         cell.replySwipeDelegate = self
         cell.setupWithTheme(theme, model: model)
         // After the setup: it clears the content colour of every reused row.
-        if !message.isOutgoing(), groupMessageMentionsMe(parsed.mentions) {
+        if message.groupPrivateMessage {
+            // KHANDAQ (26.11.2026): a private message has a ground of its own, whatever it names.
+            cell.contentView.backgroundColor = KQColor.privateSoft
+            cell.accessibilityHint = nil
+        }
+        else if !message.isOutgoing(), groupMessageMentionsMe(parsed.mentions) {
             cell.contentView.backgroundColor = KQColor.selected
             cell.accessibilityHint = String(localized: "air_group_mentions_you")
         }
@@ -1280,6 +1296,8 @@ extension ChatGroupController: UITableViewDelegate {
         }
         guard caption.messageFile == nil,
               !caption.groupSystemMessage,
+              // KHANDAQ (26.11.2026): a private message is never the caption of a file sent to the group.
+              !caption.groupPrivateMessage,
               let text = caption.messageText?.text, !text.isEmpty,
               caption.isOutgoing() == file.isOutgoing(),
               caption.groupSenderPeerId == file.groupSenderPeerId,
@@ -1993,9 +2011,11 @@ private extension ChatGroupController {
     static func makeMessagesResults(for chat: OCTChat,
                                     submanagerObjects: OCTSubmanagerObjects,
                                     showSystemMessages: Bool) -> Results<OCTMessageAbstract> {
+        // KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): a private message stands in the feed too, in
+        // its place among the others, for the two who have it: toxcore gives it to nobody else.
         let predicateFormat = showSystemMessages
-            ? "chatUniqueIdentifier == %@ AND groupPrivateMessage == NO"
-            : "chatUniqueIdentifier == %@ AND groupPrivateMessage == NO AND groupSystemMessage == NO"
+            ? "chatUniqueIdentifier == %@"
+            : "chatUniqueIdentifier == %@ AND groupSystemMessage == NO"
         let predicate = NSPredicate(format: predicateFormat, chat.uniqueIdentifier)
         // KHANDAQ (#H5): sort by sortTimestamp (group live == arrival, sync == clamped original) for a
         // stable order that matches displayed times. (Group LIVE cross-device order still depends on

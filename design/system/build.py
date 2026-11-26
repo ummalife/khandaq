@@ -119,6 +119,22 @@ def camel(name):
     return head + "".join(part[:1].upper() + part[1:] for part in rest)
 
 
+# Words Swift keeps for itself: a token named like one (private) is declared in backticks. After a dot no
+# backticks are needed, so the code reads KQColor.private.
+SWIFT_KEYWORDS = {
+    "associatedtype", "class", "deinit", "enum", "extension", "fileprivate", "func", "import", "init", "inout",
+    "internal", "let", "open", "operator", "private", "protocol", "public", "rethrows", "static", "struct",
+    "subscript", "typealias", "var", "break", "case", "continue", "default", "defer", "do", "else", "fallthrough",
+    "for", "guard", "if", "in", "repeat", "return", "switch", "where", "while", "as", "catch", "false", "is", "nil",
+    "super", "throw", "throws", "true", "try",
+}
+
+
+def swift_name(name):
+    identifier = camel(name)
+    return f"`{identifier}`" if identifier in SWIFT_KEYWORDS else identifier
+
+
 def number(value):
     return f"{value:g}"
 
@@ -341,7 +357,7 @@ def ios_swift(tokens, faces):
     ]
     for name, spec in colors.items():
         out.append(f"    /// {spec.get('use', name)}")
-        out.append(f"    static let {camel(name)} = dynamic(light: {ios_hex(spec['light'])}, dark: {ios_hex(spec['dark'])})")
+        out.append(f"    static let {swift_name(name)} = dynamic(light: {ios_hex(spec['light'])}, dark: {ios_hex(spec['dark'])})")
     out += [
         "",
         "    static func dynamic(light: UInt32, dark: UInt32) -> UIColor {",

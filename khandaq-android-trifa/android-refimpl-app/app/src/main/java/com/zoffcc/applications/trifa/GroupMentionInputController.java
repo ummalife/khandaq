@@ -13,11 +13,14 @@ import android.widget.PopupWindow;
 
 import com.vanniktech.emoji.EmojiEditText;
 
+import java.text.Collator;
+import java.text.Normalizer;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
+import java.util.Map;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -66,7 +69,8 @@ final class GroupMentionInputController
                 false);
         popupWindow.setInputMethodMode(PopupWindow.INPUT_METHOD_NEEDED);
         popupWindow.setOutsideTouchable(true);
-        popupWindow.setElevation(12f);
+        // KHANDAQ (26.11.2026): Air's plate carries its own line instead of a shadow (air_bg_mention_list).
+        popupWindow.setElevation(0f);
 
         inputField.addTextChangedListener(new TextWatcher()
         {
@@ -155,25 +159,39 @@ final class GroupMentionInputController
             return;
         }
 
-        final List<HelperGroup.GroupMemberDisplay> filtered = filterMembers(groupId, query);
+        // The handles are made from every member of the group, so a twin's handle does not depend on who the
+        // query leaves in the list; the list, the row and the inserted text all take theirs from this map.
+        final List<HelperGroup.GroupMemberDisplay> all =
+                dedupe_group_members_for_display(collect_group_members_for_display(groupId));
+        final Map<String, String> handles = GroupMentionHelper.mentionHandles(all);
+        final List<HelperGroup.GroupMemberDisplay> filtered = matchingMembers(all, handles, query);
         if (filtered.isEmpty())
         {
             dismiss();
             return;
         }
 
-        adapter.setMembers(filtered);
+        adapter.setMembers(filtered, handles);
         showPopup();
     }
 
-    private List<HelperGroup.GroupMemberDisplay> filterMembers(final String groupId, final String query)
+    static List<HelperGroup.GroupMemberDisplay> matchingMembers(final List<HelperGroup.GroupMemberDisplay> all,
+                                                                final String query)
     {
-        final List<HelperGroup.GroupMemberDisplay> all =
-                dedupe_group_members_for_display(collect_group_members_for_display(groupId));
-        final List<HelperGroup.GroupMemberDisplay> result = new ArrayList<>();
-        final String q = query == null ? "" : query.toLowerCase(Locale.ENGLISH);
-        final Set<String> usedHandles = new HashSet<>();
+        return matchingMembers(all, GroupMentionHelper.mentionHandles(all), query);
+    }
 
+    /**
+     * KHANDAQ (26.11.2026): the members a query after "@" offers, as Telegram does: yourself left out, a
+     * handle that starts with the query or a name that holds it, in any script, without regard to case or
+     * accents; online first, then by name.
+     */
+    static List<HelperGroup.GroupMemberDisplay> matchingMembers(final List<HelperGroup.GroupMemberDisplay> all,
+                                                                final Map<String, String> handles,
+                                                                final String query)
+    {
+        final List<HelperGroup.GroupMemberDisplay> result = new ArrayList<>();
+        final String q = fold(query);
         for (int i = 0; i < all.size(); i++)
         {
             final HelperGroup.GroupMemberDisplay member = all.get(i);
@@ -182,17 +200,43 @@ final class GroupMentionInputController
                 continue;
             }
 
-            final String handle = GroupMentionHelper.mentionHandleForMember(member, usedHandles, true);
-            final String name = member.name == null ? "" : member.name.toLowerCase(Locale.ENGLISH);
-            if (q.isEmpty()
-                    || handle.toLowerCase(Locale.ENGLISH).startsWith(q)
-                    || name.contains(q))
+            final String handle = GroupMentionHelper.handleOf(handles, member);
+            if (q.isEmpty() || fold(handle).startsWith(q) || fold(member.name).contains(q))
             {
                 result.add(member);
             }
         }
 
+        final Collator byName = Collator.getInstance();
+        byName.setStrength(Collator.PRIMARY);
+        Collections.sort(result, (a, b) -> {
+            if (a.online != b.online)
+            {
+                return a.online ? -1 : 1;
+            }
+            return byName.compare(a.name == null ? "" : a.name, b.name == null ? "" : b.name);
+        });
         return result;
+    }
+
+    /** Lower case without accents, for matching what is typed after "@" in any script. */
+    static String fold(final String text)
+    {
+        if (text == null || text.isEmpty())
+        {
+            return "";
+        }
+        final String decomposed = Normalizer.normalize(text, Normalizer.Form.NFD);
+        final StringBuilder sb = new StringBuilder(decomposed.length());
+        for (int i = 0; i < decomposed.length(); i++)
+        {
+            final char c = decomposed.charAt(i);
+            if (Character.getType(c) != Character.NON_SPACING_MARK)
+            {
+                sb.append(c);
+            }
+        }
+        return sb.toString().toLowerCase(Locale.ROOT);
     }
 
     private void showPopup()
@@ -202,8 +246,14 @@ final class GroupMentionInputController
             return;
         }
 
-        final int maxHeight = (int) (240 * activity.getResources().getDisplayMetrics().density);
-        mentionList.getLayoutParams().height = maxHeight;
+        // KHANDAQ (26.11.2026): as high as its rows, up to four and a half, so a fifth shows there is more to
+        // scroll; one member used to stand in a plate as high as five.
+        final int row = activity.getResources().getDimensionPixelSize(R.dimen.group_mention_row_height);
+        final int padding = mentionList.getPaddingTop() + mentionList.getPaddingBottom();
+        final int maxHeight = row * 9 / 2 + padding;
+        mentionList.getLayoutParams().height = adapter.getItemCount() > 4 ? maxHeight
+                                                                          : ViewGroup.LayoutParams.WRAP_CONTENT;
+        mentionList.requestLayout();
 
         anchorView.post(() -> {
             if (popupWindow.isShowing())
@@ -235,8 +285,7 @@ final class GroupMentionInputController
         }
 
         final int cursor = Math.max(mentionStart, inputField.getSelectionStart());
-        final Set<String> used = new HashSet<>();
-        final String handle = GroupMentionHelper.mentionHandleForMember(member, used, false);
+        final String handle = adapter.handleOf(member);
         final String token = GroupMentionHelper.insertMentionToken(handle);
 
         suppressWatcher = true;
@@ -256,15 +305,22 @@ final class GroupMentionInputController
     private final class MentionAdapter extends RecyclerView.Adapter<MentionAdapter.Holder>
     {
         private final List<HelperGroup.GroupMemberDisplay> members = new ArrayList<>();
+        private Map<String, String> handles = new HashMap<>();
 
-        void setMembers(final List<HelperGroup.GroupMemberDisplay> items)
+        void setMembers(final List<HelperGroup.GroupMemberDisplay> items, final Map<String, String> byKey)
         {
             members.clear();
             if (items != null)
             {
                 members.addAll(items);
             }
+            handles = byKey == null ? new HashMap<>() : byKey;
             notifyDataSetChanged();
+        }
+
+        String handleOf(final HelperGroup.GroupMemberDisplay member)
+        {
+            return GroupMentionHelper.handleOf(handles, member);
         }
 
         @NonNull
@@ -280,8 +336,7 @@ final class GroupMentionInputController
         public void onBindViewHolder(@NonNull final Holder holder, final int position)
         {
             final HelperGroup.GroupMemberDisplay member = members.get(position);
-            final Set<String> used = new HashSet<>();
-            final String handle = GroupMentionHelper.mentionHandleForMember(member, used, false);
+            final String handle = handleOf(member);
 
             String displayName = member.name == null ? handle : member.name;
             final int paren = displayName.indexOf(" (");
@@ -292,8 +347,11 @@ final class GroupMentionInputController
 
             holder.nameView.setText(displayName);
             holder.handleView.setText("@" + handle);
-            ChatBubbleUiHelper.fill_group_peer_avatar(holder.itemView.getContext(), member.pubkey, displayName,
-                    holder.avatarView);
+            // The member's tile, in the tone the group's own tiles give them (keyed on the member key).
+            holder.tile.bind(AirTileView.Kind.PERSON, displayName,
+                             AirModel.Tone.index(member.pubkey == null || member.pubkey.isEmpty() ? displayName
+                                                                                                   : member.pubkey));
+            holder.itemView.setContentDescription(displayName + ", @" + handle);
             holder.itemView.setOnClickListener(v -> insertMention(member));
         }
 
@@ -305,14 +363,14 @@ final class GroupMentionInputController
 
         final class Holder extends RecyclerView.ViewHolder
         {
-            final de.hdodenhof.circleimageview.CircleImageView avatarView;
+            final AirTileView tile;
             final android.widget.TextView nameView;
             final android.widget.TextView handleView;
 
             Holder(final View itemView)
             {
                 super(itemView);
-                avatarView = itemView.findViewById(R.id.group_mention_avatar);
+                tile = itemView.findViewById(R.id.group_mention_tile);
                 nameView = itemView.findViewById(R.id.group_mention_name);
                 handleView = itemView.findViewById(R.id.group_mention_handle);
             }

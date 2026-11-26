@@ -31,6 +31,7 @@
 #include <QTimerEvent>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QMouseEvent>
 #include <QLocale>
 #include <QPainter>
 #include <QPainterPath>
@@ -853,4 +854,207 @@ void AirInviteList::rebuild()
     empty->setVisible(!empty->text().isEmpty());
     rowsHolder->setVisible(!shown.isEmpty());
     updateGeometry();
+}
+
+// ---- AirMentionList ----
+
+constexpr int AirMentionList::maxRows;
+
+AirMentionList::AirMentionList(QTextEdit* field_, QWidget* parent)
+    : QWidget(parent)
+    , field{field_}
+{
+    setObjectName(QStringLiteral("mentionList"));
+    // The field keeps the focus: a click on a row takes the member without taking the keyboard.
+    setFocusPolicy(Qt::NoFocus);
+    setMouseTracking(true);
+    setCursor(Qt::PointingHandCursor);
+    setAccessibleName(AirStrings::text(Text::MentionListName));
+    hide();
+    if (field) {
+        field->installEventFilter(this);
+    }
+    AirPaint::followTheme(this);
+}
+
+void AirMentionList::setChoices(const QVector<Air::MentionChoice>& choices)
+{
+    const QString chosenKey = choice().member.publicKey;
+    offered = choices.mid(0, maxRows);
+    current = 0;
+    // The choice stays on the member it was on while they are still offered.
+    for (int i = 0; i < offered.size(); ++i) {
+        if (offered.at(i).member.publicKey == chosenKey) {
+            current = i;
+            break;
+        }
+    }
+    while (tiles.size() < offered.size()) {
+        auto* const tile = new AirTile(Size::tileCompact, this);
+        tile->setAttribute(Qt::WA_TransparentForMouseEvents);
+        tiles.append(tile);
+    }
+    for (int i = 0; i < tiles.size(); ++i) {
+        const bool shown = i < offered.size();
+        if (shown) {
+            const Air::GroupMember& member = offered.at(i).member;
+            tiles.at(i)->setPerson(member.name, Air::toneIndex(member.toneKey()));
+        }
+        tiles.at(i)->setVisible(shown);
+    }
+    placeTiles();
+    updateGeometry();
+    setVisible(!offered.isEmpty());
+    update();
+}
+
+void AirMentionList::moveChoice(int delta)
+{
+    if (offered.isEmpty()) {
+        return;
+    }
+    const int count = offered.size();
+    current = ((current + delta) % count + count) % count;
+    update();
+}
+
+Air::MentionChoice AirMentionList::choice() const
+{
+    return current >= 0 && current < offered.size() ? offered.at(current) : Air::MentionChoice();
+}
+
+QSize AirMentionList::sizeHint() const
+{
+    return QSize(Size::listColumn, offered.size() * Size::rowDeskCompact + 2 * Space::s4);
+}
+
+bool AirMentionList::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched != field || !isVisible()) {
+        return QWidget::eventFilter(watched, event);
+    }
+    if (event->type() == QEvent::FocusOut) {
+        hide();
+        return false;
+    }
+    if (event->type() != QEvent::KeyPress) {
+        return false;
+    }
+    const auto* const key = static_cast<QKeyEvent*>(event);
+    switch (key->key()) {
+    case Qt::Key_Up:
+        moveChoice(-1);
+        return true;
+    case Qt::Key_Down:
+        moveChoice(1);
+        return true;
+    case Qt::Key_Enter:
+    case Qt::Key_Return:
+    case Qt::Key_Tab: {
+        const Air::MentionChoice taken = choice();
+        if (taken.handle.isEmpty()) {
+            return false;
+        }
+        emit chosen(taken);
+        return true;
+    }
+    case Qt::Key_Escape:
+        hide();
+        emit dismissed();
+        return true;
+    default:
+        break;
+    }
+    return false;
+}
+
+QRect AirMentionList::rowRect(int row) const
+{
+    return QRect(0, Space::s4 + row * Size::rowDeskCompact, width(), Size::rowDeskCompact);
+}
+
+int AirMentionList::rowAt(const QPoint& pos) const
+{
+    for (int row = 0; row < offered.size(); ++row) {
+        if (rowRect(row).contains(pos)) {
+            return row;
+        }
+    }
+    return -1;
+}
+
+void AirMentionList::placeTiles()
+{
+    for (int i = 0; i < tiles.size(); ++i) {
+        const QRect row = rowRect(i);
+        const QRect tile(Space::s12, row.top() + (row.height() - Size::tileCompact) / 2,
+                         Size::tileCompact, Size::tileCompact);
+        tiles.at(i)->setGeometry(visual(this, tile));
+    }
+}
+
+void AirMentionList::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    placeTiles();
+}
+
+void AirMentionList::mouseMoveEvent(QMouseEvent* event)
+{
+    const int row = rowAt(event->pos());
+    if (row >= 0 && row != current) {
+        current = row;
+        update();
+    }
+    QWidget::mouseMoveEvent(event);
+}
+
+void AirMentionList::mousePressEvent(QMouseEvent* event)
+{
+    const int row = rowAt(event->pos());
+    if (event->button() != Qt::LeftButton || row < 0) {
+        QWidget::mousePressEvent(event);
+        return;
+    }
+    current = row;
+    emit chosen(offered.at(row));
+}
+
+void AirMentionList::paintEvent(QPaintEvent*)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    AirPaint::box(painter, QRectF(rect()), Radius::card, air().color(Color::Surface),
+                  air().color(Color::Line));
+    const int flags = startAlignment(this) | Qt::TextSingleLine;
+    const QFont nameFont = air().font(TextRole::Body);
+    const QFont handleFont = air().font(TextRole::Caption);
+    for (int row = 0; row < offered.size(); ++row) {
+        const QRect line = rowRect(row);
+        if (row == current) {
+            AirPaint::box(painter, QRectF(line.adjusted(Space::s4, 0, -Space::s4, 0)),
+                          Radius::control, air().color(Color::Sunken), QColor());
+        }
+        const int textStart = Space::s12 + Size::tileCompact + Space::s12;
+        const int room = std::max(0, width() - textStart - Space::s12);
+        const QString handle = QStringLiteral("@") + offered.at(row).handle;
+        // The handle keeps its room, up to half the row; the name takes the rest.
+        const int handleWidth =
+            std::min(room / 2, QFontMetrics(handleFont).horizontalAdvance(handle));
+        const int nameRoom = std::max(0, room - handleWidth - Space::s8);
+        const QString name = QFontMetrics(nameFont).elidedText(offered.at(row).member.name,
+                                                               Qt::ElideRight, nameRoom);
+        const int nameWidth = QFontMetrics(nameFont).horizontalAdvance(name);
+        painter.setFont(nameFont);
+        painter.setPen(air().color(Color::Ink));
+        AirPaint::ownText(painter, visual(this, QRect(textStart, line.top(), nameWidth, line.height())),
+                          flags, name);
+        painter.setFont(handleFont);
+        painter.setPen(air().color(Color::Ink3));
+        AirPaint::ownText(painter,
+                          visual(this, QRect(textStart + nameWidth + Space::s8, line.top(),
+                                             handleWidth, line.height())),
+                          flags,
+                          QFontMetrics(handleFont).elidedText(handle, Qt::ElideRight, handleWidth));
+    }
 }

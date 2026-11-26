@@ -85,6 +85,11 @@ public:
 
     QString getText() const final;
     QString getLinkAt(QPointF scenePos) const;
+    /**
+     * KHANDAQ (26.11.2026): the target of the link right under scenePos, as the pointer finds it;
+     * empty where there is none.
+     */
+    QString anchorAt(QPointF scenePos) const;
 
 protected:
     // dynamic resource management

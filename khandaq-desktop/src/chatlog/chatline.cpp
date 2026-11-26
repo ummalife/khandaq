@@ -24,7 +24,9 @@
 #include "src/widget/air/airtokens.h"
 
 #include <QDebug>
+#include <QGraphicsRectItem>
 #include <QGraphicsScene>
+#include <QPen>
 #include <QGuiApplication>
 #include <QStringList>
 
@@ -39,6 +41,12 @@ ChatLine::~ChatLine()
             c->scene()->removeItem(c);
 
         delete c;
+    }
+    if (ground) {
+        if (ground->scene()) {
+            ground->scene()->removeItem(ground);
+        }
+        delete ground;
     }
 }
 
@@ -76,6 +84,9 @@ void ChatLine::removeFromScene()
         if (c->scene())
             c->scene()->removeItem(c);
     }
+    if (ground && ground->scene()) {
+        ground->scene()->removeItem(ground);
+    }
 }
 
 void ChatLine::addToScene(QGraphicsScene* scene)
@@ -85,12 +96,18 @@ void ChatLine::addToScene(QGraphicsScene* scene)
 
     for (ChatLineContent* c : content)
         scene->addItem(c);
+    if (ground) {
+        scene->addItem(ground);
+    }
 }
 
 void ChatLine::setVisible(bool visible)
 {
     for (ChatLineContent* c : content)
         c->setVisible(visible);
+    if (ground) {
+        ground->setVisible(visible && !collapsed);
+    }
 }
 
 void ChatLine::selectionCleared()
@@ -115,6 +132,9 @@ void ChatLine::reloadTheme()
 {
     for (ChatLineContent* c : content) {
         c->reloadTheme();
+    }
+    if (ground) {
+        ground->setBrush(AirStyle::instance().color(AirTokens::Color::PrivateSoft));
     }
 }
 
@@ -174,6 +194,29 @@ ChatLineContent* ChatLine::quotePart() const
 ChatLineContent* ChatLine::notesPart() const
 {
     return notesColumn >= 0 ? getContent(notesColumn) : nullptr;
+}
+
+void ChatLine::setPrivatePart(int note)
+{
+    privateColumn = note;
+    if (note < 0 || ground) {
+        return;
+    }
+    // Behind the selection (-1) and the contents: it takes no clicks and draws only the ground.
+    ground = new QGraphicsRectItem();
+    ground->setPen(Qt::NoPen);
+    ground->setBrush(AirStyle::instance().color(AirTokens::Color::PrivateSoft));
+    ground->setZValue(-2.0);
+    ground->setAcceptedMouseButtons(Qt::NoButton);
+    ground->setAcceptHoverEvents(false);
+    if (!content.isEmpty() && content.first()->scene()) {
+        content.first()->scene()->addItem(ground);
+    }
+}
+
+ChatLineContent* ChatLine::privatePart() const
+{
+    return privateColumn >= 0 ? getContent(privateColumn) : nullptr;
 }
 
 void ChatLine::replaceContent(int col, ChatLineContent* lineContent)
@@ -253,6 +296,9 @@ void ChatLine::layoutAir(QPointF scenePos)
             c->setVisible(false);
             c->setPos(scenePos);
         }
+        if (ground) {
+            ground->setVisible(false);
+        }
         bbox.setHeight(0);
         return;
     }
@@ -314,6 +360,12 @@ void ChatLine::layoutAir(QPointF scenePos)
         }
     };
 
+    // KHANDAQ (26.11.2026): who a private message goes to, before anything of the message.
+    ChatLineContent* const privateNote = privatePart();
+    if (privateNote) {
+        placePart(privateNote, Space::s4);
+    }
+
     ChatLineContent* const quote = quotePart();
     if (quote) {
         placePart(quote, Space::s4);
@@ -329,11 +381,17 @@ void ChatLine::layoutAir(QPointF scenePos)
 
     place(content[2], edge, top + Space::s2, Size::timeColumn);
 
-    if (content.size() > 3 && quoteColumn != 3 && notesColumn != 3) {
+    if (content.size() > 3 && quoteColumn != 3 && notesColumn != 3 && privateColumn != 3) {
         place(content[3], textStart + textWidth + Space::s10, top, Size::mark);
     }
 
     bbox.setHeight(y + Space::s4);
+    if (ground) {
+        // The scene's own coordinates: the item stays at the origin and takes the entry's box.
+        ground->setPos(0, 0);
+        ground->setRect(bbox);
+        ground->setVisible(true);
+    }
 }
 
 void ChatLine::layout(qreal w, QPointF scenePos)
@@ -417,6 +475,9 @@ void ChatLine::moveBy(qreal deltaY)
     // reposition only
     for (ChatLineContent* c : content)
         c->moveBy(0, deltaY);
+    if (ground) {
+        ground->moveBy(0, deltaY);
+    }
 
     bbox.moveTop(bbox.top() + deltaY);
 }

@@ -48,9 +48,13 @@ class ChatListController: UIViewController {
     fileprivate let commandIdRow = AirCommandIdRow()
     /// "Join the group with this key" over it while the line holds exactly a group key's 64 characters.
     fileprivate let commandGroupRow = AirCommandIdRow(kind: .group)
+    /// KHANDAQ (26.11.2026): in place of "New contact with this ID" when the 64 characters are the key of a member of
+    /// one of our groups: "«B» in the group «G»: Send a contact request" (DESIGN-group-contacts-private-mentions.md).
+    fileprivate let commandMemberRow = AirCommandIdRow(kind: .member)
+    fileprivate var commandMember: AirGroupMemberMatch?
     fileprivate lazy var commandHeader: UIView = {
         let header = UIView()
-        let stack = UIStackView(arrangedSubviews: [commandGroupRow, commandIdRow])
+        let stack = UIStackView(arrangedSubviews: [commandGroupRow, commandMemberRow, commandIdRow])
         stack.axis = .vertical
         header.addSubview(stack)
         stack.snp.makeConstraints {
@@ -60,6 +64,7 @@ class ChatListController: UIViewController {
     }()
     fileprivate var commandIdHex: String?
     fileprivate weak var submanagerObjectsForCommand: OCTSubmanagerObjects?
+    fileprivate weak var submanagerGroupsForCommand: OCTSubmanagerGroups?
     fileprivate var dataSource: AirListDataSource!
     fileprivate var emptyView: AirEmptyView?
     fileprivate var emptyState: AirEmptyState?
@@ -84,6 +89,7 @@ class ChatListController: UIViewController {
         self.theme = theme
         self.submanagerUser = submanagerUser
         self.submanagerObjectsForCommand = submanagerObjects
+        self.submanagerGroupsForCommand = submanagerGroups
 
         super.init(nibName: nil, bundle: nil)
 
@@ -277,6 +283,21 @@ private extension ChatListController {
         }
         commandIdRow.addTarget(self, action: #selector(commandIdRowPressed), for: .touchUpInside)
         commandGroupRow.addTarget(self, action: #selector(commandGroupRowPressed), for: .touchUpInside)
+        commandMemberRow.addTarget(self, action: #selector(commandMemberRowPressed), for: .touchUpInside)
+    }
+
+    /// Asks the member whose key in a group the line holds to exchange IDs; the toast says what came of it.
+    @objc func commandMemberRowPressed() {
+        guard let member = commandMember, let groups = submanagerGroupsForCommand else {
+            return
+        }
+        cancelSearch()
+        AirGroupContactOffer.send(toMemberKey: member.memberKey, name: member.name, in: member.chat, submanagerGroups: groups) { [weak self] text in
+            guard let self = self else {
+                return
+            }
+            AirToast.show(text, in: self.view)
+        }
     }
 
     @objc func commandGroupRowPressed() {
@@ -312,6 +333,17 @@ private extension ChatListController {
         }))
         commandGroupRow.isHidden = hex.count != AirGroupKey.length
         commandGroupRow.configure(note: String(localized: "air_cmd_group_note"))
+        if let objects = submanagerObjectsForCommand, let groups = submanagerGroupsForCommand {
+            commandMember = AirGroupMemberMatch.find(hex: hex, submanagerObjects: objects, submanagerGroups: groups)
+        }
+        else {
+            commandMember = nil
+        }
+        if let member = commandMember {
+            commandMemberRow.configure(member: member)
+        }
+        commandMemberRow.isHidden = commandMember == nil
+        commandIdRow.isHidden = commandMember != nil
         let width = tableView.bounds.width > 0 ? tableView.bounds.width : view.bounds.width
         let size = commandHeader.systemLayoutSizeFitting(CGSize(width: width, height: UILayoutFittingCompressedSize.height),
                                                          withHorizontalFittingPriority: .required,

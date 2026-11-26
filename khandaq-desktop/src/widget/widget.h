@@ -56,9 +56,11 @@ class MainWindow;
 namespace Air {
 struct CommandOffer;
 class SeenReceipts;
+struct PrivateEntry;
 }
 
 class AddFriendForm;
+struct AirMemberMatch;
 class AirBand;
 class AirCommandIdRow;
 class AirController;
@@ -417,6 +419,41 @@ private:
     void leaveGroup(const GroupId& groupId);
     void onGroupPrivateMessageReceived(int groupnumber, const ToxPk& peerPk, const QString& message,
                                        bool isAction);
+    /**
+     * KHANDAQ (26.11.2026): a private message with a member stands in the feed of the group too,
+     * for us alone (Air::PrivateEntry): ours, or come to us.
+     */
+    void addPrivateFeedEntry(const GroupId& groupId, const ToxPk& author, const QString& text,
+                             const Air::PrivateEntry& entry);
+    /**
+     * KHANDAQ (26.11.2026): an offer of a member of a group to become contacts, or the accept of
+     * ours (airgroupcontact.h), from the member toxcore names; Core let it through its checks.
+     */
+    void onGroupContactPacket(int groupnumber, const ToxPk& member, bool accept,
+                              const QByteArray& address, const QByteArray& nonce);
+    /**
+     * KHANDAQ (26.11.2026): "Add to contacts" on a member of a group: our ID goes to them over the
+     * group and the offer waits for their answer, or a toast over anchor says why nothing went. A
+     * member who is a contact already opens their conversation. False when nothing went.
+     */
+    bool offerGroupContact(const GroupId& groupId, const ToxPk& member, QWidget* anchor);
+    /**
+     * KHANDAQ (26.11.2026): Accept on the card of a member's offer: our request goes to their ID,
+     * and the accept over the group while they are there.
+     */
+    void acceptGroupOffer(const ToxPk& contactPk);
+    /**
+     * KHANDAQ (26.11.2026): the member our offer went to answered it (its accept, or their request
+     * with its nonce): they become a contact, named as in the group until their own name comes.
+     */
+    void finishContactOffer(const QString& groupKey, const QString& memberKey,
+                            const QString& memberName, const ToxPk& contactPk,
+                            const QString& address);
+    /**
+     * KHANDAQ (26.11.2026): the member of one of our groups whose key there is key, upper case;
+     * a null match for none.
+     */
+    AirMemberMatch groupMemberWithKey(const QString& key) const;
     QDir groupDownloadDir(const Group* g) const;
     void dispatchGroupFileToChatLog(const GroupId& groupId, const ToxPk& sender, ToxFile file);
     void updateGroupFileInChatLog(const GroupId& groupId, const ToxPk& sender, const ToxFile& file);

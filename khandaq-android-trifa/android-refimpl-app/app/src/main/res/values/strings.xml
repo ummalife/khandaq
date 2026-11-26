@@ -889,7 +889,7 @@
     <string name="group_member_action_private_msg_sent">Private message sent</string>
     <string name="group_member_action_private_msg_failed">Failed to send</string>
     <string name="group_member_action_open_chat">Open direct chat</string>
-    <string name="group_member_action_add_friend">Add friend</string>
+    <string name="group_member_action_add_friend">Add to contacts</string>
     <string name="group_member_action_copy_id">Copy ID</string>
     <string name="group_member_action_copy_done">ID copied</string>
     <string name="group_member_action_mute">Mute notifications</string>

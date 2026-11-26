@@ -186,7 +186,8 @@ extension ChatGroupController {
             chatInputView.sendBlocked = false
             return
         }
-        let head = MessageReplyHelper.encode(replyController.pendingMeta, bodyText: "")
+        // KHANDAQ (26.11.2026): the block of the members it mentions travels in the first part with the reply's header.
+        let head = MessageReplyHelper.encode(replyController.pendingMeta, bodyText: "") + mentionBlock(for: text)
         hintView.setCounter(text: AirComposeLimit.counterText(for: text, head: head, maxBytes: AirGroupComposeLimit.bytes))
         chatInputView.sendBlocked = false
     }
@@ -236,6 +237,45 @@ extension ChatGroupController {
             navigationController?.pushViewController(controller, animated: true)
             return
         }
+    }
+
+    /// KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): the other one of the two of a private message
+    /// (the author of one we got, the recipient of ours), by the key the row kept, since their peer number changes
+    /// when they reconnect; by the peer number on an older row without one. Nil when they are not in the group now.
+    func privateAnswerPeer(for message: OCTMessageAbstract) -> OCTGroupPeer? {
+        guard message.groupPrivateMessage, !chat.isInvalidated, let peers = submanagerGroups.peers(for: chat) else {
+            return nil
+        }
+        let key = (message.groupPrivatePeerPubkey ?? "").lowercased()
+        let selfPeerId = submanagerGroups.groupSelfPeerId(for: chat)
+        for index in 0..<peers.count {
+            guard let peer = peers.object(at: index) as? OCTGroupPeer, !peer.isInvalidated,
+                  !AirGroupMembers.isSelfPeer(UInt32(bitPattern: peer.peerId), selfPeerId: selfPeerId, groupNumber: chat.groupNumber) else {
+                continue
+            }
+            let same = key.isEmpty
+                ? peer.peerId == message.groupPrivatePeerId
+                : (peer.peerPublicKeyHex ?? "").lowercased() == key
+            if same {
+                return peer
+            }
+        }
+        return nil
+    }
+
+    /// Reply on a private entry: the conversation with the other one of the two, its field ready, where the answer
+    /// goes to them alone.
+    func openPrivateAnswer(to message: OCTMessageAbstract) {
+        guard groupComposeRight.canWritePrivately, let peer = privateAnswerPeer(for: message) else {
+            return
+        }
+        let controller = GroupPeerPrivateController(theme: theme,
+                                                    chat: chat,
+                                                    peer: peer,
+                                                    submanagerGroups: submanagerGroups,
+                                                    submanagerObjects: submanagerObjects)
+        controller.focusesFieldOnAppear = true
+        navigationController?.pushViewController(controller, animated: true)
     }
 
     // MARK: Transcript
@@ -371,6 +411,34 @@ extension ChatGroupController {
         return chatInputView
     }
 
+    /// KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): who sees a private message of the feed: the
+    /// member ours went to, by the key it kept, or you.
+    func privateNote(for message: OCTMessageAbstract) -> String {
+        guard message.isOutgoing() else {
+            return String(localized: "air_group_private_to_you")
+        }
+        let key = (message.groupPrivatePeerPubkey ?? "").uppercased()
+        let name = key.isEmpty ? nil : groupMembers.first(where: { $0.publicKey == key })?.name
+        return String(localized: "air_group_private_to_format", name ?? String(localized: "air_group_author_unknown"))
+    }
+
+    /// The member a mention in the feed names, from a tap on it: their sheet, or a toast when the group does not have
+    /// them now. Nothing for a mention of you.
+    func openMentioned(key: String, mentions: [GroupMentionHelper.MentionEntry], from source: UIView) {
+        guard !chat.isInvalidated, tableView?.isEditing != true else {
+            return
+        }
+        let wanted = key.uppercased()
+        if let member = groupMembers.first(where: { $0.publicKey == wanted }) {
+            if !member.isSelf {
+                authorSheet.present(for: member, from: source)
+            }
+            return
+        }
+        let handle = mentions.first(where: { $0.pubkey.uppercased() == wanted })?.handle ?? ""
+        AirToast.show(String(localized: "air_group_author_not_here_format", "@" + handle), in: view, above: groupToastAnchor)
+    }
+
     /// Whether a message names you, by your key in this group or by your name.
     func groupMessageMentionsMe(_ mentions: [GroupMentionHelper.MentionEntry]) -> Bool {
         guard !mentions.isEmpty else {
@@ -402,7 +470,8 @@ extension ChatGroupController {
         // A caption drawn inside its photo is not a text entry of its own.
         let merged = messageSearchQuery.isEmpty && isMergedCaptionRow(storageIndex: entry.storageIndex)
         let isText = message.messageText != nil && !message.groupSystemMessage && !merged
-        return AirRunKey(author: author, date: message.date(), isText: isText)
+        // KHANDAQ (26.11.2026): a private message starts a run of its own and ends one, so its author stands over it.
+        return AirRunKey(author: message.groupPrivateMessage ? "private:" + author : author, date: message.date(), isText: isText)
     }
 }
 

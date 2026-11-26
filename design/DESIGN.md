@@ -444,8 +444,12 @@ shows.
   consequence.
 - **Roles and removing:** the founder gives any role but founder; a moderator moves members between
   member and observer and removes them; members and observers change nothing. A member row opens:
-  Write privately; Open the conversation or Add to contacts (keys are per group, so a contact is the
-  same key); Copy key; Mute in this group; then the role and removal actions allowed to you. Each is
+  Write privately; Open the conversation or Add to contacts; Copy ID only for a member who is a
+  contact; Mute in this group; then the role and removal actions allowed to you. A member's key is
+  theirs in this group only (toxcore makes a key pair per group), so it never adds a contact: Add to
+  contacts asks the member over the group and they accept it as a contact request, and the line
+  holding a member's key offers that request instead of "12 characters missing"
+  (`DESIGN-group-contacts-private-mentions.md`). Each is
   asked once, in one sentence that starts with the name, so no language has to decline it. A change
   of role is undone from the toast for five seconds and the row moves to its new place (a crossfade
   with reduced motion). Removing has no undo: the member needs a new invitation.
@@ -460,6 +464,10 @@ shows.
   before anything is typed ("Hamza is offline: write when they are back") and Send waits. A failure
   stays under the field with the text kept; a private message that did not leave is never stored, so
   there is no transit mark.
+- **A private message in the group feed** is there for its sender and its recipient only, in its
+  place among the messages, on the `private-soft` ground with a lock and the note in `private`:
+  "Privately to Hamza: other members don't see this", or "Privately to you: …". No history sync
+  serves it and no reply quotes it into the group.
 - **Group settings** are drawn as the screens of Settings: your name in this group and the topic, each
   with what it does; Who can join (the two choices, the password, the member limit); Who can write and
   whether only the founder and the moderators change the topic. The founder changes the last two;
@@ -1116,6 +1124,10 @@ Done in the Android client on 12.11.2026.
 - **A mention in a group** is drawn in ink and bold, as iOS draws it (its link-text is ink): it stood in
   the old dark green, which vanished on the dark theme on the selected ground of a message that mentions
   you (`GroupMentionHelper`, `AirLinkQuestionTest`).
+- **@ in a group** opens the members above the field, as Telegram does: tile, name and `@handle`,
+  online first, filtered by what follows the `@` in any script; the choice puts `@handle ` in the
+  text, and the mention block carries the member's key. Handles are made alike on every client
+  (`DESIGN-group-contacts-private-mentions.md`), so `@Иса_Дагестани` is one mention everywhere.
 - **Before the release.** The pages of `AirScreenActivity` close their header with a hairline
   (`air_screen_rule`, kq-line), as Air, the conversation and the opaque navigation bar of iOS do: New
   contact with the keyboard up slid its ID field under a header with no edge. The first-launch, sign-in
@@ -1537,6 +1549,8 @@ Lowest contrast is the worst pair from the contrast rules in each theme; `build.
 | `transit-soft` | `#fbedd6` | `#36270e` | ground under transit | ground for text |
 | `danger` | `#bf3329` | `#ff8b7e` | broken, blocked, not sent | 4.65:1 on `danger-soft` / 7.04:1 on `danger-soft` |
 | `danger-soft` | `#fbe4e1` | `#3a1714` | ground under danger | ground for text |
+| `private` | `#5a3fb4` | `#b9a6ff` | a private message in a group: its lock and the words who sees it | 6.45:1 on `private-soft` / 7.79:1 on `private-soft` |
+| `private-soft` | `#f0ecfb` | `#211b38` | ground under a private message in a group | ground for text |
 | `focus` | `#2456d6` | `#86a8ff` | keyboard focus ring only | 5.65:1 on `bg` / 7.39:1 on `raised` |
 | `scrim` | `#0a0c1042` | `#00000073` | dimmed background under sheets | not used for text |
 | `tone-1` | `#0b6e4f` | `#5ccf9e` | author name in groups, initials on a tile | 5.38:1 on `sunken` / 8.29:1 on `sunken` |

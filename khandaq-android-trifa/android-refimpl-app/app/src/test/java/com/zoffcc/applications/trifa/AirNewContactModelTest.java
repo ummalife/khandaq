@@ -140,6 +140,33 @@ public class AirNewContactModelTest
         assertEquals(1016, AirNewContactModel.MAX_MESSAGE_BYTES);
     }
 
+    @Test
+    public void a_member_key_from_a_group_is_that_member_not_twelve_characters_missing()
+    {
+        // KHANDAQ (26.11.2026): the owner copied a member's key in a group and New contact said "12 characters
+        // missing". That key is theirs in the group only; the verdict names the member and the group instead.
+        final String memberKey = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+        final AirNewContactModel.GroupMember hamza =
+                new AirNewContactModel.GroupMember("0123abcd", memberKey, "Hamza", "Khandaq QA");
+        final AirNewContactModel.Verdict member = AirNewContactModel.Verdict.of(
+                memberKey, OWN, key -> false, key -> false, key -> false,
+                key -> key.equalsIgnoreCase(memberKey) ? hamza : null);
+        assertEquals(AirNewContactModel.Verdict.Kind.GROUP_MEMBER, member.kind);
+        assertEquals("Hamza", member.member.name);
+        assertEquals("Khandaq QA", member.member.groupName);
+        // Nothing goes by that key, and the ruler keeps filling: it is no ID.
+        assertNull(member.address());
+        assertEquals(AirNewContactModel.RulerState.FILLING, member.checkState());
+
+        // Any other 64 characters are still the start of an ID, with 12 to go.
+        final AirNewContactModel.Verdict other = AirNewContactModel.Verdict.of(
+                KEY, OWN, key -> false, key -> false, key -> false,
+                key -> key.equalsIgnoreCase(memberKey) ? hamza : null);
+        assertEquals(AirNewContactModel.Verdict.Kind.PARTIAL, other.kind);
+        assertEquals(12, other.left);
+        assertNull(other.member);
+    }
+
     private static AirNewContactModel.Verdict verdict(final String hex)
     {
         return verdict(hex, set(), set(), set());

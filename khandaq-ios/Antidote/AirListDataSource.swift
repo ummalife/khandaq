@@ -430,11 +430,19 @@ private extension AirListDataSource {
                 continue
             }
             let date = Date(timeIntervalSince1970: request.dateInterval)
+            // A member who asked from a group is shown by their name there and the group's.
+            var kind = AirRequestKind.contact
+            if let offer = submanagerFriends?.groupContactOffer(for: request) {
+                let group = offer.groupName.isEmpty ? String(localized: "group_chat_default_title") : offer.groupName
+                kind = .member(name: offer.memberName.isEmpty ? String(localized: "air_group_author_unknown") : offer.memberName,
+                               group: group)
+            }
             airRequests.append(AirRequest(id: request.uniqueIdentifier,
                                           publicKey: request.publicKey,
                                           message: (request.message ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
                                           timeText: ChatListContent.timeText(for: date, timeFormatter: timeFormatter, dateFormatter: dateFormatter),
-                                          date: request.dateInterval))
+                                          date: request.dateInterval,
+                                          kind: kind))
         }
 
         // Invitations to groups wait as cards too, while the contact who sent them is still a contact.

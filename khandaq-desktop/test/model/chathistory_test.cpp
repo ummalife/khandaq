@@ -23,6 +23,7 @@
 #include "src/core/toxpk.h"
 #include "src/friendlist.h"
 #include "src/grouplist.h"
+#include "src/model/air/airmessagemarks.h"
 #include "src/model/group.h"
 #include "src/model/groupmessagedispatcher.h"
 #include "src/model/message.h"
@@ -43,6 +44,9 @@
 #include <QtTest/QtTest>
 
 #include <tox/tox.h>
+
+#include <QHash>
+#include <QSet>
 
 #include <memory>
 #include <utility>
@@ -105,11 +109,20 @@ public:
     {
         relayed.insert(key);
     }
+    Air::PrivateEntry privateEntry(const QString& key) const override
+    {
+        return privates.value(key);
+    }
+    void markPrivateEntry(const QString& key, const Air::PrivateEntry& entry) override
+    {
+        privates.insert(key, entry);
+    }
 
 private:
     QHash<QString, Air::EntryMarks> marks;
     QHash<QString, QByteArray> wires;
     QSet<QString> relayed;
+    QHash<QString, Air::PrivateEntry> privates;
 };
 
 class SilentMessageBoxes : public IMessageBoxManager
@@ -156,21 +169,21 @@ public:
     }
 };
 
-/** A group that takes every text at once; the receipts go nowhere. */
+/** A group that takes every text at once, and counts what went to it; the receipts go nowhere. */
 class TakingGroupSender : public ICoreGroupMessageSender
 {
 public:
     SendResult sendGroupAction(int groupId, const QString& message, uint32_t& wireId) override
     {
         std::ignore = groupId;
-        std::ignore = message;
+        sent.append(message);
         wireId = ++lastWireId;
         return SendResult::Sent;
     }
     SendResult sendGroupMessage(int groupId, const QString& message, uint32_t& wireId) override
     {
         std::ignore = groupId;
-        std::ignore = message;
+        sent.append(message);
         wireId = ++lastWireId;
         return SendResult::Sent;
     }
@@ -179,11 +192,17 @@ public:
         std::ignore = groupId;
         std::ignore = author;
         std::ignore = messageId;
+        ++receipts;
     }
+
+    /** The texts the group was given, and how many receipts went to it. */
+    QStringList sent;
+    int receipts = 0;
 
 private:
     uint32_t lastWireId = 0;
 };
+
 } // namespace
 
 /**
@@ -205,6 +224,7 @@ private slots:
     void aRelayedTextTheHistoryKeepsIsNotToldAgain();
     void aCopyOfADeletedTextIsNotShownAgain();
     void aDeletionOfMessagesNotLoadedErasesThemInTheHistory();
+    void aPrivateMessageNeverGoesToTheGroup();
 
 private:
     /** The conversation of the group as a start of the app makes it, on the same database. */
@@ -219,11 +239,11 @@ private:
     MockGroupQuery groupQuery;
     MockCoreIdHandler idHandler;
     TakingGroupSender groupSender;
+    MemoryEntryStore entryStore;
     std::unique_ptr<MessageProcessor::SharedParams> processorParams;
     std::unique_ptr<Group> group;
     std::unique_ptr<GroupMessageDispatcher> dispatcher;
     std::unique_ptr<ChatHistory> chatHistory;
-    MemoryEntryStore entryStore;
     /** The relayed texts the conversation told of, in order. */
     std::vector<std::pair<ToxPk, Message>> told;
 };
@@ -427,6 +447,64 @@ void TestChatHistory::aDeletionOfMessagesNotLoadedErasesThemInTheHistory()
     QVERIFY(!chatHistory->isShown(oldText));
     QVERIFY(!chatHistory->isShown(oldFile));
     QVERIFY(chatHistory->isShown(ChatLogIdx{2}));
+}
+
+/**
+ * KHANDAQ (26.11.2026): a private message with a member stands in the feed of the group, to its
+ * sender and its recipient alone (DESIGN-group-contacts-private-mentions.md, part 2). It is kept
+ * delivered with its mark, and nothing of it goes to the group: no text, no receipt, not when the
+ * conversation opens again either (a text kept undelivered would be sent to the group then). This
+ * client serves no history of a group at all (Core, "a history-sync CONSUMER only").
+ */
+void TestChatHistory::aPrivateMessageNeverGoesToTheGroup()
+{
+    groupSender.sent.clear();
+    groupSender.receipts = 0;
+    const size_t before = chatHistory->getNextIdx().get();
+    const QDateTime theirs = QDateTime::currentDateTime().addSecs(-60);
+    const QDateTime ours = theirs.addSecs(30);
+    Air::PrivateEntry received;
+    received.peerKey = maryam.toString();
+    received.peerName = QStringLiteral("Maryam");
+    Air::PrivateEntry written = received;
+    written.ours = true;
+
+    chatHistory->addPrivateEntry(maryam, QStringLiteral("Only for you"), theirs, received);
+    chatHistory->addPrivateEntry(idHandler.getSelfPublicKey(), QStringLiteral("Only for Maryam"),
+                                 ours, written);
+    history->sync();
+    QCOMPARE(chatHistory->getNextIdx().get(), before + 2);
+    const ChatLogItem& first = chatHistory->at(ChatLogIdx(before));
+    QCOMPARE(first.getContentAsMessage().message.content, QStringLiteral("Only for you"));
+    QCOMPARE(first.getSender(), maryam);
+    const ChatLogItem& second = chatHistory->at(ChatLogIdx(before + 1));
+    QCOMPARE(second.getSender(), idHandler.getSelfPublicKey());
+    QCOMPARE(second.getContentAsMessage().state, MessageState::complete);
+
+    const QString chatKey = family.toString();
+    QCOMPARE(entryStore.privateEntry(
+                 Air::textEntryKey(chatKey, maryam.toString(), theirs.toMSecsSinceEpoch())),
+             received);
+    QCOMPARE(entryStore.privateEntry(Air::textEntryKey(chatKey,
+                                                       idHandler.getSelfPublicKey().toString(),
+                                                       ours.toMSecsSinceEpoch())),
+             written);
+    // Nothing was told as a text relayed from the group either.
+    QVERIFY(told.empty());
+
+    // The conversation opens again, from the database: both are there, still apart, and nothing
+    // goes.
+    open();
+    QCOMPARE(chatHistory->getNextIdx().get(), before + 2);
+    QCOMPARE(chatHistory->privateEntry(ChatLogIdx(before)), received);
+    QCOMPARE(chatHistory->privateEntry(ChatLogIdx(before + 1)), written);
+    QVERIFY(groupSender.sent.isEmpty());
+    QCOMPARE(groupSender.receipts, 0);
+
+    // A text to the group goes as before, and alone, and is no private entry.
+    dispatcher->sendMessage(false, QStringLiteral("To everyone"));
+    QCOMPARE(groupSender.sent, QStringList{QStringLiteral("To everyone")});
+    QVERIFY(chatHistory->privateEntry(ChatLogIdx(before + 2)).isNull());
 }
 
 int main(int argc, char* argv[])

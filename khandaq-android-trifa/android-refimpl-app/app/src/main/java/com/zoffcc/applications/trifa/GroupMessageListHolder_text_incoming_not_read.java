@@ -621,7 +621,7 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
             entry.senderUnverified = should_mark_unverified_sender(false, m, verified);
             if (m.private_message == 1)
             {
-                entry.privateNote = context.getString(R.string.air_group_private_to_you);
+                entry.privateNote = context.getString(R.string.air_group_private_note_to_you);
             }
             tile = new AirTranscript.AuthorTile(m.id, should_show_plain_author_tile(m, verified, tileName != null),
                                                 tileName, tileTone, openAuthor);

@@ -327,6 +327,7 @@
 		KQSELFNM0000000000000001 /* GroupSelfNameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQSELFNM0000000000000002 /* GroupSelfNameTests.swift */; };
 		KQTOMB000000000000000001 /* GroupMessageTombstoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQTOMB000000000000000002 /* GroupMessageTombstoneTests.swift */; };
 		B3C344111661920000000003 /* AirRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344111661920000000002 /* AirRequestTests.swift */; };
+		C2611260FB0000000000A006 /* GroupContactsMentionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2611260FB0000000000A005 /* GroupContactsMentionsTests.swift */; };
 		B3C343706707940000000003 /* AirNewContactModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C343706707940000000002 /* AirNewContactModelTests.swift */; };
 		B3C343693019790000000003 /* AirLocalStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C343693019790000000002 /* AirLocalStoreTests.swift */; };
 		KQCFILET0000000000000001 /* KhandaqCommunityFilesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQCFILET0000000000000002 /* KhandaqCommunityFilesTests.swift */; };
@@ -343,6 +344,8 @@
 		B3C344149902240000000009 /* AirNewGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344149902240000000008 /* AirNewGroup.swift */; };
 		B3C344149902240000000007 /* AirGroupDossier.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344149902240000000006 /* AirGroupDossier.swift */; };
 		B3C344149902230000000005 /* AirGroupViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344149902230000000004 /* AirGroupViews.swift */; };
+		C2611260FB0000000000A004 /* AirMentionPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2611260FB0000000000A003 /* AirMentionPicker.swift */; };
+		C2611260FB0000000000A002 /* AirGroupContacts.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2611260FB0000000000A001 /* AirGroupContacts.swift */; };
 		B3C344149902230000000003 /* AirGroupModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344149902230000000002 /* AirGroupModel.swift */; };
 		B3C343706707710000000005 /* AirNewContactScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C343706707710000000004 /* AirNewContactScreen.swift */; };
 		B3C343706707710000000003 /* AirNewContactModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C343706707710000000002 /* AirNewContactModel.swift */; };
@@ -861,6 +864,7 @@
 		KQSELFNM0000000000000002 /* GroupSelfNameTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupSelfNameTests.swift; sourceTree = "<group>"; };
 		KQTOMB000000000000000002 /* GroupMessageTombstoneTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupMessageTombstoneTests.swift; sourceTree = "<group>"; };
 		B3C344111661920000000002 /* AirRequestTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirRequestTests.swift; sourceTree = "<group>"; };
+		C2611260FB0000000000A005 /* GroupContactsMentionsTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupContactsMentionsTests.swift; sourceTree = "<group>"; };
 		B3C343706707940000000002 /* AirNewContactModelTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirNewContactModelTests.swift; sourceTree = "<group>"; };
 		B3C343693019790000000002 /* AirLocalStoreTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirLocalStoreTests.swift; sourceTree = "<group>"; };
 		KQCFILET0000000000000002 /* KhandaqCommunityFilesTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KhandaqCommunityFilesTests.swift; sourceTree = "<group>"; };
@@ -877,6 +881,8 @@
 		B3C344149902240000000008 /* AirNewGroup.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirNewGroup.swift; sourceTree = "<group>"; };
 		B3C344149902240000000006 /* AirGroupDossier.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirGroupDossier.swift; sourceTree = "<group>"; };
 		B3C344149902230000000004 /* AirGroupViews.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirGroupViews.swift; sourceTree = "<group>"; };
+		C2611260FB0000000000A003 /* AirMentionPicker.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirMentionPicker.swift; sourceTree = "<group>"; };
+		C2611260FB0000000000A001 /* AirGroupContacts.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirGroupContacts.swift; sourceTree = "<group>"; };
 		B3C344149902230000000002 /* AirGroupModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirGroupModel.swift; sourceTree = "<group>"; };
 		B3C343706707710000000004 /* AirNewContactScreen.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirNewContactScreen.swift; sourceTree = "<group>"; };
 		B3C343706707710000000002 /* AirNewContactModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirNewContactModel.swift; sourceTree = "<group>"; };
@@ -1063,6 +1069,7 @@
 				KQSELFNM0000000000000002 /* GroupSelfNameTests.swift */,
 				KQTOMB000000000000000002 /* GroupMessageTombstoneTests.swift */,
 				B3C344111661920000000002 /* AirRequestTests.swift */,
+				C2611260FB0000000000A005 /* GroupContactsMentionsTests.swift */,
 				B3C343706707940000000002 /* AirNewContactModelTests.swift */,
 				B3C343693019790000000002 /* AirLocalStoreTests.swift */,
 				KQCFILET0000000000000002 /* KhandaqCommunityFilesTests.swift */,
@@ -1498,6 +1505,8 @@
 				B3C344149902240000000008 /* AirNewGroup.swift */,
 				B3C344149902240000000006 /* AirGroupDossier.swift */,
 				B3C344149902230000000004 /* AirGroupViews.swift */,
+				C2611260FB0000000000A003 /* AirMentionPicker.swift */,
+				C2611260FB0000000000A001 /* AirGroupContacts.swift */,
 				B3C344149902230000000002 /* AirGroupModel.swift */,
 				B3C343706707710000000004 /* AirNewContactScreen.swift */,
 				B3C343706707710000000002 /* AirNewContactModel.swift */,
@@ -2174,6 +2183,8 @@
 				B3C344149902240000000009 /* AirNewGroup.swift in Sources */,
 				B3C344149902240000000007 /* AirGroupDossier.swift in Sources */,
 				B3C344149902230000000005 /* AirGroupViews.swift in Sources */,
+				C2611260FB0000000000A004 /* AirMentionPicker.swift in Sources */,
+				C2611260FB0000000000A002 /* AirGroupContacts.swift in Sources */,
 				B3C344149902230000000003 /* AirGroupModel.swift in Sources */,
 				B3C343706707710000000005 /* AirNewContactScreen.swift in Sources */,
 				B3C343706707710000000003 /* AirNewContactModel.swift in Sources */,
@@ -2423,6 +2434,7 @@
 				KQSELFNM0000000000000001 /* GroupSelfNameTests.swift in Sources */,
 				KQTOMB000000000000000001 /* GroupMessageTombstoneTests.swift in Sources */,
 				B3C344111661920000000003 /* AirRequestTests.swift in Sources */,
+				C2611260FB0000000000A006 /* GroupContactsMentionsTests.swift in Sources */,
 				B3C343706707940000000003 /* AirNewContactModelTests.swift in Sources */,
 				B3C343693019790000000003 /* AirLocalStoreTests.swift in Sources */,
 				KQCFILET0000000000000001 /* KhandaqCommunityFilesTests.swift in Sources */,

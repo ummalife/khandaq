@@ -359,6 +359,11 @@ final class AirAdapter extends ListAdapter<AirModel.Row, RecyclerView.ViewHolder
                 bindInvite(context, next);
                 return;
             }
+            if (next.kind == AirModel.Request.Kind.GROUP_CONTACT)
+            {
+                bindGroupContact(context, next);
+                return;
+            }
             tag.setText(R.string.air_request_tag);
             accept.setText(R.string.friend_request_accept);
             TextViewCompat.setTextAppearance(message, R.style.TextAppearance_KQ_Body);
@@ -382,6 +387,34 @@ final class AirAdapter extends ListAdapter<AirModel.Row, RecyclerView.ViewHolder
             // TalkBack reads the key as one string, without the visual grouping.
             key.setContentDescription(context.getString(R.string.air_request_key_format,
                                                         grouped.replace(" ", "")));
+        }
+
+        /**
+         * KHANDAQ (26.11.2026): an offer from a member of a group names the member, as they are called there,
+         * and the group it came from; Accept is a request's.
+         */
+        private void bindGroupContact(final Context context, final AirModel.Request next)
+        {
+            tag.setText(R.string.air_request_tag);
+            accept.setText(R.string.friend_request_accept);
+            TextViewCompat.setTextAppearance(message, R.style.TextAppearance_KQ_Air_BodyStrong);
+            message.setTextColor(AirUi.color(context, R.color.kq_ink));
+            message.setText(next.inviterName);
+            message.setVisibility(next.inviterName.isEmpty() ? View.GONE : View.VISIBLE);
+            final String line = next.groupName.isEmpty()
+                                ? context.getString(R.string.air_group_contact_from_unnamed)
+                                : context.getString(R.string.air_group_contact_from_format, next.groupName);
+            // The group's name stands out as the inviter's does on an invitation; a span, not the view's
+            // colour, so the row recycled for another request keeps the line's own colour.
+            final SpannableString styled = new SpannableString(line);
+            final int at = next.groupName.isEmpty() ? -1 : line.indexOf(next.groupName);
+            if (at >= 0)
+            {
+                styled.setSpan(new ForegroundColorSpan(AirUi.color(context, R.color.kq_ink_2)), at,
+                               at + next.groupName.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
+            key.setText(styled);
+            key.setContentDescription(line);
         }
 
         /**

@@ -75,6 +75,24 @@ void ChatQuotePreview::setQuoteText(const QString& text)
 
     quote = words;
     replying = false;
+    editing = false;
+    replyMeta = Air::ReplyMeta{};
+    replyName.clear();
+    replyToSelf = false;
+    retranslateUi();
+    setAccessibleDescription(quote);
+    setVisible(true);
+    updateGeometry();
+    update();
+    emit changed();
+}
+
+void ChatQuotePreview::setEdit(const QString& words)
+{
+    // "Editing" stands even over words with nothing to show.
+    quote = Air::replyQuote(words);
+    replying = false;
+    editing = true;
     replyMeta = Air::ReplyMeta{};
     replyName.clear();
     replyToSelf = false;
@@ -96,6 +114,7 @@ void ChatQuotePreview::setReply(const Air::ReplyMeta& meta, const QString& name,
 
     quote = words;
     replying = true;
+    editing = false;
     replyMeta = meta;
     replyName = name;
     replyToSelf = self;
@@ -109,10 +128,11 @@ void ChatQuotePreview::setReply(const Air::ReplyMeta& meta, const QString& name,
 
 void ChatQuotePreview::clearQuote()
 {
-    const bool had = !quote.isEmpty();
+    const bool had = !quote.isEmpty() || editing;
     quote.clear();
-    const bool wasReply = replying;
+    const bool wasReply = replying || editing;
     replying = false;
+    editing = false;
     replyMeta = Air::ReplyMeta{};
     replyName.clear();
     replyToSelf = false;
@@ -128,7 +148,12 @@ void ChatQuotePreview::clearQuote()
 
 bool ChatQuotePreview::hasQuote() const
 {
-    return !quote.isEmpty();
+    return !quote.isEmpty() && !editing;
+}
+
+bool ChatQuotePreview::isEdit() const
+{
+    return editing;
 }
 
 bool ChatQuotePreview::isReply() const
@@ -149,7 +174,7 @@ QString ChatQuotePreview::quoteText() const
 QStringList ChatQuotePreview::shownLines(int width) const
 {
     return AirPaint::linesOf(quote.left(maxLaidOut), air().font(TextRole::Body),
-                             textRect(width).width(), replying ? replyLines : maxLines);
+                             textRect(width).width(), replying || editing ? replyLines : maxLines);
 }
 
 bool ChatQuotePreview::hasHeightForWidth() const
@@ -199,11 +224,15 @@ void ChatQuotePreview::retranslateUi()
         title = replyToSelf
                     ? AirStrings::text(Text::ReplyToSelf)
                     : AirStrings::text(Text::SpokenReply).arg(AirStrings::replyName(replyName));
+    } else if (editing) {
+        title = AirStrings::text(Text::NoteEditing);
     } else {
         title = tr("Quote");
     }
     setAccessibleName(title);
-    const QString cancel = replying ? AirStrings::text(Text::ReplyCancel) : tr("Cancel quote");
+    const QString cancel = replying  ? AirStrings::text(Text::ReplyCancel)
+                           : editing ? AirStrings::text(Text::NoteEditCancel)
+                                     : tr("Cancel quote");
     closeButton->setToolTip(cancel);
     closeButton->setAccessibleName(cancel);
     update();

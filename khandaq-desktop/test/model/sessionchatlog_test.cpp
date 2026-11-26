@@ -110,6 +110,7 @@ private slots:
     void onlyAShownMessageOrFileTakesOurReaction();
     void aFileReactionFromIosIsShown();
     void aRelayedAuthorTakesTheNameTheGroupGivesThem();
+    void ourOwnTextTakesAnEditMarkedEdited();
 
 private:
     MockCoreIdHandler idHandler;
@@ -793,6 +794,49 @@ void TestSessionChatLog::aRelayedAuthorTakesTheNameTheGroupGivesThem()
     // Named once, they keep it.
     QCOMPARE(chatLog->nameAuthor(author, QStringLiteral("Maryam C")), 0);
     QCOMPARE(chatLog->at(ChatLogIdx(0)).getDisplayName(), QStringLiteral("Maryam B"));
+}
+
+/**
+ * @brief KHANDAQ (beta feedback 2026-11-22): a text of ours takes new words, or becomes an action,
+ * and shows "edited", as Saved Messages edits a note; nothing else does, and the same words change
+ * nothing
+ */
+void TestSessionChatLog::ourOwnTextTakesAnEditMarkedEdited()
+{
+    const ToxPk maryam = keyOf(0x11);
+    /* ChatLogIdx(0) */ chatLog->onMessageSent(DispatchedMessageId(0), createMessage("at five"));
+    /* ChatLogIdx(1) */ chatLog->onMessageReceived(maryam, createMessage("see you"));
+    SystemMessage joined;
+    joined.messageType = SystemMessageType::userJoinedGroup;
+    joined.timestamp = QDateTime::currentDateTime();
+    /* ChatLogIdx(2) */ chatLog->addSystemMessage(joined);
+    /* ChatLogIdx(3) */ chatLog->onMessageSent(DispatchedMessageId(1), createMessage("gone"));
+    chatLog->hideItem(ChatLogIdx(3));
+    QSignalSpy updated(chatLog.get(), &IChatLog::itemUpdated);
+
+    QVERIFY(chatLog->editOwnMessage(ChatLogIdx(0), false, QStringLiteral("at six"), 1763380800));
+    QCOMPARE(updated.count(), 1);
+    const ChatLogMessage& edited = chatLog->at(ChatLogIdx(0)).getContentAsMessage();
+    QCOMPARE(edited.message.content, QStringLiteral("at six"));
+    QVERIFY(edited.marks.edited);
+    QCOMPARE(edited.marks.editedAt, quint32(1763380800));
+    const SearchPos start{ChatLogIdx(0), 0};
+    QVERIFY(chatLog->searchForward(start, QStringLiteral("six"), ParameterSearch()).found);
+    QVERIFY(chatLog->editOwnMessage(ChatLogIdx(0), true, QStringLiteral("at six"), 1763380900));
+    QVERIFY(chatLog->at(ChatLogIdx(0)).getContentAsMessage().message.isAction);
+    QCOMPARE(updated.count(), 2);
+
+    // The same words, someone else's text, a call or a join, a hidden one, none at all: nothing.
+    QVERIFY(!chatLog->editOwnMessage(ChatLogIdx(0), true, QStringLiteral("at six"), 1763381000));
+    QVERIFY(!chatLog->editOwnMessage(ChatLogIdx(1), false, QStringLiteral("see you there"), 1));
+    QVERIFY(!chatLog->editOwnMessage(ChatLogIdx(2), false, QStringLiteral("joined"), 1));
+    QVERIFY(!chatLog->editOwnMessage(ChatLogIdx(3), false, QStringLiteral("back"), 1));
+    QVERIFY(!chatLog->editOwnMessage(ChatLogIdx(9), false, QStringLiteral("none"), 1));
+    QCOMPARE(updated.count(), 2);
+    QCOMPARE(chatLog->at(ChatLogIdx(1)).getContentAsMessage().message.content,
+             QStringLiteral("see you"));
+    QVERIFY(!chatLog->at(ChatLogIdx(1)).getContentAsMessage().marks.edited);
+    QCOMPARE(chatLog->at(ChatLogIdx(0)).getContentAsMessage().marks.editedAt, quint32(1763380900));
 }
 
 QTEST_GUILESS_MAIN(TestSessionChatLog)

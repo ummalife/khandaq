@@ -100,6 +100,7 @@ bool AirVoiceRecorder::start(QObject* owner, std::unique_ptr<IAudioSource> given
         samples.clear();
         sampleRate = 0;
         full = false;
+        paused = false;
     }
     active = true;
     limitSaid = false;
@@ -163,6 +164,30 @@ qint64 AirVoiceRecorder::elapsedMs() const
     return static_cast<qint64>(samples.size()) * 1000 / sampleRate;
 }
 
+bool AirVoiceRecorder::setPaused(bool paused_)
+{
+    if (!canPause()) {
+        return false;
+    }
+    QMutexLocker locker(&lock);
+    if (paused == paused_) {
+        return false;
+    }
+    paused = paused_;
+    return true;
+}
+
+bool AirVoiceRecorder::isPaused() const
+{
+    QMutexLocker locker(&lock);
+    return paused;
+}
+
+bool AirVoiceRecorder::canPause() const
+{
+    return active && source != nullptr;
+}
+
 AirVoiceDecoder::Pcm AirVoiceRecorder::finish()
 {
     AirVoiceDecoder::Pcm pcm;
@@ -203,7 +228,8 @@ void AirVoiceRecorder::take(const int16_t* pcm, size_t frames, uint8_t channels,
         return;
     }
     QMutexLocker locker(&lock);
-    if (full) {
+    // What the microphone hears during a pause is not part of the note.
+    if (full || paused) {
         return;
     }
     if (sampleRate == 0) {
@@ -252,6 +278,8 @@ void AirVoiceRecorder::tick()
 void AirVoiceRecorder::closeMicrophone()
 {
     source.reset();
+    QMutexLocker locker(&lock);
+    paused = false;
 }
 
 void AirVoiceRecorder::end()

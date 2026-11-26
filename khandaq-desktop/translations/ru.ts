@@ -927,6 +927,11 @@
         <translation>Отправить</translation>
     </message>
     <message>
+        <source>Save</source>
+        <comment>the Send button while the field holds a saved message being edited; as message_edit_save on iOS</comment>
+        <translation>Сохранить</translation>
+    </message>
+    <message>
         <source>Attach a file</source>
         <comment>paperclip button of the message field</comment>
         <translation>Прикрепить файл</translation>
@@ -950,6 +955,21 @@
         <source>Recording a voice message</source>
         <comment>in place of the message field while a voice message is recorded</comment>
         <translation>Запись голосового</translation>
+    </message>
+    <message>
+        <source>Recording paused</source>
+        <comment>in place of the message field while the recording of a voice message is paused</comment>
+        <translation>Запись на паузе</translation>
+    </message>
+    <message>
+        <source>Pause recording</source>
+        <comment>button while a voice message is recorded: what the microphone hears is not taken until it goes on</comment>
+        <translation>Приостановить запись</translation>
+    </message>
+    <message>
+        <source>Resume recording</source>
+        <comment>the same button while the recording of a voice message is paused: it goes on</comment>
+        <translation>Продолжить запись</translation>
     </message>
     <message>
         <source>Too short: a voice message lasts at least a second</source>
@@ -1292,6 +1312,21 @@
         <source>Saved messages are kept only on this device, so it cannot be brought back.</source>
         <comment>confirmation before a saved message is deleted</comment>
         <translation>Избранное хранится только на этом устройстве, поэтому сообщение не вернуть.</translation>
+    </message>
+    <message>
+        <source>Edit message</source>
+        <comment>menu action on a message in Saved Messages: its words go into the field to be changed</comment>
+        <translation>Изменить сообщение</translation>
+    </message>
+    <message>
+        <source>Editing</source>
+        <comment>over the field while a saved message is being edited; as chat_edit_header on Android</comment>
+        <translation>Редактирование</translation>
+    </message>
+    <message>
+        <source>Cancel editing</source>
+        <comment>the cross over the field while a saved message is being edited: it stays as it was</comment>
+        <translation>Отменить редактирование</translation>
     </message>
     <message>
         <source>Delete</source>
@@ -1775,6 +1810,16 @@
         <source>Opens the actions for this member</source>
         <comment>tooltip of a member row</comment>
         <translation>Открывает действия с участником</translation>
+    </message>
+    <message>
+        <source>Your name in the group</source>
+        <comment>group dossier section and its field: our name in this group only</comment>
+        <translation>Ваше имя в группе</translation>
+    </message>
+    <message>
+        <source>Members of this group see it. Your profile name stays as it is.</source>
+        <comment>group dossier: under the field of our name in the group</comment>
+        <translation>Его видят участники этой группы. Имя профиля остаётся прежним.</translation>
     </message>
     <message>
         <source>Your role</source>
@@ -2405,6 +2450,11 @@
             <numerusform>Ещё %n файла</numerusform>
             <numerusform>Ещё %n файлов</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Add more</source>
+        <comment>dialog before files go: the button between Cancel and Send that opens the system dialog again; the files chosen there join the list</comment>
+        <translation>Добавить ещё</translation>
     </message>
     <message>
         <source>Voice message</source>
@@ -3868,6 +3918,11 @@
         <source>Couldn&apos;t change who can join</source>
         <comment>title of the error when the group refused a change of who can join</comment>
         <translation>Не удалось изменить, кто может войти</translation>
+    </message>
+    <message>
+        <source>Couldn&apos;t change your name in the group</source>
+        <comment>title of the error when the group refused our name in it</comment>
+        <translation>Не удалось сменить имя в группе</translation>
     </message>
     <message>
         <source>Couldn&apos;t invite to the group</source>

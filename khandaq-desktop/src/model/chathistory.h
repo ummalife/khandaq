@@ -81,9 +81,21 @@ public:
     /**
      * Applies an edit, a deletion or a reaction of sender (SessionChatLog::applyEffect) and keeps
      * it: the new words or the erased message in the history, the marks in the entry store.
+     *
+     * KHANDAQ (beta feedback 2026-11-22): in a group a deletion is kept as well, whatever the
+     * conversation holds of it (History::addDeletion), and one of a message the conversation has
+     * not loaded erases it in the history: a text by the id the entry store keeps for it, among
+     * the last texts of its author, a file by its id, if the author sent it.
      */
     SessionChatLog::EffectResult applyEffect(const ToxPk& sender, const Air::MessageEffect& effect,
                                              const ToxPk& selfKey);
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): whether author deleted that text or file of this group
+     * (History::addDeletion): a copy of it that comes again, live or relayed, is not shown. False
+     * between two people and without the history.
+     */
+    bool isDeleted(const ToxPk& author, Air::MessageEffect::Anchor anchor,
+                   const QByteArray& anchorId) const;
 
     /**
      * KHANDAQ (0.2.57): read receipts between two people. The time, by our clock, of our own
@@ -157,6 +169,11 @@ private:
     QString chatKey() const;
     /** Keeps the id a group gave a message of ours or of a member, when the history keeps it. */
     void keepWireId(const ToxPk& author, const Message& message);
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): erases in the history the message of this group that a
+     * deletion by author points at, which the conversation has not loaded (applyEffect).
+     */
+    void eraseUnloaded(const ToxPk& author, const Air::MessageEffect& effect);
     /** KHANDAQ (0.2.57): the msgV3 id the history keeps for a message: one between two people. */
     QByteArray msgV3IdOf(const Message& message) const;
     /** The time of our message a read receipt names, among those the log holds; -1 for none. */

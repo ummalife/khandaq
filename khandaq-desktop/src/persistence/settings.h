@@ -475,6 +475,12 @@ public:
      */
     QString getUnsyncedGroupJoins() const;
     void setUnsyncedGroupJoins(const QString& stored);
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): the groups with a name of our own (Core), which a rename
+     * of the profile leaves as they are and a join gives back to them (Air::GroupSelfNames).
+     */
+    QString getGroupSelfNames() const;
+    void setGroupSelfNames(const QString& stored);
 
     StyleType getStylePreference() const;
     void setStylePreference(StyleType newValue);
@@ -792,6 +798,7 @@ private:
     QByteArray airLocalStore;
     QString pendingGroupLeaves;
     QString unsyncedGroupJoins;
+    QString groupSelfNames;
 
     static CompatibleRecursiveMutex bigLock;
     static const QString globalSettingsFile;

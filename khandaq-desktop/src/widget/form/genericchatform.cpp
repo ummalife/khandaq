@@ -72,6 +72,7 @@
 #include <QRegularExpression>
 #include <QStringBuilder>
 #include <QTextDocument>
+#include <QTimer>
 #include <QtConcurrent/QtConcurrentRun>
 #include <QtGlobal>
 
@@ -287,20 +288,34 @@ GenericChatForm::GenericChatForm(const Core& core_, const Chat* chat, IChatLog& 
     {
         // One recorder for the app: every form listens and takes what is about its own note.
         AirVoiceRecorder* const recorder = &AirVoiceRecorder::instance();
+        // KHANDAQ (beta feedback 2026-11-22): the bar says what the recorder did, which is nothing
+        // without a microphone open for the note.
+        const auto showPause = [this, recorder] {
+            composer->setRecordingPaused(recorder->isPaused(), recorder->canPause());
+        };
+        connect(composer, &AirComposer::voicePauseRequested, this,
+                [this, recorder, showPause](bool paused) {
+                    if (recorder->isRecordingFor(this)) {
+                        recorder->setPaused(paused);
+                        showPause();
+                    }
+                });
         connect(recorder, &AirVoiceRecorder::elapsedChanged, this, [this, recorder](qint64 ms) {
             if (recorder->isRecordingFor(this)) {
                 composer->setRecordingTime(ms, static_cast<double>(ms)
                                                    / AirVoiceRecorder::longestMs);
             }
         });
-        connect(recorder, &AirVoiceRecorder::limitReached, this, [this, recorder] {
+        connect(recorder, &AirVoiceRecorder::limitReached, this, [this, recorder, showPause] {
             if (recorder->isRecordingFor(this)) {
                 composer->setRecordingTime(AirVoiceRecorder::longestMs, 1.0);
+                showPause();
                 sendVoiceNote(true);
             }
         });
-        connect(recorder, &AirVoiceRecorder::lost, this, [this, recorder] {
+        connect(recorder, &AirVoiceRecorder::lost, this, [this, recorder, showPause] {
             if (recorder->isRecordingFor(this)) {
+                showPause();
                 AirToast::post(this, AirStrings::text(AirStrings::Text::VoiceNoMicrophone));
             }
         });
@@ -819,6 +834,23 @@ void GenericChatForm::offerFiles(const QStringList& paths)
     auto* const list = new OutgoingFileList(paths);
     dialog->setContent(list);
     dialog->setAccessibleDescription(list->spokenText());
+    // KHANDAQ (beta feedback 2026-11-22): more files join the list. Send checks each of them as it
+    // checks any file chosen, and says why for each one it refuses.
+    dialog->addChoice(AirStrings::text(AirStrings::Text::FilesAddMore), [self, paths] {
+        if (GenericChatForm* const form = self.data()) {
+            // The system dialog runs a loop of its own: it opens once this one has gone.
+            QTimer::singleShot(0, form, [form, paths] { form->addMoreFiles(paths); });
+        }
+    });
+}
+
+void GenericChatForm::addMoreFiles(const QStringList& listed)
+{
+    const QString folder =
+        listed.isEmpty() ? QDir::homePath() : QFileInfo(listed.last()).absolutePath();
+    const QStringList chosen =
+        QFileDialog::getOpenFileNames(window(), tr("Send files"), folder, QString(), nullptr);
+    onPasteFiles(Air::withMoreFiles(listed, chosen));
 }
 
 void GenericChatForm::putAddressesInField(const QStringList& addresses)

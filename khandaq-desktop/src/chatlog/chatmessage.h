@@ -116,9 +116,11 @@ public:
     void setStatus(Air::EntryStatus status);
     /**
      * Shows what changed on a message since it was drawn (stage 3, item 10): the new words of an
-     * edit and the marks. Returns whether the entry may have changed its height.
+     * edit, its type (KHANDAQ, beta feedback 2026-11-22: a saved message edited into an action or
+     * out of one), and the marks. Returns whether the entry may have changed its height.
      */
-    bool updateMessage(const QString& rawMessage, const Air::EntryMarks& marks, SmileyPack& smileyPack);
+    bool updateMessage(const QString& rawMessage, MessageType type, const Air::EntryMarks& marks,
+                       SmileyPack& smileyPack);
     /** Shows the marks of an entry anew; returns whether it may have changed its height. */
     bool updateMarks(const Air::EntryMarks& marks);
     /**

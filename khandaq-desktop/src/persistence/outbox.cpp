@@ -273,14 +273,18 @@ SavedNotes::SavedNotes(std::shared_ptr<RawDatabase> db_)
 QVector<SavedNotes::Note> SavedNotes::all()
 {
     QVector<Note> notes;
-    db->execNow(RawDatabase::Query(QStringLiteral("SELECT id, timestamp, message FROM notes "
-                                                  "ORDER BY timestamp, id;"),
+    db->execNow(RawDatabase::Query(QStringLiteral("SELECT id, timestamp, message, edited_at "
+                                                  "FROM notes ORDER BY timestamp, id;"),
                                    [&notes](const QVector<QVariant>& row) {
                                        Note note;
                                        note.id = row[0].toLongLong();
                                        note.timestamp =
                                            QDateTime::fromMSecsSinceEpoch(row[1].toLongLong());
                                        note.text = QString::fromUtf8(row[2].toByteArray());
+                                       if (!row[3].isNull()) {
+                                           note.editedAt =
+                                               QDateTime::fromMSecsSinceEpoch(row[3].toLongLong());
+                                       }
                                        notes << note;
                                    }));
     return notes;
@@ -295,6 +299,15 @@ qint64 SavedNotes::add(const QDateTime& time, const QString& text)
                                          .arg(time.toMSecsSinceEpoch()),
                                      {text.toUtf8()}));
     return id;
+}
+
+void SavedNotes::edit(qint64 id, const QString& text, const QDateTime& time)
+{
+    db->execLater(RawDatabase::Query(QStringLiteral("UPDATE notes SET message = ?, edited_at = %1 "
+                                                    "WHERE id = %2;")
+                                         .arg(time.toMSecsSinceEpoch())
+                                         .arg(id),
+                                     {text.toUtf8()}));
 }
 
 void SavedNotes::remove(qint64 id)

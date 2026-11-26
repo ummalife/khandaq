@@ -18,6 +18,7 @@
 */
 
 #include "src/model/air/airgroup.h"
+#include "src/model/air/airyou.h"
 #include "src/widget/air/airchatparts.h"
 #include "src/widget/air/aircomposer.h"
 #include "src/widget/air/airgroupdossier.h"
@@ -158,8 +159,11 @@ private slots:
     void inviteListKeepsTheChoiceByKey();
     void readOnlyBarTakesThePlaceOfTheField();
     void composerOffersTheEmojiAtTheEndOfTheField();
+    void composerSendSaysSaveWhileANoteIsEdited();
     void composerRecordsAVoiceNoteInPlaceOfTheField();
+    void composerPausesAVoiceNoteAndLetsItGoOn();
     void dossierSaysTheRoleAndListsTheMembers();
+    void dossierSetsYourNameInTheGroup();
     void memberMenuIsTheSameFromTheRowAndFromTheirName();
     void aGroupByInvitationOnlySharesNoKeyAndItsFounderOpensIt();
     void privateThreadTellsAnObserverWhyItCannotAnswer();
@@ -525,6 +529,23 @@ void TestAirGroupViews::composerOffersTheEmojiAtTheEndOfTheField()
     QVERIFY(!emoji->isVisible());
 }
 
+/** KHANDAQ (beta feedback 2026-11-22): Send reads "Save" while a saved message is edited. */
+void TestAirGroupViews::composerSendSaysSaveWhileANoteIsEdited()
+{
+    QWidget host;
+    auto* const composer = new AirComposer(new QTextEdit(), &host);
+    auto* const send = part<QAbstractButton>(composer, "composerSend");
+    QCOMPARE(send->text(), AirStrings::text(Text::ComposeSend));
+    QSignalSpy asks(composer, &AirComposer::sendRequested);
+    composer->setSaving(true);
+    QCOMPARE(send->text(), AirStrings::text(Text::ComposeSave));
+    QVERIFY(send->isEnabled());
+    send->click();
+    QCOMPARE(asks.count(), 1);
+    composer->setSaving(false);
+    QCOMPARE(send->text(), AirStrings::text(Text::ComposeSend));
+}
+
 /**
  * The microphone follows the emoji (0.2.60). While a note is recorded its bar stands where the
  * field was and the cross where the paperclip was; Send and Enter send the note, the cross and Esc
@@ -637,6 +658,86 @@ void TestAirGroupViews::composerRecordsAVoiceNoteInPlaceOfTheField()
     QVERIFY(emoji->isVisible());
 }
 
+/**
+ * KHANDAQ (beta feedback 2026-11-22): while a note is recorded, a voice note's round button stands
+ * where the microphone was: two bars to pause, the triangle to go on, named for each, and the bar
+ * says that the recording is paused. A new note starts unpaused.
+ */
+void TestAirGroupViews::composerPausesAVoiceNoteAndLetsItGoOn()
+{
+    QWidget host;
+    host.resize(700, 300);
+    auto* const field = new QTextEdit();
+    auto* const composer = new AirComposer(field, &host);
+    composer->setGeometry(0, 0, 700, 300);
+    host.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&host));
+    auto* const pause = part<AirPlayButton>(composer, "composerVoicePause");
+    auto* const send = part<QAbstractButton>(composer, "composerSend");
+    auto* const recording = part<QWidget>(composer, "composerRecording");
+    QVERIFY(!pause->isVisible());
+
+    composer->setRecording(true);
+    QVERIFY(pause->isVisible());
+    QVERIFY(pause->isEnabled());
+    QVERIFY(pause->isPlaying());
+    QCOMPARE(pause->accessibleName(), AirStrings::text(Text::ComposeVoicePause));
+    QCOMPARE(pause->toolTip(), AirStrings::text(Text::ComposeVoicePause));
+    const QRect barBox(recording->mapTo(composer, QPoint()), recording->size());
+    const QRect pauseBox(pause->mapTo(composer, QPoint()), pause->size());
+    const QRect sendBox(send->mapTo(composer, QPoint()), send->size());
+    QVERIFY(barBox.right() < pauseBox.left());
+    QVERIFY(pauseBox.right() < sendBox.left());
+    // Tab: the cross, the pause, Send.
+    host.activateWindow();
+    QVERIFY(QTest::qWaitForWindowActive(&host));
+    auto* const cancel = part<QAbstractButton>(composer, "composerVoiceCancel");
+    cancel->setFocus();
+    QTest::keyClick(cancel, Qt::Key_Tab);
+    QCOMPARE(QApplication::focusWidget(), static_cast<QWidget*>(pause));
+    QTest::keyClick(pause, Qt::Key_Tab);
+    QCOMPARE(QApplication::focusWidget(), static_cast<QWidget*>(send));
+
+    // The button asks; the form pauses the note and says so.
+    QSignalSpy asks(composer, &AirComposer::voicePauseRequested);
+    pause->click();
+    QCOMPARE(asks.count(), 1);
+    QCOMPARE(asks.last().at(0).toBool(), true);
+    QVERIFY(pause->isPlaying());
+    composer->setRecordingPaused(true);
+    QVERIFY(!pause->isPlaying());
+    QCOMPARE(pause->accessibleName(), AirStrings::text(Text::ComposeVoiceResume));
+    QCOMPARE(pause->toolTip(), AirStrings::text(Text::ComposeVoiceResume));
+    composer->setRecordingTime(12000, 0.04);
+    QVERIFY(recording->accessibleName().startsWith(AirStrings::text(Text::ComposeRecordingPaused)));
+    QVERIFY(recording->accessibleName().endsWith(QStringLiteral("0:12")));
+    QTest::keyClick(pause, Qt::Key_Space);
+    QCOMPARE(asks.count(), 2);
+    QCOMPARE(asks.last().at(0).toBool(), false);
+    composer->setRecordingPaused(false);
+    QCOMPARE(pause->accessibleName(), AirStrings::text(Text::ComposeVoicePause));
+    QVERIFY(recording->accessibleName().startsWith(AirStrings::text(Text::ComposeRecording)));
+    QVERIFY(!recording->accessibleName().startsWith(
+        AirStrings::text(Text::ComposeRecordingPaused)));
+    // Enter on the pause sends the note, as from Send.
+    QSignalSpy notes(composer, &AirComposer::voiceSendRequested);
+    QTest::keyClick(pause, Qt::Key_Return);
+    QCOMPARE(notes.count(), 1);
+    QCOMPARE(asks.count(), 2);
+
+    // No microphone for the note: nothing to pause.
+    composer->setRecordingPaused(false, false);
+    QVERIFY(!pause->isEnabled());
+    composer->setRecordingPaused(true);
+    composer->setRecording(false);
+    QVERIFY(!pause->isVisible());
+    composer->setRecording(true);
+    QVERIFY(pause->isEnabled());
+    QVERIFY(pause->isPlaying());
+    QCOMPARE(pause->accessibleName(), AirStrings::text(Text::ComposeVoicePause));
+    composer->setRecording(false);
+}
+
 /** The dossier says your role in words and lists everyone, you included, by role. */
 void TestAirGroupViews::dossierSaysTheRoleAndListsTheMembers()
 {
@@ -701,6 +802,83 @@ void TestAirGroupViews::dossierSaysTheRoleAndListsTheMembers()
     part<AirButton>(dialog, "dialogConfirm")->click();
     QCOMPARE(leaves.count(), 1);
     QVERIFY(!dossier->isOpen());
+}
+
+/**
+ * KHANDAQ (beta feedback 2026-11-22): the dossier shows our name in the group, with the note that
+ * the profile name stays, and asks for a new one on Enter or when the field loses the focus. An
+ * emptied field, the same name or Esc ask nothing, and a refresh keeps what is being typed.
+ */
+void TestAirGroupViews::dossierSetsYourNameInTheGroup()
+{
+    QWidget host;
+    host.resize(1100, 800);
+    auto* const dossier = new AirGroupDossier(&host);
+    host.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&host));
+    host.activateWindow();
+    QVERIFY(QTest::qWaitForWindowActive(&host));
+    AirGroupInfo info;
+    info.name = QStringLiteral("Study circle");
+    info.groupKey = groupKey;
+    info.selfName = QStringLiteral("Amina");
+    info.members = {member(1, QStringLiteral("Amina"), Air::GroupRole::Member, true, true)};
+    info.reach = Air::GroupReach::make(1, 1, 0, true);
+    dossier->setInfo(info);
+    dossier->open();
+
+    auto* const field = part<AirTextField>(dossier, "groupSelfName");
+    QVERIFY(field);
+    QVERIFY(field->isVisibleTo(dossier));
+    QCOMPARE(field->text(), QStringLiteral("Amina"));
+    QVERIFY(showsText(dossier, AirStrings::text(Text::GroupSelfName)));
+    QVERIFY(showsText(dossier, AirStrings::text(Text::GroupSelfNameNote)));
+    QCOMPARE(field->edit()->accessibleName(), AirStrings::text(Text::GroupSelfName));
+
+    // Enter asks for the name, trimmed, and the field shows the one the group took.
+    QSignalSpy asked(dossier, &AirGroupDossier::selfNameRequested);
+    const QMetaObject::Connection answer =
+        QObject::connect(dossier, &AirGroupDossier::selfNameRequested, dossier,
+                         [&](const QString& name) {
+                             info.selfName = name;
+                             dossier->setInfo(info);
+                         });
+    field->edit()->setFocus();
+    QVERIFY(field->edit()->hasFocus());
+    field->setText(QStringLiteral("  Sister Amina "));
+    QTest::keyClick(field->edit(), Qt::Key_Return);
+    QCOMPARE(asked.count(), 1);
+    QCOMPARE(asked.at(0).at(0).toString(), QStringLiteral("Sister Amina"));
+    QCOMPARE(field->text(), QStringLiteral("Sister Amina"));
+
+    // A refresh while it is being edited keeps what is typed; Esc takes it back and asks nothing,
+    // and the dossier stays.
+    field->setText(QStringLiteral("Umm"));
+    dossier->setInfo(info);
+    QCOMPARE(field->text(), QStringLiteral("Umm"));
+    QTest::keyClick(field->edit(), Qt::Key_Escape);
+    QCOMPARE(field->text(), QStringLiteral("Sister Amina"));
+    QVERIFY(dossier->isOpen());
+
+    // Typing stops at the bytes toxcore takes for a name.
+    QTest::keyClicks(field->edit(), QString(Air::nameLimitBytes, QLatin1Char('a')));
+    QCOMPARE(field->text().toUtf8().size(), Air::nameLimitBytes);
+    QTest::keyClick(field->edit(), Qt::Key_Escape);
+
+    // An emptied field takes the name back; the same name asks nothing.
+    field->setText(QStringLiteral("   "));
+    QTest::keyClick(field->edit(), Qt::Key_Return);
+    QCOMPARE(field->text(), QStringLiteral("Sister Amina"));
+    QTest::keyClick(field->edit(), Qt::Key_Return);
+    QCOMPARE(asked.count(), 1);
+
+    // Leaving the field asks as well; a name the group refused leaves the one it has.
+    QObject::disconnect(answer);
+    field->setText(QStringLiteral("Amina B."));
+    part<AirButton>(dossier, "groupLeave")->setFocus();
+    QCOMPARE(asked.count(), 2);
+    QCOMPARE(asked.at(1).at(0).toString(), QStringLiteral("Amina B."));
+    QCOMPARE(field->text(), QStringLiteral("Sister Amina"));
 }
 
 /**

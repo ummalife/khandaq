@@ -36,6 +36,8 @@
 
 #include <QApplication>
 #include <QDateTime>
+#include <QHash>
+#include <QSet>
 #include <QTemporaryDir>
 #include <QTemporaryFile>
 #include <QtTest/QtTest>
@@ -49,6 +51,66 @@
 namespace {
 const GroupId family{QByteArray(GroupId::size, 'g')};
 const ToxPk maryam{QByteArray(ToxPk::size, 'm')};
+const ToxPk yusuf{QByteArray(ToxPk::size, 'y')};
+/** Our key in the group, as Core::getGroupSelfPublicKey gives it. */
+const ToxPk groupSelf{QByteArray(ToxPk::size, 's')};
+const QByteArray fileId{"0123456789abcdef0123456789abcdef"};
+
+using Anchor = Air::MessageEffect::Anchor;
+using Change = SessionChatLog::EffectResult::Change;
+
+/** A deletion by its author (packet 0x42), as Air::readGroupPacket reads it. */
+Air::MessageEffect deletionOf(Anchor anchor, const QByteArray& anchorId)
+{
+    Air::MessageEffect effect;
+    effect.kind = Air::MessageEffect::Kind::Delete;
+    effect.anchor = anchor;
+    effect.anchorId = anchorId;
+    return effect;
+}
+
+/** What AirLocal keeps between the starts of the app, in memory for every start of a test. */
+class MemoryEntryStore : public Air::EntryMarksStore
+{
+public:
+    Air::EntryMarks entryMarks(const QString& key) const override
+    {
+        return marks.value(key);
+    }
+    void setEntryMarks(const QString& key, const Air::EntryMarks& kept) override
+    {
+        if (kept.isEmpty()) {
+            marks.remove(key);
+        } else {
+            marks.insert(key, kept);
+        }
+    }
+    QByteArray wireId(const QString& key) const override
+    {
+        return wires.value(key);
+    }
+    void setWireId(const QString& key, const QByteArray& id) override
+    {
+        if (id.isEmpty()) {
+            wires.remove(key);
+        } else {
+            wires.insert(key, id);
+        }
+    }
+    bool isRelayed(const QString& key) const override
+    {
+        return relayed.contains(key);
+    }
+    void markRelayed(const QString& key) override
+    {
+        relayed.insert(key);
+    }
+
+private:
+    QHash<QString, Air::EntryMarks> marks;
+    QHash<QString, QByteArray> wires;
+    QSet<QString> relayed;
+};
 
 class SilentMessageBoxes : public IMessageBoxManager
 {
@@ -129,6 +191,7 @@ private:
  * the texts a member relays from its history, on a real database. One that joins the conversation
  * is told once (ChatHistory::syncedMessageAdded), and the window counts it as unread; one the
  * history keeps already, live or relayed in an earlier run, joins nothing and is not told.
+ * KHANDAQ (beta feedback 2026-11-22): nor does one its author deleted.
  */
 class TestChatHistory : public QObject
 {
@@ -140,6 +203,8 @@ private slots:
     void cleanupTestCase();
     void aRelayedTextIsToldOnceItJoinsTheConversation();
     void aRelayedTextTheHistoryKeepsIsNotToldAgain();
+    void aCopyOfADeletedTextIsNotShownAgain();
+    void aDeletionOfMessagesNotLoadedErasesThemInTheHistory();
 
 private:
     /** The conversation of the group as a start of the app makes it, on the same database. */
@@ -158,6 +223,7 @@ private:
     std::unique_ptr<Group> group;
     std::unique_ptr<GroupMessageDispatcher> dispatcher;
     std::unique_ptr<ChatHistory> chatHistory;
+    MemoryEntryStore entryStore;
     /** The relayed texts the conversation told of, in order. */
     std::vector<std::pair<ToxPk, Message>> told;
 };
@@ -212,7 +278,7 @@ void TestChatHistory::open()
     dispatcher.reset(new GroupMessageDispatcher(*group, MessageProcessor(*processorParams),
                                                 idHandler, groupSender, *settings));
     chatHistory.reset(new ChatHistory(*group, history.get(), idHandler, *settings, *dispatcher,
-                                      friendList, groupList));
+                                      friendList, groupList, &entryStore));
     told.clear();
     connect(chatHistory.get(), &ChatHistory::syncedMessageAdded, this,
             [this](const ToxPk& author, const Message& message) {
@@ -265,6 +331,102 @@ void TestChatHistory::aRelayedTextTheHistoryKeepsIsNotToldAgain()
     dispatcher->onSyncedMessageReceived(maryam, QStringLiteral("Relayed too"), 9, written.addSecs(1));
     QCOMPARE(told.size(), size_t{1});
     QCOMPARE(told[0].second.content, QStringLiteral("Relayed too"));
+}
+
+/**
+ * KHANDAQ (beta feedback 2026-11-22): a member who missed a deletion relays the message again from
+ * the history of the group, and after a restart the history has no words of it to know it by. The
+ * deletion is kept: neither that copy nor a live one joins the conversation, and nothing is told.
+ * The author's other texts, and one of another member with the same id, still come.
+ */
+void TestChatHistory::aCopyOfADeletedTextIsNotShownAgain()
+{
+    dispatcher->onMessageReceived(maryam, false, QStringLiteral("Deleted words"), 21);
+    history->sync();
+    const size_t count = chatHistory->getNextIdx().get();
+    const ChatLogIdx deleted{count - 1};
+    const SessionChatLog::EffectResult result =
+        chatHistory->applyEffect(maryam, deletionOf(Anchor::Text, Air::groupWireId(21)), groupSelf);
+    QVERIFY(result.change == Change::Deleted);
+    QVERIFY(!chatHistory->isShown(deleted));
+    QVERIFY(chatHistory->isDeleted(maryam, Anchor::Text, Air::groupWireId(21)));
+
+    open();
+    QVERIFY(!chatHistory->isShown(deleted));
+    const QDateTime written = QDateTime::currentDateTime().addSecs(-60);
+    dispatcher->onSyncedMessageReceived(maryam, QStringLiteral("Deleted words"), 21, written);
+    QVERIFY(told.empty());
+    QCOMPARE(chatHistory->getNextIdx().get(), count);
+    dispatcher->onMessageReceived(maryam, false, QStringLiteral("Deleted words"), 21);
+    QCOMPARE(chatHistory->getNextIdx().get(), count);
+
+    dispatcher->onSyncedMessageReceived(maryam, QStringLiteral("Kept words"), 22,
+                                        written.addSecs(1));
+    QCOMPARE(told.size(), size_t{1});
+    dispatcher->onSyncedMessageReceived(yusuf, QStringLiteral("Deleted words"), 21,
+                                        written.addSecs(2));
+    QCOMPARE(told.size(), size_t{2});
+    QCOMPARE(chatHistory->getNextIdx().get(), count + 2);
+
+    // A deletion of ours, or one that names no message, is not kept.
+    const Air::MessageEffect ours = deletionOf(Anchor::Text, Air::groupWireId(23));
+    std::ignore = chatHistory->applyEffect(groupSelf, ours, groupSelf);
+    QVERIFY(!chatHistory->isDeleted(groupSelf, Anchor::Text, Air::groupWireId(23)));
+    const Air::MessageEffect onItsWay = deletionOf(Anchor::Text, Air::groupWireId(0));
+    std::ignore = chatHistory->applyEffect(maryam, onItsWay, groupSelf);
+    QVERIFY(!chatHistory->isDeleted(maryam, Anchor::Text, Air::groupWireId(0)));
+}
+
+/**
+ * KHANDAQ (beta feedback 2026-11-22): a start of the app loads the last 100 entries of the group.
+ * A deletion of an older text or file of the author erases it in the history all the same, and it
+ * stays erased after a restart; one by another member erases nothing of theirs.
+ */
+void TestChatHistory::aDeletionOfMessagesNotLoadedErasesThemInTheHistory()
+{
+    dispatcher->onMessageReceived(maryam, false, QStringLiteral("Old words"), 31);
+    ToxFile photo(1, 0, QStringLiteral("photo.jpg"), QStringLiteral("/files/photo.jpg"), 1234,
+                  ToxFile::RECEIVING);
+    photo.resumeFileId = fileId;
+    photo.status = ToxFile::INITIALIZING;
+    chatHistory->onFileUpdated(maryam, photo);
+    photo.status = ToxFile::FINISHED;
+    chatHistory->onFileUpdated(maryam, photo);
+    for (uint32_t id = 100; id < 220; ++id) {
+        dispatcher->onMessageReceived(yusuf, false, QStringLiteral("Later %1").arg(id), id);
+    }
+    history->sync();
+    QCoreApplication::processEvents();
+    const ChatLogIdx oldText{0};
+    const ChatLogIdx oldFile{1};
+    const Air::MessageEffect textDeleted = deletionOf(Anchor::Text, Air::groupWireId(31));
+    const Air::MessageEffect fileDeleted = deletionOf(Anchor::File, fileId);
+
+    // Another member's deletion of them: not loaded, and not theirs.
+    open();
+    QVERIFY(chatHistory->applyEffect(yusuf, textDeleted, groupSelf).change == Change::None);
+    QVERIFY(chatHistory->applyEffect(yusuf, fileDeleted, groupSelf).change == Change::None);
+    QCOMPARE(chatHistory->at(oldText).getContentAsMessage().message.content,
+             QStringLiteral("Old words"));
+    QVERIFY(chatHistory->isShown(oldText));
+    QCOMPARE(chatHistory->at(oldFile).getContentAsFile().file.fileName,
+             QStringLiteral("photo.jpg"));
+    QVERIFY(chatHistory->isShown(oldFile));
+
+    // Hers, not loaded either.
+    open();
+    QVERIFY(chatHistory->applyEffect(maryam, textDeleted, groupSelf).change == Change::None);
+    QVERIFY(chatHistory->applyEffect(maryam, fileDeleted, groupSelf).change == Change::None);
+    QVERIFY(chatHistory->at(oldText).getContentType() == ChatLogItem::ContentType::message);
+    QVERIFY(!chatHistory->isShown(oldText));
+    QVERIFY(!chatHistory->isShown(oldFile));
+    QVERIFY(chatHistory->isDeleted(maryam, Anchor::File, fileId));
+
+    open();
+    std::ignore = chatHistory->at(oldText);
+    QVERIFY(!chatHistory->isShown(oldText));
+    QVERIFY(!chatHistory->isShown(oldFile));
+    QVERIFY(chatHistory->isShown(ChatLogIdx{2}));
 }
 
 int main(int argc, char* argv[])

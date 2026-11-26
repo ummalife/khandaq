@@ -57,6 +57,21 @@ void addChatIdSubQuery(QString& queryString, QVector<QByteArray>& boundParams, c
     queryString += "(SELECT id FROM chats WHERE uuid = ?)";
 }
 
+/** KHANDAQ (beta feedback 2026-11-22): what a deletion points at, as deleted_messages keeps it. */
+int anchorValue(Air::MessageEffect::Anchor anchor)
+{
+    return anchor == Air::MessageEffect::Anchor::File ? 1 : 0;
+}
+
+/** A deletion of a chat as History holds it: the author's key, what it points at and its id. */
+QByteArray deletionKey(const QByteArray& author, int anchor, const QByteArray& anchorId)
+{
+    QByteArray key = author;
+    key.append(static_cast<char>(anchor));
+    key.append(anchorId);
+    return key;
+}
+
 /**
  * KHANDAQ (0.2.57): the stamp of a file that has not ended (ToxFile::Stamp) is kept where an ended
  * one keeps its hash, which nothing reads back: a mark and three 64-bit numbers, so it is never
@@ -296,7 +311,10 @@ void History::eraseHistory()
         return;
     }
 
-    db->execNow("DELETE FROM faux_offline_pending;"
+    deletions.clear();
+    deletionsLoaded = true;
+    db->execNow("DELETE FROM deleted_messages;"
+                "DELETE FROM faux_offline_pending;"
                 "DELETE FROM broken_messages;"
                 "DELETE FROM text_messages;"
                 "DELETE FROM file_transfers;"
@@ -377,6 +395,11 @@ void History::removeChatHistory(const ChatId& chatId)
     addChatIdSubQuery(queryString, boundParams, chatId);
     queries += {queryString, boundParams};
     boundParams.clear();
+
+    queries +=
+        RawDatabase::Query(QStringLiteral("DELETE FROM deleted_messages WHERE chat_uuid = ?;"),
+                           {chatId.getByteArray()});
+    deletions.remove(chatId.getByteArray());
 
     queryString = QStringLiteral(
         "DELETE FROM chats WHERE id=");
@@ -1148,13 +1171,15 @@ History::SentFile History::sentFile(const ChatId& chatId, const QByteArray& file
     return sent;
 }
 
-void History::eraseFileEntry(const ChatId& chatId, const QByteArray& fileId)
+void History::eraseFileEntry(const ChatId& chatId, const QByteArray& fileId, const ToxPk& author)
 {
     if (historyAccessBlocked()) {
         return;
     }
 
-    erasedFiles.insert(fileId);
+    if (author.isEmpty()) {
+        erasedFiles.insert(fileId);
+    }
     QVector<QByteArray> boundParams;
     boundParams += QByteArray();
     boundParams += QByteArray();
@@ -1163,8 +1188,98 @@ void History::eraseFileEntry(const ChatId& chatId, const QByteArray& fileId)
                                          "WHERE file_restart_id = ? AND id IN "
                                          "(SELECT id FROM history WHERE chat_id = ");
     addChatIdSubQuery(queryString, boundParams, chatId);
-    queryString += QStringLiteral(");");
+    queryString += QStringLiteral(")");
+    if (!author.isEmpty()) {
+        queryString +=
+            QStringLiteral(" AND sender_alias IN (SELECT id FROM aliases WHERE owner = ");
+        addAuthorIdSubQuery(queryString, boundParams, author);
+        queryString += QStringLiteral(")");
+    }
+    queryString += QStringLiteral(";");
     db->execLater(RawDatabase::Query(queryString, boundParams));
+}
+
+constexpr qint64 History::deletionKeepMs;
+
+void History::addDeletion(const ChatId& chatId, const ToxPk& author,
+                          Air::MessageEffect::Anchor anchor, const QByteArray& anchorId)
+{
+    if (historyAccessBlocked() || author.isEmpty() || anchorId.isEmpty()) {
+        return;
+    }
+    loadDeletions();
+    const int kind = anchorValue(anchor);
+    QSet<QByteArray>& kept = deletions[chatId.getByteArray()];
+    const QByteArray key = deletionKey(author.getByteArray(), kind, anchorId);
+    if (kept.contains(key)) {
+        return;
+    }
+    kept.insert(key);
+    db->execLater(RawDatabase::Query(
+        QStringLiteral(
+            "INSERT OR IGNORE INTO deleted_messages "
+            "(chat_uuid, author, anchor, anchor_id, deleted_at) VALUES (?, ?, %1, ?, %2);")
+            .arg(kind)
+            .arg(QDateTime::currentMSecsSinceEpoch()),
+        {chatId.getByteArray(), author.getByteArray(), anchorId}));
+}
+
+bool History::isDeleted(const ChatId& chatId, const ToxPk& author,
+                        Air::MessageEffect::Anchor anchor, const QByteArray& anchorId)
+{
+    if (historyAccessBlocked() || author.isEmpty() || anchorId.isEmpty()) {
+        return false;
+    }
+    loadDeletions();
+    const auto kept = deletions.constFind(chatId.getByteArray());
+    return kept != deletions.constEnd()
+           && kept->contains(deletionKey(author.getByteArray(), anchorValue(anchor), anchorId));
+}
+
+void History::loadDeletions()
+{
+    if (deletionsLoaded) {
+        return;
+    }
+    deletionsLoaded = true;
+    QVector<RawDatabase::Query> queries;
+    queries +=
+        RawDatabase::Query(QStringLiteral("DELETE FROM deleted_messages WHERE deleted_at < %1;")
+                               .arg(QDateTime::currentMSecsSinceEpoch() - deletionKeepMs));
+    queries += RawDatabase::Query(
+        QStringLiteral("SELECT chat_uuid, author, anchor, anchor_id FROM deleted_messages;"),
+        [this](const QVector<QVariant>& row) {
+            deletions[row[0].toByteArray()].insert(
+                deletionKey(row[1].toByteArray(), row[2].toInt(), row[3].toByteArray()));
+        });
+    if (!db->execNow(queries)) {
+        qWarning() << "Failed to read the deletions kept in the history";
+    }
+}
+
+QVector<History::KeptText> History::textsOf(const ChatId& chatId, const ToxPk& author, int limit)
+{
+    QVector<KeptText> texts;
+    if (historyAccessBlocked() || limit <= 0) {
+        return texts;
+    }
+    QVector<QByteArray> boundParams;
+    QString queryString = QStringLiteral("SELECT history.timestamp, text_messages.message "
+                                         "FROM history "
+                                         "JOIN text_messages ON text_messages.id = history.id "
+                                         "JOIN aliases ON aliases.id = text_messages.sender_alias "
+                                         "WHERE length(text_messages.message) > 0 "
+                                         "AND history.chat_id = ");
+    addChatIdSubQuery(queryString, boundParams, chatId);
+    queryString += QStringLiteral(" AND aliases.owner = ");
+    addAuthorIdSubQuery(queryString, boundParams, author);
+    queryString += QStringLiteral(" ORDER BY history.id DESC LIMIT %1;").arg(limit);
+    // Read as getMessagesForChat reads them, so that setMessageText finds the words again.
+    db->execNow({queryString, boundParams, [&texts](const QVector<QVariant>& row) {
+                     texts.append(KeptText{QDateTime::fromMSecsSinceEpoch(row[0].toLongLong()),
+                                           row[1].toString()});
+                 }});
+    return texts;
 }
 
 qint64 History::ownItemTime(const ChatId& chatId, const ToxPk& self, const Air::SeenAnchor& anchor)

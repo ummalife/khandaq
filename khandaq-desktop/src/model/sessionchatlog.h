@@ -54,6 +54,14 @@ public:
     bool isShown(ChatLogIdx idx) const override;
     bool isCancelled(ChatLogIdx idx) const override;
     bool toggleOwnReaction(ChatLogIdx idx, const QString& emoji, QString* ownAfter) override;
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): our own text at idx, by the profile's key, takes new
+     * words, an action or not, edited at time (seconds since 1970), and shows "edited" as an edit
+     * by someone else does; applyEffect takes none of ours. Saved Messages edits its notes so.
+     * @return False, and nothing changes, for an index without a text of ours shown, or the same
+     * words
+     */
+    bool editOwnMessage(ChatLogIdx idx, bool isAction, const QString& content, quint32 time);
 
     void hideItem(ChatLogIdx idx);
     /** Leaves out an item as it is loaded, one the history keeps erased; nothing is signalled. */

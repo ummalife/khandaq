@@ -3007,6 +3007,14 @@ void Widget::onGroupMessageReceived(int groupnumber, const ToxPk& author, const 
     if (!dispatcher) {
         return;
     }
+    // KHANDAQ (beta feedback 2026-11-22): a text its author deleted before it came is neither
+    // shown nor alerted.
+    if (messageId != 0
+        && deletedInGroup(groupId, author, Air::MessageEffect::Anchor::Text,
+                          Air::groupWireId(messageId))) {
+        qDebug() << "onGroupMessageReceived: a text its author deleted came; dropped";
+        return;
+    }
 
     dispatcher->onMessageReceived(author, isAction, message, messageId);
 }
@@ -3265,6 +3273,17 @@ void Widget::dispatchGroupFileToChatLog(const GroupId& groupId, const ToxPk& sen
     updateGroupFileInChatLog(groupId, sender, file);
 }
 
+bool Widget::deletedInGroup(const GroupId& groupId, const ToxPk& author,
+                            Air::MessageEffect::Anchor anchor, const QByteArray& anchorId) const
+{
+    const auto chatLog = groupChatLogs.constFind(groupId);
+    if (chatLog == groupChatLogs.constEnd()) {
+        return false;
+    }
+    const auto chatHistory = std::static_pointer_cast<ChatHistory>(chatLog.value());
+    return chatHistory->isDeleted(author, anchor, anchorId);
+}
+
 void Widget::updateGroupFileInChatLog(const GroupId& groupId, const ToxPk& sender,
                                       const ToxFile& file)
 {
@@ -3297,6 +3316,13 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     // count, nothing held in Khandaq Community to push the files of others out.
     if (settings.getBlackList().contains(sender.toString())) {
         qDebug() << "onGroupFileReceived: a file of a member whose messages are hidden; dropped";
+        stopGroupFileArrival(fileId);
+        return;
+    }
+    // KHANDAQ (beta feedback 2026-11-22): a file its sender deleted, relayed again by a member who
+    // missed the deletion, or still coming when it came, is neither written nor shown.
+    if (deletedInGroup(groupId, sender, Air::MessageEffect::Anchor::File, fileId)) {
+        qDebug() << "onGroupFileReceived: a file its sender deleted; dropped";
         stopGroupFileArrival(fileId);
         return;
     }
@@ -3617,9 +3643,11 @@ void Widget::onGroupFileArrivalStarted(int groupnumber, const ToxPk& sender,
         stoppedGroupFileArrivals.remove(fileId);
     }
     // No entry for a file whose sender toxcore cannot name yet, nor one of a member whose
-    // messages are hidden: onGroupFileReceived makes its entry, or drops it, once it is here.
+    // messages are hidden, nor one its sender deleted: onGroupFileReceived makes its entry, or
+    // drops it, once it is here.
     if (fileId.isEmpty() || sender.isEmpty() || !groupList->findGroup(groupId)
-        || settings.getBlackList().contains(sender.toString())) {
+        || settings.getBlackList().contains(sender.toString())
+        || deletedInGroup(groupId, sender, Air::MessageEffect::Anchor::File, fileId)) {
         return;
     }
     // A file of Khandaq Community held already keeps its entry with Accept, which this one would
@@ -3874,9 +3902,13 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
         groupName = tr("Group %1").arg(groupId.toString().left(8));
     }
     const bool enabled = core->getGroupAvEnabled(groupnumber);
-    Group* newgroup =
-        groupList->addGroup(*core, groupnumber, groupId, groupName, enabled, core->getUsername(),
-            *friendList);
+    // KHANDAQ (beta feedback 2026-11-22): our name in this group, which may be its own.
+    const auto selfNameIn = [this](uint32_t number) {
+        const QString name = core->getGroupSelfName(static_cast<int>(number));
+        return name.isEmpty() ? core->getUsername() : name;
+    };
+    Group* newgroup = groupList->addGroup(*core, groupnumber, groupId, groupName, enabled,
+                                          selfNameIn(groupnumber), *friendList);
     assert(newgroup);
 
     if (enabled) {
@@ -3974,7 +4006,10 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
     });
     connect(widget, &GroupWidget::chatroomWidgetClicked, form, &ChatForm::focusInput);
     connect(newgroup, &Group::titleChangedByUser, this, &Widget::titleChangedByUser);
-    connect(core, &Core::usernameSet, newgroup, &Group::setSelfName);
+    // A rename of the profile passes to the group unless it has a name of our own
+    // (Core::setUsername).
+    connect(core, &Core::usernameSet, newgroup,
+            [newgroup, selfNameIn] { newgroup->setSelfName(selfNameIn(newgroup->getId())); });
 
     return newgroup;
 }
@@ -5227,7 +5262,7 @@ void Widget::showStatusMenu(const QPoint& globalPos)
  * wait <ms> | size <w> <h> | theme system|light|dark | lang <code> | filter <name> |
  * query <text> | open <title> | send <title>|<text> | favorite|unfavorite <title> |
  * compact on|off | settings [section] | reveal <object name> | add | click <object name> |
- * press <name> | type <text> | hours <title>|<hours ago,...> | notedelete <text> |
+ * press <name> | type <text> | hours <title>|<hours ago,...> | notedelete|noteedit <text> |
  * newcontact [text] | toxlink <tox:...> | fill <object name>|<text> | key <key> | focuslist |
  * card accept|decline <words> | newgroup [contact] | joingroup [text] | private <member> |
  * groupask <member>|moderator|member|observer|remove | sendfile <title>|<path> |
@@ -5328,20 +5363,28 @@ void Widget::runShotScript(const QString& path)
                         dispatcher->sendMessage(false, text);
                     }
                 }
-            } else if (command == QStringLiteral("notedelete")) {
-                // notedelete <text>: asks to delete the newest saved message with this text.
+            } else if (command == QStringLiteral("notedelete")
+                       || command == QStringLiteral("noteedit")) {
+                // notedelete <text>: asks to delete the newest saved message with this text;
+                // noteedit <text>: puts it into the field to be edited, as its menu does.
                 bool found = false;
                 for (auto idx = notesLog->getNextIdx(); idx > notesLog->getFirstIdx() && !found;) {
                     idx = idx - 1;
                     const ChatLogItem& item = notesLog->at(idx);
                     if (notesLog->isShown(idx) && item.getContentType() == ChatLogItem::ContentType::message
                         && item.getContentAsMessage().message.content == rest) {
-                        notesForm->askToDelete(idx);
+                        if (command == QStringLiteral("notedelete")) {
+                            notesForm->askToDelete(idx);
+                        } else {
+                            notesForm->startEdit(idx);
+                        }
                         found = true;
                     }
                 }
                 if (!found) {
-                    qWarning() << "No saved message to delete:" << rest;
+                    qWarning() << "No saved message to"
+                               << (command == QStringLiteral("notedelete") ? "delete:" : "edit:")
+                               << rest;
                 }
             } else if (command == QStringLiteral("favorite")
                        || command == QStringLiteral("unfavorite")) {

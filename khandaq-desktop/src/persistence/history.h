@@ -319,8 +319,45 @@ public:
     /**
      * Erases the name and the place of a file its sender deleted (stage 3, item 10): the
      * conversation leaves a file without either out. A transfer that ends later keeps them erased.
+     *
+     * KHANDAQ (beta feedback 2026-11-22): with an author, only a file author sent is erased: one
+     * the conversation has not loaded, whose sender nothing has checked. No transfer of it is under
+     * way, so none is guarded either.
      */
-    void eraseFileEntry(const ChatId& chatId, const QByteArray& fileId);
+    void eraseFileEntry(const ChatId& chatId, const QByteArray& fileId,
+                        const ToxPk& author = ToxPk());
+
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): a member deleted a text or a file of theirs in the group
+     * (packet 0x42): the text by the id the group gave it (Air::groupWireId), the file by its id.
+     * Kept between launches (schema 14), whether the conversation holds the message or not: a
+     * copy that comes later, relayed from the history of the group by a member who missed the
+     * deletion, is not shown again (isDeleted). Kept for deletionKeepMs.
+     */
+    void addDeletion(const ChatId& chatId, const ToxPk& author, Air::MessageEffect::Anchor anchor,
+                     const QByteArray& anchorId);
+    /** Whether author deleted that text or file of the chat (addDeletion). */
+    bool isDeleted(const ChatId& chatId, const ToxPk& author, Air::MessageEffect::Anchor anchor,
+                   const QByteArray& anchorId);
+    /**
+     * How long a deletion is kept: a member relays the messages of the last 130 minutes only, and
+     * a relayed one is taken within 200 minutes of its time (Air::syncTimeAccepted); the rest is
+     * room for clocks that are wrong.
+     */
+    static constexpr qint64 deletionKeepMs = 30LL * 24 * 60 * 60 * 1000;
+    /** KHANDAQ (beta feedback 2026-11-22): a text of the history as it is kept. */
+    struct KeptText
+    {
+        QDateTime time;
+        /** Its words; an action with its prefix. */
+        QString text;
+    };
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): author's texts in the chat that still have words, the
+     * newest first, at most limit: those a deletion of a text the conversation has not loaded is
+     * looked for among (ChatHistory::applyEffect).
+     */
+    QVector<KeptText> textsOf(const ChatId& chatId, const ToxPk& author, int limit);
 
     /**
      * KHANDAQ (0.2.57): read receipts. The time, by our clock, of the newest of our own messages
@@ -370,6 +407,11 @@ private:
     bool historyAccessBlocked();
     static RawDatabase::Query generateFileFinished(RowId fileId, bool success,
                                                    const QString& filePath, const QByteArray& fileHash);
+    /**
+     * KHANDAQ (beta feedback 2026-11-22): reads the deletions of every chat once, on first use,
+     * dropping those older than deletionKeepMs: a lookup then asks the database nothing.
+     */
+    void loadDeletions();
 
     std::shared_ptr<RawDatabase> db;
 
@@ -387,6 +429,9 @@ private:
     QHash<QByteArray, FileInfo> fileInfos;
     /** Files their senders deleted while this run knew them: an end of the transfer writes no path. */
     QSet<QByteArray> erasedFiles;
+    /** The deletions kept (addDeletion), by the uuid of their chat; read on first use. */
+    QHash<QByteArray, QSet<QByteArray>> deletions;
+    bool deletionsLoaded = false;
     Settings& settings;
     std::unique_ptr<Outbox> outbox;
     std::unique_ptr<SavedNotes> savedNotes;

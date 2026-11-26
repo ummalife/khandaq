@@ -104,7 +104,8 @@ void TestAirCallStage::fitShowsTheWholeFrame()
 void TestAirCallStage::fillCoversTheStage()
 {
     // 480 * 1280 / 720 = 853.3: the frame is cut by 106 and 107 px at the sides, never stretched.
-    const QRect drawn = Air::CallStage::videoRect(landscapeFrame, QRect(0, 0, 640, 480), Scale::Fill);
+    const QRect drawn =
+        Air::CallStage::videoRect(landscapeFrame, QRect(0, 0, 640, 480), Scale::Fill);
     QCOMPARE(drawn, QRect(-106, 0, 853, 480));
     QVERIFY(drawn.contains(QRect(0, 0, 640, 480)));
     // A portrait frame on a portrait stage: 480 * 1280 / 720 = 853.3 high.
@@ -180,7 +181,8 @@ void TestAirCallStage::selfAreaStaysUnderTheHeaderAndOverTheRow()
     // The window: the row of three stands at 526 (640 - 24 - 90).
     QCOMPARE(Air::CallStage::selfArea(QRect(0, 0, 1024, 640), -1, 526), windowArea);
     // Full screen: the head ends at 117 (24 + 93), the row of five stands at 966.
-    QCOMPARE(Air::CallStage::selfArea(QRect(0, 0, 1920, 1080), 117, 966), QRect(16, 133, 1888, 817));
+    QCOMPARE(Air::CallStage::selfArea(QRect(0, 0, 1920, 1080), 117, 966),
+             QRect(16, 133, 1888, 817));
 }
 
 void TestAirCallStage::cornersStandInTheArea()
@@ -190,7 +192,8 @@ void TestAirCallStage::cornersStandInTheArea()
              QRect(757, 369, 251, 141));
     QCOMPARE(Air::CallStage::cornerRect(windowArea, size, Qt::BottomLeftCorner),
              QRect(16, 369, 251, 141));
-    QCOMPARE(Air::CallStage::cornerRect(windowArea, size, Qt::TopLeftCorner), QRect(16, 16, 251, 141));
+    QCOMPARE(Air::CallStage::cornerRect(windowArea, size, Qt::TopLeftCorner),
+             QRect(16, 16, 251, 141));
     QCOMPARE(Air::CallStage::cornerRect(windowArea, size, Qt::TopRightCorner),
              QRect(757, 16, 251, 141));
     // 16 from the right edge of the stage, 16 over the row.

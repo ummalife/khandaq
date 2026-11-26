@@ -382,7 +382,8 @@ void VideoSurface::paintWithoutFrame(QPainter& painter)
         // KHANDAQ (calls stage, 26.11): the call screen stays dark in both themes; the person's
         // avatar stands in the middle at the size of an audio call until their video comes.
         painter.fillRect(rect(), AirStyle::darkColor(Color::LockTop));
-        const int side = qMin(stageAvatarSide, qMin(width(), height()) - 2 * Air::CallStage::selfInset());
+        const int side =
+            qMin(stageAvatarSide, qMin(width(), height()) - 2 * Air::CallStage::selfInset());
         if (side <= 0) {
             return;
         }
@@ -395,7 +396,8 @@ void VideoSurface::paintWithoutFrame(QPainter& painter)
             painter.setPen(Qt::NoPen);
             painter.setBrush(AirStyle::darkColor(Color::MediaControl));
             painter.drawRoundedRect(tile, radius, radius);
-            shown = loadPlaceholderAvatar(QSize(pixels, pixels) / 2, QStringLiteral(":/img/contact.svg"));
+            shown = loadPlaceholderAvatar(QSize(pixels, pixels) / 2,
+                                          QStringLiteral(":/img/contact.svg"));
             shown.setDevicePixelRatio(dpr);
             const QSizeF logical = QSizeF(shown.size()) / dpr;
             painter.drawPixmap(QPointF(tile.center().x() - logical.width() / 2.0,
@@ -403,7 +405,8 @@ void VideoSurface::paintWithoutFrame(QPainter& painter)
                                shown);
             return;
         }
-        shown = avatar.scaled(pixels, pixels, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+        shown = avatar.scaled(pixels, pixels, Qt::KeepAspectRatioByExpanding,
+                              Qt::SmoothTransformation);
         shown.setDevicePixelRatio(dpr);
         QPainterPath clip;
         clip.addRoundedRect(tile, radius, radius);

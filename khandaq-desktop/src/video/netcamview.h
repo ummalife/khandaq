@@ -57,10 +57,10 @@ public:
     NetCamView(ToxPk friendPk_, CameraSource& cameraSource, Settings& settings,
         Style& style, Profile& profile, QWidget* parent = nullptr);
     /**
-     * KHANDAQ (calls stage, 26.11): the stage without a profile. The avatars and the size the camera
-     * is set to (empty when the settings leave it to the camera) come as they are; the constructor
-     * above reads them from the profile and the settings and keeps the avatars up to date. Tests
-     * make the stage with this one and a camera of their own.
+     * KHANDAQ (calls stage, 26.11): the stage without a profile. The avatars and the size the
+     * camera is set to (empty when the settings leave it to the camera) come as they are; the
+     * constructor above reads them from the profile and the settings and keeps the avatars up to
+     * date. Tests make the stage with this one and a camera of their own.
      */
     NetCamView(ToxPk friendPk_, VideoSource& cameraSource, const QSize& cameraSize,
                const QPixmap& selfAvatar, const QPixmap& friendAvatar, QWidget* parent = nullptr);
@@ -103,7 +103,7 @@ private:
     void toggleVideoPreview();
     void keyPressEvent(QKeyEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
-    /** The two videos where the swap puts them: the big one on the stage, the small one in the box. */
+    /** The videos where the swap puts them: the big one on the stage, the small one in the box. */
     void placeVideos();
     void swapVideos();
     /** Lays the stage out: the big video, the head, the row and the box in its corner. */

@@ -959,7 +959,10 @@ QString presenceText(const Air::Reach& reach, const QString& sinceTime, bool isT
 QString awayText(qint64 seconds);
 /** What a screen reader says for the link mark. */
 QString linkText(Air::LinkState link);
-/** KHANDAQ (calls stage, 26.11): the words of the link chip on the call screen, as the phones say them. */
+/**
+ * KHANDAQ (calls stage, 26.11): the words of the link chip on the call screen, as the phones say
+ * them.
+ */
 QString callLinkText(Air::LinkState link);
 /** The line under the field; name is the person's short name. */
 QString composeHintText(const Air::ComposeHint& hint, const QString& name);

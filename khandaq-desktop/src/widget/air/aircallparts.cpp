@@ -72,7 +72,9 @@ constexpr qreal shadowOpacity = 0.5;
 /** The gaps of the head, as those of an audio call: the name to the time, the time to the chip. */
 constexpr int nameGap = Space::s6;
 constexpr int chipGap = Space::s12;
-/** The chip: 4 px over and under its words, 10 px at its ends, 6 px between the mark and the words. */
+/**
+ * The chip: 4 px over and under its words, 10 px at its ends, 6 px between the mark and the words.
+ */
 constexpr int chipPadY = Space::s4;
 constexpr int chipPadX = Space::s10;
 constexpr int chipInnerGap = Space::s6;
@@ -86,11 +88,11 @@ const char speakerGlyph[] =
 const char bubbleGlyph[] =
     "<path d=\"M20.5 15a2 2 0 0 1-2 2H8l-4.5 3.5V6.5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z\"/>";
 const char expandGlyph[] =
-    "<path d=\"M4 8.5V5.5A1.5 1.5 0 0 1 5.5 4h3M15.5 4h3A1.5 1.5 0 0 1 20 5.5v3M20 15.5v3a1.5 1.5 0 "
-    "0 1-1.5 1.5h-3M8.5 20h-3A1.5 1.5 0 0 1 4 18.5v-3\"/>";
+    "<path d=\"M4 8.5V5.5A1.5 1.5 0 0 1 5.5 4h3M15.5 4h3A1.5 1.5 0 0 1 20 5.5v3"
+    "M20 15.5v3a1.5 1.5 0 0 1-1.5 1.5h-3M8.5 20h-3A1.5 1.5 0 0 1 4 18.5v-3\"/>";
 const char collapseGlyph[] =
-    "<path d=\"M9 4v3.5A1.5 1.5 0 0 1 7.5 9H4M15 4v3.5A1.5 1.5 0 0 0 16.5 9H20M20 15h-3.5a1.5 1.5 0 0 "
-    "0-1.5 1.5V20M4 15h3.5A1.5 1.5 0 0 1 9 16.5V20\"/>";
+    "<path d=\"M9 4v3.5A1.5 1.5 0 0 1 7.5 9H4M15 4v3.5A1.5 1.5 0 0 0 16.5 9H20"
+    "M20 15h-3.5a1.5 1.5 0 0 0-1.5 1.5V20M4 15h3.5A1.5 1.5 0 0 1 9 16.5V20\"/>";
 
 enum class Glyph
 {
@@ -106,7 +108,8 @@ enum class Glyph
 QByteArray drawnGlyph(const char* inner)
 {
     return QByteArrayLiteral("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" "
-                             "viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#000000\" stroke-width=\"")
+                             "viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#000000\" "
+                             "stroke-width=\"")
            + QByteArray::number(Stroke::icon)
            + QByteArrayLiteral("\" stroke-linecap=\"round\" stroke-linejoin=\"round\">") + inner
            + QByteArrayLiteral("</svg>");
@@ -334,8 +337,8 @@ void AirShadowedText::paint(QPainter& painter, const QRect& rect, int flags, con
             QPainter shadowPainter(&image);
             shadowPainter.setFont(font);
             shadowPainter.setPen(dark(Color::FixedBlack));
-            shadowPainter.drawText(QRect(shadowBlur, shadowBlur, rect.width(), rect.height()), flags,
-                                   text);
+            const QRect inImage(shadowBlur, shadowBlur, rect.width(), rect.height());
+            shadowPainter.drawText(inImage, flags, text);
         }
         // A blur of 4 is a Gaussian of sigma 2 (as CSS reads it); three boxes of this radius come
         // closest to it.
@@ -479,7 +482,8 @@ void AirCallControl::paintEvent(QPaintEvent*)
         // A dot on the rim at the top of the circle, on the side the line ends.
         const qreal along = circle.width() / 2.0 * M_SQRT1_2;
         const bool rightToLeft = layoutDirection() == Qt::RightToLeft;
-        const QPointF dot(rightToLeft ? centre.x() - along : centre.x() + along, centre.y() - along);
+        const qreal dotX = rightToLeft ? centre.x() - along : centre.x() + along;
+        const QPointF dot(dotX, centre.y() - along);
         painter.setBrush(dark(Color::Live));
         painter.drawEllipse(dot, Size::dot / 2.0, Size::dot / 2.0);
     }
@@ -488,8 +492,9 @@ void AirCallControl::paintEvent(QPaintEvent*)
     const QString words = text();
     const qreal basePixels = AirTokens::desktopType[static_cast<int>(TextRole::Label)].pixelSize;
     const qreal fullWidth = QFontMetricsF(air().font(TextRole::Label)).horizontalAdvance(words);
-    const QFont font =
-        fontAt(TextRole::Label, Air::CallStage::labelPixelSize(basePixels, fullWidth, wordBox.width()));
+    const qreal labelPixels =
+        Air::CallStage::labelPixelSize(basePixels, fullWidth, wordBox.width());
+    const QFont font = fontAt(TextRole::Label, labelPixels);
     painter.setFont(font);
     const QString shown = QFontMetricsF(font).elidedText(words, Qt::ElideRight, wordBox.width());
     word.paint(painter, wordBox, Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextSingleLine, shown,
@@ -544,8 +549,8 @@ void AirCallHeader::setLink(Air::LinkState link_)
 
 int AirCallHeader::contentHeight()
 {
-    return air().lineHeight(TextRole::Display) + nameGap + air().lineHeight(TextRole::Body) + chipGap
-           + air().lineHeight(TextRole::Label) + 2 * chipPadY;
+    return air().lineHeight(TextRole::Display) + nameGap + air().lineHeight(TextRole::Body)
+           + chipGap + air().lineHeight(TextRole::Label) + 2 * chipPadY;
 }
 
 QSize AirCallHeader::sizeHint() const
@@ -555,10 +560,11 @@ QSize AirCallHeader::sizeHint() const
 
 QRect AirCallHeader::chipRect() const
 {
-    const int textWidth = qCeil(QFontMetricsF(air().font(TextRole::Label)).horizontalAdvance(linkWords));
+    const QFontMetricsF metrics(air().font(TextRole::Label));
+    const int textWidth = qCeil(metrics.horizontalAdvance(linkWords));
     const int side = Air::CallStage::selfInset();
-    const int chipWidth =
-        qMin(chipPadX + Size::linkMark + chipInnerGap + textWidth + chipPadX, qMax(0, width() - 2 * side));
+    const int chipWidth = qMin(chipPadX + Size::linkMark + chipInnerGap + textWidth + chipPadX,
+                               qMax(0, width() - 2 * side));
     const int top = AirShadowedText::reach() + air().lineHeight(TextRole::Display) + nameGap
                     + air().lineHeight(TextRole::Body) + chipGap;
     return QRect((width() - chipWidth) / 2, top, chipWidth,
@@ -569,7 +575,8 @@ void AirCallHeader::placeMark()
 {
     const QRect chip = chipRect();
     const bool rightToLeft = layoutDirection() == Qt::RightToLeft;
-    const int x = rightToLeft ? chip.x() + chip.width() - chipPadX - mark->width() : chip.x() + chipPadX;
+    const int x = rightToLeft ? chip.x() + chip.width() - chipPadX - mark->width()
+                              : chip.x() + chipPadX;
     mark->move(x, chip.y() + (chip.height() - mark->height()) / 2);
 }
 
@@ -592,7 +599,8 @@ void AirCallHeader::changeEvent(QEvent* event)
 void AirCallHeader::retranslate()
 {
     linkWords = AirStrings::callLinkText(link);
-    setAccessibleName(QStringList{name, Air::clockText(seconds), linkWords}.join(QStringLiteral(", ")));
+    const QStringList said{name, Air::clockText(seconds), linkWords};
+    setAccessibleName(said.join(QStringLiteral(", ")));
     placeMark();
     update();
 }
@@ -607,8 +615,10 @@ void AirCallHeader::paintEvent(QPaintEvent*)
     const int flags = Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextSingleLine;
 
     painter.setFont(air().font(TextRole::Display));
-    const QRect nameRect(side, AirShadowedText::reach(), lineWidth, air().lineHeight(TextRole::Display));
-    const QString shownName = QFontMetricsF(painter.font()).elidedText(name, Qt::ElideRight, lineWidth);
+    const QRect nameRect(side, AirShadowedText::reach(), lineWidth,
+                         air().lineHeight(TextRole::Display));
+    const QString shownName =
+        QFontMetricsF(painter.font()).elidedText(name, Qt::ElideRight, lineWidth);
     nameText.paint(painter, nameRect, flags, shownName, white);
 
     painter.setFont(air().font(TextRole::Body));
@@ -622,14 +632,11 @@ void AirCallHeader::paintEvent(QPaintEvent*)
     painter.drawRoundedRect(chip, chip.height() / 2.0, chip.height() / 2.0);
     const bool rightToLeft = layoutDirection() == Qt::RightToLeft;
     const int wordsStart = chipPadX + Size::linkMark + chipInnerGap;
-    const QRect wordsRect = rightToLeft
-                                ? QRect(chip.x() + chipPadX, chip.y(), chip.width() - wordsStart - chipPadX,
-                                        chip.height())
-                                : QRect(chip.x() + wordsStart, chip.y(), chip.width() - wordsStart - chipPadX,
-                                        chip.height());
+    const int wordsX = rightToLeft ? chip.x() + chipPadX : chip.x() + wordsStart;
+    const QRect wordsRect(wordsX, chip.y(), chip.width() - wordsStart - chipPadX, chip.height());
     painter.setFont(air().font(TextRole::Label));
     painter.setPen(white);
     const QString shownWords =
         QFontMetricsF(painter.font()).elidedText(linkWords, Qt::ElideRight, wordsRect.width());
-    painter.drawText(wordsRect, Qt::AlignVCenter | Qt::AlignHCenter | Qt::TextSingleLine, shownWords);
+    painter.drawText(wordsRect, flags, shownWords);
 }

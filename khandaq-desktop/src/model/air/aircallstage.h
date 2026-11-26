@@ -27,15 +27,17 @@
 /**
  * KHANDAQ (calls stage, 26.11): the stage of a video call, apart from any widget. Where the two
  * videos stand and how each one takes its place, by the rules the three clients share for the call
- * screens (DESIGN.md, "Files, voice and calls on the phone"): the big video is never stretched, your
- * own video stands in a box with the aspect of your camera, in a corner of the free part of the
- * stage, and a click swaps the two. NetCamView lays its widgets out with these numbers, and the
- * tests check them without a call.
+ * screens (DESIGN.md, "Files, voice and calls on the phone"): the big video is never stretched,
+ * your own video stands in a box with the aspect of your camera, in a corner of the free part of
+ * the stage, and a click swaps the two. NetCamView lays its widgets out with these numbers, and
+ * the tests check them without a call.
  */
 namespace Air {
 namespace CallStage {
 
-/** How a video takes a box: covering it (centred, cut at the edges) or inside it (bars round it). */
+/**
+ * How a video takes a box: covering it (centred, cut at the edges) or inside it (bars round it).
+ */
 enum class Scale
 {
     Fill,

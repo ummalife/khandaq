@@ -87,8 +87,8 @@ void MovableWidget::mouseMoveEvent(QMouseEvent* event)
     if (!pressed) {
         return;
     }
-    if (!dragging
-        && (event->globalPos() - pressPoint).manhattanLength() >= QApplication::startDragDistance()) {
+    const int moved = (event->globalPos() - pressPoint).manhattanLength();
+    if (!dragging && moved >= QApplication::startDragDistance()) {
         dragging = true;
     }
     if (!dragging) {

@@ -86,8 +86,8 @@ public:
 
     void setState(Air::LinkState state);
     /**
-     * KHANDAQ (calls stage, 26.11): the mark on the call screen, which is dark in both themes, takes
-     * the colours of the dark palette.
+     * KHANDAQ (calls stage, 26.11): the mark on the call screen, which is dark in both themes,
+     * takes the colours of the dark palette.
      */
     void setOnDark(bool onDark);
 

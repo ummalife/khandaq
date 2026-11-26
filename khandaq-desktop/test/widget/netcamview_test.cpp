@@ -60,6 +60,11 @@ namespace {
 
 const QSize landscape(1280, 720);
 const QSize portrait(720, 1280);
+/** The word for the shape of a frame, in the names of rows and files. */
+QLatin1String shapeWord(const QSize& frame)
+{
+    return frame == landscape ? QLatin1String("landscape") : QLatin1String("portrait");
+}
 const QColor callTone(0x1f, 0x5c, 0x66);
 const QColor selfTone(0x5a, 0x34, 0x70);
 /** The edges of a test card: a mirror shows the yellow one on the right. */
@@ -89,8 +94,8 @@ public:
         frame->width = rgb.width();
         frame->height = rgb.height();
         frame->format = AV_PIX_FMT_RGB24;
-        if (av_image_alloc(frame->data, frame->linesize, rgb.width(), rgb.height(), AV_PIX_FMT_RGB24,
-                           VideoFrame::dataAlignment)
+        if (av_image_alloc(frame->data, frame->linesize, rgb.width(), rgb.height(),
+                           AV_PIX_FMT_RGB24, VideoFrame::dataAlignment)
             < 0) {
             av_frame_free(&frame);
             QFAIL("No room for a frame");
@@ -343,8 +348,8 @@ private:
 
 void TestNetCamView::initTestCase()
 {
-    // A Settings reads and writes the settings file of the Khandaq of this computer: it is made only
-    // when that file lies in the home of the test.
+    // A Settings reads and writes the settings file of the Khandaq of this computer: it is made
+    // only when that file lies in the home of the test.
     const QString folder = QDir::cleanPath(Paths().getSettingsDirPath());
     if (!home.isEmpty() && folder.startsWith(home + QLatin1Char('/'))) {
         settings.reset(new Settings(messages));
@@ -380,7 +385,8 @@ void TestNetCamView::remoteVideoFillsTheStage()
 
     // No bars: the edges of the stage show the call, cut at the sides, not stretched.
     const QImage picture = stage.view.grab().toImage();
-    for (const QPoint& point : {QPoint(2, 320), QPoint(1021, 320), QPoint(512, 2), QPoint(512, 637)}) {
+    const QPoint edges[] = {QPoint(2, 320), QPoint(1021, 320), QPoint(512, 2), QPoint(512, 637)};
+    for (const QPoint& point : edges) {
         QVERIFY2(!near(picture.pixelColor(point), AirStyle::darkColor(Color::FixedBlack)),
                  qPrintable(describe(picture.pixelColor(point))));
     }
@@ -610,9 +616,9 @@ void TestNetCamView::fullScreenHasItsHeadAndTheWholeRow()
 
     const QVector<AirCallControl*> row = stage.row();
     QCOMPARE(row.size(), 5);
-    const AirCallControl::Kind kinds[] = {AirCallControl::Kind::Microphone, AirCallControl::Kind::Sound,
-                                          AirCallControl::Kind::SelfView, AirCallControl::Kind::FullScreen,
-                                          AirCallControl::Kind::End};
+    using Kind = AirCallControl::Kind;
+    const Kind kinds[] = {Kind::Microphone, Kind::Sound, Kind::SelfView, Kind::FullScreen,
+                          Kind::End};
     for (int i = 0; i < row.size(); ++i) {
         QCOMPARE(row[i]->kind(), kinds[i]);
         QCOMPARE(row[i]->geometry(), QRect(160 + 96 * i, 486, 96, 95));
@@ -730,17 +736,19 @@ void TestNetCamView::nothingOverlaps_data()
     QTest::addColumn<QSize>("size");
     QTest::addColumn<QSize>("camera");
     QTest::addColumn<bool>("full");
-    for (const QSize& size : {QSize(640, 256), QSize(640, 480), QSize(1024, 640), QSize(1440, 900)}) {
+    const QSize windows[] = {QSize(640, 256), QSize(640, 480), QSize(1024, 640), QSize(1440, 900)};
+    for (const QSize& size : windows) {
         for (const QSize& camera : {landscape, portrait}) {
             const QString name = QStringLiteral("%1x%2 %3").arg(size.width()).arg(size.height());
-            QTest::newRow(qPrintable(name.arg(camera == landscape ? QLatin1String("landscape") : QLatin1String("portrait"))))
+            QTest::newRow(qPrintable(name.arg(shapeWord(camera))))
                 << size << camera << false;
         }
     }
     for (const QSize& size : {QSize(800, 600), QSize(1920, 1080)}) {
         for (const QSize& camera : {landscape, portrait}) {
-            const QString name = QStringLiteral("full %1x%2 %3").arg(size.width()).arg(size.height());
-            QTest::newRow(qPrintable(name.arg(camera == landscape ? QLatin1String("landscape") : QLatin1String("portrait"))))
+            const QString name =
+                QStringLiteral("full %1x%2 %3").arg(size.width()).arg(size.height());
+            QTest::newRow(qPrintable(name.arg(shapeWord(camera))))
                 << size << camera << true;
         }
     }
@@ -761,7 +769,12 @@ void TestNetCamView::nothingOverlaps()
     const QRect stageRect(QPoint(), size);
     const QRect box = stage.box()->geometry();
     QVERIFY(stage.box()->isVisibleTo(&stage.view));
-    QVERIFY2(stageRect.adjusted(16, 16, -16, -16).contains(box), qPrintable(QStringLiteral("%1,%2 %3x%4").arg(box.x()).arg(box.y()).arg(box.width()).arg(box.height())));
+    const QString where = QStringLiteral("%1,%2 %3x%4")
+                              .arg(box.x())
+                              .arg(box.y())
+                              .arg(box.width())
+                              .arg(box.height());
+    QVERIFY2(stageRect.adjusted(16, 16, -16, -16).contains(box), qPrintable(where));
     // The box keeps the camera's shape, give or take a pixel of rounding.
     QVERIFY(qAbs(box.width() * camera.height() - box.height() * camera.width())
             <= qMax(camera.width(), camera.height()));
@@ -785,7 +798,8 @@ void TestNetCamView::noDebugOverlays()
     TestStage stage;
     startStage(stage, QSize(1024, 640), landscape);
     // The stage holds its two videos, the box, the head and the six controls, and nothing else.
-    const QList<QWidget*> parts = stage.view.findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly);
+    const QList<QWidget*> parts =
+        stage.view.findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly);
     QCOMPARE(parts.size(), 9);
     int surfaces = 0;
     int controls = 0;
@@ -847,7 +861,8 @@ void TestNetCamView::stageIsDarkInBothThemes()
         waiting[dark] = stage.view.grab().toImage();
         // Until the first frame the stage has the lock ground and our box the lock-bottom one.
         QCOMPARE(waiting[dark].pixelColor(5, 5), AirStyle::darkColor(Color::LockTop));
-        QCOMPARE(waiting[dark].pixelColor(757 + 125, 369 + 70), AirStyle::darkColor(Color::LockBottom));
+        QCOMPARE(waiting[dark].pixelColor(757 + 125, 369 + 70),
+                 AirStyle::darkColor(Color::LockBottom));
     }
     QCOMPARE(pictures[0], pictures[1]);
     QCOMPARE(waiting[0], waiting[1]);
@@ -882,8 +897,8 @@ void TestNetCamView::screenshots()
                                          .arg(theme)
                                          .arg(size.width())
                                          .arg(size.height())
-                                         .arg(call == landscape ? QLatin1String("landscape") : QLatin1String("portrait"))
-                                         .arg(swapped ? QLatin1String("swapped") : QLatin1String("normal")));
+                                         .arg(shapeWord(call))
+                                         .arg(QLatin1String(swapped ? "swapped" : "normal")));
                 }
             }
         }
@@ -892,7 +907,8 @@ void TestNetCamView::screenshots()
                 TestStage stage;
                 startStage(stage, QSize(1024, 640), call);
                 stage.view.setSeconds(754);
-                stage.view.setLink(call == landscape ? Air::LinkState::Direct : Air::LinkState::Relay);
+                stage.view.setLink(call == landscape ? Air::LinkState::Direct
+                                                     : Air::LinkState::Relay);
                 stage.view.updateMuteMicButton(swapped);
                 fullScreen(stage, QSize(1920, 1080));
                 if (swapped) {
@@ -900,8 +916,8 @@ void TestNetCamView::screenshots()
                 }
                 save(stage.view, QStringLiteral("%1-full-1920x1080-%2-%3")
                                      .arg(theme)
-                                     .arg(call == landscape ? QLatin1String("landscape") : QLatin1String("portrait"))
-                                     .arg(swapped ? QLatin1String("swapped-muted") : QLatin1String("normal")));
+                                     .arg(shapeWord(call))
+                                     .arg(QLatin1String(swapped ? "swapped-muted" : "normal")));
             }
         }
         // Our camera in portrait, as the 9:16 self card of the phones.
@@ -952,10 +968,11 @@ void TestNetCamView::screenshots()
             stage.view.setLink(Air::LinkState::Direct);
             stage.view.updateMuteMicButton(true);
             stage.view.setShowMessages(true, true);
-            save(stage.view, QStringLiteral("dark-%1x%2-%3").arg(size.width()).arg(size.height()).arg(language));
+            const QString named =
+                QStringLiteral("%1x%2-%3").arg(size.width()).arg(size.height()).arg(language);
+            save(stage.view, QStringLiteral("dark-") + named);
             fullScreen(stage, size);
-            save(stage.view,
-                 QStringLiteral("dark-full-%1x%2-%3").arg(size.width()).arg(size.height()).arg(language));
+            save(stage.view, QStringLiteral("dark-full-") + named);
         }
         QCoreApplication::removeTranslator(&words);
         Translator::translate(QStringLiteral("en"));

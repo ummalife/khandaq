@@ -124,7 +124,8 @@ QRect selfArea(const QRect& stage, int headerBottom, int rowTop)
     if (rowTop >= 0) {
         bottom = qMin(bottom, rowTop - inset);
     }
-    return QRect(stage.left() + inset, top, qMax(0, stage.width() - 2 * inset), qMax(0, bottom - top));
+    return QRect(stage.left() + inset, top, qMax(0, stage.width() - 2 * inset),
+                 qMax(0, bottom - top));
 }
 
 QRect cornerRect(const QRect& area, const QSize& size, Qt::Corner corner)
@@ -204,7 +205,8 @@ qreal labelPixelSize(qreal basePixelSize, qreal textWidth, qreal width)
     if (textWidth <= width || textWidth <= 0) {
         return basePixelSize;
     }
-    const qreal smallest = qMin(basePixelSize, qMax(basePixelSize * labelShrink, labelSmallestPixels));
+    const qreal smallest =
+        qMin(basePixelSize, qMax(basePixelSize * labelShrink, labelSmallestPixels));
     return qMax(smallest, basePixelSize * width / textWidth);
 }
 

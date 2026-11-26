@@ -36,7 +36,9 @@ namespace
 {
 /** The stage in the window is at least as tall as the old video surface was. */
 constexpr int minimumStageHeight = 256;
-/** In full screen the head stands this far from the top of the screen, as the row from its bottom. */
+/**
+ * In full screen the head stands this far from the top of the screen, as the row from its bottom.
+ */
 constexpr int headerTop = AirTokens::Space::s24;
 
 /** The same corner on the other side, for the other reading direction. */
@@ -271,7 +273,8 @@ QRect NetCamView::selfAreaNow() const
 {
     const QRect stage = rect();
     const int headerBottom = fullScreen ? headerTop + AirCallHeader::contentHeight() : -1;
-    const QRect row = Air::CallStage::rowRect(stage, rowNow().size(), AirCallControl::controlHeight());
+    const QRect row =
+        Air::CallStage::rowRect(stage, rowNow().size(), AirCallControl::controlHeight());
     return Air::CallStage::selfArea(stage, headerBottom, row.top());
 }
 
@@ -331,8 +334,8 @@ void NetCamView::onSelfDropped(const QPointF& velocity)
     selfCorner = Air::CallStage::snapCorner(area, selfFrame->size(), selfFrame->pos(), velocity);
     const QPoint target = Air::CallStage::cornerRect(area, selfFrame->size(), selfCorner).topLeft();
     const AirStyle& style = AirStyle::instance();
-    selfFrame->slideTo(target, style.reducedMotion() ? 0 : style.duration(AirTokens::Motion::layout),
-                       style.easeOut());
+    const int duration = style.reducedMotion() ? 0 : style.duration(AirTokens::Motion::layout);
+    selfFrame->slideTo(target, duration, style.easeOut());
 }
 
 void NetCamView::toggleFullScreen()

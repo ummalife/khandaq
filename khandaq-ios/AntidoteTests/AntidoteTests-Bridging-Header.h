@@ -57,6 +57,27 @@
 // through the queue of the realm manager.
 - (void)updateGroupPrivacyState:(OCTToxGroupPrivacyState)privacyState forChat:(OCTChat *)chat;
 - (void)updateGroupVoiceState:(OCTToxGroupVoiceState)voiceState forChat:(OCTChat *)chat;
+// KHANDAQ (notification parity, 2026-11-20): the rows the history sync stores, the unread count and the badges read
+// as they are stored, the author's key included.
+- (OCTMessageAbstract *)addGroupSyncedMessageWithText:(NSString *)text
+                                                 type:(OCTToxMessageType)type
+                                                 chat:(OCTChat *)chat
+                                               peerId:(uint32_t)peerId
+                                             peerName:(NSString *)peerName
+                                      senderPubkeyHex:(NSString *)senderPubkeyHex
+                                            messageId:(OCTToxMessageId)messageId
+                                         dateInterval:(NSTimeInterval)dateInterval;
+- (OCTMessageAbstract *)addGroupSyncedMessageWithFileName:(NSString *)fileName
+                                                 fileSize:(uint64_t)fileSize
+                                                 filePath:(NSString *)filePath
+                                                 fileType:(OCTMessageFileType)fileType
+                                                     chat:(OCTChat *)chat
+                                                   peerId:(uint32_t)peerId
+                                                 peerName:(NSString *)peerName
+                                          senderPubkeyHex:(NSString *)senderPubkeyHex
+                                                  fileUTI:(NSString *)fileUTI
+                                       groupMsgIdHashHex:(NSString *)groupMsgIdHashHex
+                                             dateInterval:(NSTimeInterval)dateInterval;
 @end
 
 // Redesign stage 3, item 10: the receive paths of the KQ packets (1:1 186, 187, 188 and group 0x41,

@@ -88,12 +88,21 @@ enum ChatListContent {
     // Correcting the alignment (it IS someone else's message) would otherwise make those rows start
     // counting, so a long-idle group would jump to a brand-new unread number purely on update. Keep
     // them out of the badge; attributable synced rows (peerId > 0) count exactly as they always did.
+    // KHANDAQ (notification parity, 2026-11-20): peer id 0 is what the history sync gives every row whose author is
+    // not in the group at that moment (left, or offline), and in Khandaq Community, where members come and go all
+    // day, that was most of what it brought: new messages showed no unread. Such a row still names its author by the
+    // public key frozen on it at insert, so it counts like the message of a member who is there; only a legacy
+    // synced row with no key, which nobody can be named for, stays out. The badge keeps the same rule
+    // (NotificationCoordinator.unreadChatsPredicate).
     static func countsAsUnread(_ message: OCTMessageAbstract) -> Bool {
         if message.isOutgoing() || message.groupSystemMessage {
             return false
         }
 
-        return !(message.groupHistorySync && message.groupSenderPeerId == 0)
+        guard message.groupHistorySync && message.groupSenderPeerId == 0 else {
+            return true
+        }
+        return message.messageText?.groupSenderPubkey != nil || message.messageFile?.groupSenderPubkey != nil
     }
 
     static func unreadCount(for chat: OCTChat,

@@ -4,6 +4,9 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 import static com.zoffcc.applications.trifa.PushPreviewCryptoTest.repeat;
 import static org.junit.Assert.assertArrayEquals;
@@ -108,19 +111,68 @@ public class PushPreviewStoreTest
     {
         final MemoryPreferences peers = new MemoryPreferences();
         final MemoryPreferences presence = new MemoryPreferences();
+        final MemoryPreferences wake = new MemoryPreferences();
         final MemoryPreferences allowed = new MemoryPreferences();
         PushPreviewStore.storePeerKey(peers, FRIEND, new byte[32]);
         PushPreviewStore.storePeerKey(peers, OTHER, new byte[32]);
         PushPreviewStore.storePresence(presence, FRIEND, Collections.singletonList(HASH_1));
+        // KHANDAQ (0.2.69, group message wakes): and its 190/03 set; the other friend's stays.
+        PushPreviewStore.storeWakeSet(wake, FRIEND, Collections.singletonList(HASH_1));
+        PushPreviewStore.storeWakeSet(wake, OTHER, Collections.singletonList(HASH_2));
         assertTrue(PushPreviewStore.allowSender(allowed, FRIEND));
         assertTrue(PushPreviewStore.allowSender(allowed, OTHER));
-        PushPreviewStore.forgetFriend(peers, presence, allowed, FRIEND.toLowerCase(java.util.Locale.ROOT));
+        PushPreviewStore.forgetFriend(peers, presence, wake, allowed, FRIEND.toLowerCase(java.util.Locale.ROOT));
         assertNull(PushPreviewStore.peerKey(peers, FRIEND));
         assertNotNull(PushPreviewStore.peerKey(peers, OTHER));
         assertTrue(PushPreviewStore.friendsWithPresence(presence, HASH_1).isEmpty());
+        assertFalse(wake.values.containsKey(FRIEND));
+        assertEquals(Collections.singletonMap(OTHER, Collections.singleton(HASH_2)), PushPreviewStore.wakeSets(wake));
         // Deleted or blocked: whatever they still send is not shown; the others' is.
         assertFalse(PushPreviewStore.isAllowedSender(allowed, FRIEND));
         assertTrue(PushPreviewStore.isAllowedSender(allowed, OTHER));
+    }
+
+    @Test
+    public void each_wake_set_replaces_what_the_friend_sent_and_is_read_for_every_friend()
+    {
+        // KHANDAQ (0.2.69, group message wakes): 190/03 is kept as 190/02 is, in a file of its own.
+        final MemoryPreferences prefs = new MemoryPreferences();
+        assertTrue(PushPreviewStore.wakeSets(prefs).isEmpty());
+        PushPreviewStore.storeWakeSet(prefs, FRIEND.toLowerCase(java.util.Locale.ROOT),
+                                      Arrays.asList(HASH_1, HASH_2.toUpperCase(java.util.Locale.ROOT), "short", null));
+        assertEquals(HASH_1 + "," + HASH_2, prefs.values.get(FRIEND));
+        PushPreviewStore.storeWakeSet(prefs, OTHER, Collections.singletonList(HASH_2));
+        final Map<String, Set<String>> sets = PushPreviewStore.wakeSets(prefs);
+        assertEquals(2, sets.size());
+        assertEquals(new HashSet<>(Arrays.asList(HASH_1, HASH_2)), sets.get(FRIEND));
+        assertEquals(Collections.singleton(HASH_2), sets.get(OTHER));
+
+        // The next set replaces it; an empty one: the friend may be woken for none of our groups.
+        PushPreviewStore.storeWakeSet(prefs, FRIEND, Collections.singletonList(HASH_1));
+        assertEquals(Collections.singleton(HASH_1), PushPreviewStore.wakeSets(prefs).get(FRIEND));
+        PushPreviewStore.storeWakeSet(prefs, FRIEND, Collections.<String>emptyList());
+        assertFalse(prefs.values.containsKey(FRIEND));
+        assertEquals(Collections.singleton(OTHER), PushPreviewStore.wakeSets(prefs).keySet());
+
+        // Nothing for a malformed friend, and nothing malformed is read back.
+        PushPreviewStore.storeWakeSet(prefs, "nobody", Collections.singletonList(HASH_1));
+        prefs.values.put(repeat("C3", 32), "nothex,short");
+        prefs.values.put("not a key", HASH_1);
+        assertEquals(Collections.singleton(OTHER), PushPreviewStore.wakeSets(prefs).keySet());
+    }
+
+    @Test
+    public void a_friends_presence_is_read_back_as_it_was_kept()
+    {
+        // KHANDAQ (0.2.69, group message wakes): the 190/03 set for a friend leaves out a group whose muted member is
+        // in that friend's 190/02 set, so that set is read per friend.
+        final MemoryPreferences prefs = new MemoryPreferences();
+        assertTrue(PushPreviewStore.presenceOf(prefs, FRIEND).isEmpty());
+        PushPreviewStore.storePresence(prefs, FRIEND, Arrays.asList(HASH_1.toUpperCase(java.util.Locale.ROOT), HASH_2));
+        assertEquals(new HashSet<>(Arrays.asList(HASH_1, HASH_2)),
+                     PushPreviewStore.presenceOf(prefs, FRIEND.toLowerCase(java.util.Locale.ROOT)));
+        assertTrue(PushPreviewStore.presenceOf(prefs, OTHER).isEmpty());
+        assertTrue(PushPreviewStore.presenceOf(prefs, null).isEmpty());
     }
 
     @Test

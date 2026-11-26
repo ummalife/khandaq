@@ -5,10 +5,14 @@ import android.util.Log;
 
 import com.zoffcc.applications.sorm.FriendList;
 import com.zoffcc.applications.sorm.GroupDB;
+import com.zoffcc.applications.sorm.GroupPeerDB;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
@@ -24,7 +28,8 @@ import static com.zoffcc.applications.trifa.TrifaToxService.orma;
  * which group member we are in each of our groups, as hashes, so that their reaction to our message in a group can
  * wake us. Both go where packet 181 (our push URL) goes, and 190/02 also to the friends online when a group is
  * joined or created. They go only from a device that can show previews: a push token and Android 9 or later. What
- * friends send is kept in PushPreviewStore.
+ * friends send is kept in PushPreviewStore. KHANDAQ (0.2.69, group message wakes): 190/03 goes with 190/02, a set of
+ * its own to each friend (GroupMessageWakes.wakeSet): the groups whose messages may wake us.
  *
  * <p>The Tox calls and the master key (whose first use writes it) run on one worker thread of their own: the callers
  * are the Tox thread, the main thread and the capability pool.
@@ -42,6 +47,8 @@ final class PushPreviewPeers
     });
     private static final Object LOCK = new Object();
     private static ScheduledFuture<?> presenceAnnouncement = null;
+    /** The announcement to come carries 190/02 too: a group was joined, created or left, not only muted. */
+    private static boolean presencePending = false;
     private static volatile Boolean cipherChecked = null;
 
     private PushPreviewPeers()
@@ -68,7 +75,7 @@ final class PushPreviewPeers
 
     /**
      * Where 181 goes to a friend (HelperFriend.send_pushurl_to_friend, which runs only with a push token): 190/01 with
-     * the key for them and 190/02 with our group presence go along.
+     * the key for them and 190/02 with our group presence go along, and 190/03 with the groups that may wake us.
      */
     static void publishTo(final String friendPubkey)
     {
@@ -98,14 +105,29 @@ final class PushPreviewPeers
             }
             final byte[] presence = PushPreviewCrypto.presencePacket(ownPresenceHashes());
             MainActivity.tox_friend_send_lossless_packet(friendNumber, presence, presence.length);
+            sendWakeSet(context, friendNumber, friendPubkey, ownGroupsForWakes());
         });
     }
 
     /**
-     * A group was joined or created (HelperGroup): a little later, 190/02 to every friend online, and the copy of the
-     * muted chats brought up to date, since a group may come in muted.
+     * A group was joined, created or left (HelperGroup): a little later, 190/02 and 190/03 to every friend online, and
+     * the copy of the muted chats brought up to date, since a group may come in muted.
      */
     static void groupsChanged()
+    {
+        announceLater(true);
+    }
+
+    /**
+     * KHANDAQ (0.2.69, group message wakes): a group, or a member in one, was muted or unmuted here: a little later,
+     * 190/03 to every friend online, so that the group's messages wake whom they should and nobody else.
+     */
+    static void wakeSetsChanged()
+    {
+        announceLater(false);
+    }
+
+    private static void announceLater(final boolean presence)
     {
         if (!usable())
         {
@@ -113,6 +135,8 @@ final class PushPreviewPeers
         }
         synchronized (LOCK)
         {
+            // One announcement for a burst of changes; it carries 190/02 when one of them was a group's.
+            presencePending |= presence;
             if (presenceAnnouncement != null)
             {
                 presenceAnnouncement.cancel(false);
@@ -124,13 +148,19 @@ final class PushPreviewPeers
             }
             catch (RejectedExecutionException e)
             {
-                Log.i(TAG, "groupsChanged:EE:rejected");
+                Log.i(TAG, "announceLater:EE:rejected");
             }
         }
     }
 
     private static void announcePresence()
     {
+        final boolean presenceToo;
+        synchronized (LOCK)
+        {
+            presenceToo = presencePending;
+            presencePending = false;
+        }
         try
         {
             final Context context = MainActivity.context_s;
@@ -139,8 +169,7 @@ final class PushPreviewPeers
                 return;
             }
             refreshMutedChatsNow(context);
-            HelperRelay.own_push_token_load();
-            if (!MainActivity.PREF__use_push_service || (TRIFAGlobals.global_notification_token == null))
+            if (!wakeable())
             {
                 return;
             }
@@ -149,7 +178,8 @@ final class PushPreviewPeers
             {
                 return;
             }
-            final byte[] presence = PushPreviewCrypto.presencePacket(ownPresenceHashes());
+            final byte[] presence = presenceToo ? PushPreviewCrypto.presencePacket(ownPresenceHashes()) : null;
+            final List<GroupMessageWakes.OwnGroup> groups = ownGroupsForWakes();
             for (final long friendNumber : friends)
             {
                 if (MainActivity.tox_friend_get_connection_status(friendNumber)
@@ -162,13 +192,24 @@ final class PushPreviewPeers
                 {
                     continue;
                 }
-                MainActivity.tox_friend_send_lossless_packet(friendNumber, presence, presence.length);
+                if (presence != null)
+                {
+                    MainActivity.tox_friend_send_lossless_packet(friendNumber, presence, presence.length);
+                }
+                sendWakeSet(context, friendNumber, friendPubkey, groups);
             }
         }
         catch (Throwable e)
         {
             Log.i(TAG, "announcePresence:EE:" + e.getClass().getSimpleName());
         }
+    }
+
+    /** This device has a push token: friends can wake it, and 190/02 and 190/03 are worth their packets. */
+    private static boolean wakeable()
+    {
+        HelperRelay.own_push_token_load();
+        return MainActivity.PREF__use_push_service && (TRIFAGlobals.global_notification_token != null);
     }
 
     /** The presence hash of each group we are in and have our key of, the first 64, none twice. */
@@ -205,6 +246,106 @@ final class PushPreviewPeers
         return hashes;
     }
 
+    // ---- group message wakes ----
+
+    /**
+     * KHANDAQ (0.2.69, group message wakes): 190/03 to one friend, its own set (GroupMessageWakes.wakeSet). Nothing
+     * when our groups or their mutes cannot be read: the friend keeps the set it has rather than one that may list a
+     * group muted here.
+     */
+    private static void sendWakeSet(final Context context, final long friendNumber, final String friendPubkey,
+                                    final List<GroupMessageWakes.OwnGroup> groups)
+    {
+        if (groups == null)
+        {
+            return;
+        }
+        final byte[] wake = PushPreviewCrypto.wakePacket(
+                GroupMessageWakes.wakeSet(groups, PushPreviewStore.presenceOf(context, friendPubkey)));
+        MainActivity.tox_friend_send_lossless_packet(friendNumber, wake, wake.length);
+    }
+
+    /** 190/03 again to a friend online whose 190/02 just came, off the Tox thread. */
+    private static void sendWakeSetSoon(final String friendPubkey)
+    {
+        run(() -> {
+            final Context context = MainActivity.context_s;
+            final long friendNumber = friendNumberOf(friendPubkey);
+            if ((context == null) || (friendNumber < 0) || HelperRelay.is_any_relay(friendPubkey) || !wakeable())
+            {
+                return;
+            }
+            sendWakeSet(context, friendNumber, friendPubkey, ownGroupsForWakes());
+        });
+    }
+
+    /**
+     * Our groups as the 190/03 sets need them: each group we are in and have our key of, as for 190/02, whether it is
+     * muted here, and the members muted here in it. Null when the database or toxcore cannot say.
+     */
+    private static List<GroupMessageWakes.OwnGroup> ownGroupsForWakes()
+    {
+        if (orma == null)
+        {
+            return null;
+        }
+        final long[] groupNumbers = MainActivity.tox_group_get_grouplist();
+        if (groupNumbers == null)
+        {
+            return null;
+        }
+        final Set<String> mutedGroups = new HashSet<>();
+        final Map<String, Set<String>> mutedMembers = new HashMap<>();
+        try
+        {
+            final List<GroupDB> groups = orma.selectFromGroupDB().notification_silentEq(true).toList();
+            if (groups != null)
+            {
+                for (final GroupDB g : groups)
+                {
+                    if (g.group_identifier != null)
+                    {
+                        mutedGroups.add(g.group_identifier.toLowerCase(Locale.ROOT));
+                    }
+                }
+            }
+            final List<GroupPeerDB> peers = orma.selectFromGroupPeerDB().notification_silentEq(true).toList();
+            if (peers != null)
+            {
+                for (final GroupPeerDB p : peers)
+                {
+                    if ((p.group_identifier != null) && (p.tox_group_peer_pubkey != null))
+                    {
+                        mutedMembers.computeIfAbsent(p.group_identifier.toLowerCase(Locale.ROOT),
+                                                     id -> new HashSet<>()).add(p.tox_group_peer_pubkey);
+                    }
+                }
+            }
+        }
+        catch (RuntimeException e)
+        {
+            Log.i(TAG, "ownGroupsForWakes:EE:" + e.getClass().getSimpleName());
+            return null;
+        }
+        final List<GroupMessageWakes.OwnGroup> own = new ArrayList<>();
+        for (final long groupNumber : groupNumbers)
+        {
+            if (GroupPendingLeaves.holdsGroupNumber(groupNumber))
+            {
+                continue;
+            }
+            final String chatId = HelperGroup.tox_group_by_groupnum__wrapper(groupNumber);
+            final String ownKey = MainActivity.tox_group_self_get_public_key(groupNumber);
+            if ((chatId == null) || (ownKey == null))
+            {
+                continue;
+            }
+            final String id = chatId.toLowerCase(Locale.ROOT);
+            own.add(new GroupMessageWakes.OwnGroup(chatId, ownKey, mutedGroups.contains(id), mutedMembers.get(id)));
+        }
+        return own;
+    }
+
     // ---- in ----
 
     /** Packet 190 from a friend (MainActivity's lossless dispatch, Tox thread). Anything malformed is dropped. */
@@ -236,6 +377,17 @@ final class PushPreviewPeers
                 if (hashes != null)
                 {
                     PushPreviewStore.storePresence(context, friendPubkey, hashes);
+                    // KHANDAQ (0.2.69, group message wakes): our 190/03 set for this friend leaves out the groups in
+                    // which we muted its member, and only its 190/02 says which member is its own.
+                    sendWakeSetSoon(friendPubkey);
+                }
+            }
+            else if (data[1] == PushPreviewCrypto.SUBTYPE_GROUP_WAKE)
+            {
+                final List<String> hashes = PushPreviewCrypto.wakeFromPacket(data, length);
+                if (hashes != null)
+                {
+                    PushPreviewStore.storeWakeSet(context, friendPubkey, hashes);
                 }
             }
         }
@@ -247,7 +399,7 @@ final class PushPreviewPeers
 
     // ---- what goes with a friend ----
 
-    /** A friend deleted (HelperFriend.delete_friend): their K and their group presence go too. */
+    /** A friend deleted (HelperFriend.delete_friend): their K, their group presence and wake set go too. */
     static void forgetFriend(final String friendPubkey)
     {
         // On the worker: the caller may be the main thread, and the first read of these preferences reads a file.

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (calls stage, 26.11): the ground of the link chip over the call's picture, the dark scrim
+     (fixed-black at 45 %, #00000073) in both themes, since the call screen is dark in both. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:alpha="0.451" android:color="@color/kq_fixed_black" />
+</selector>

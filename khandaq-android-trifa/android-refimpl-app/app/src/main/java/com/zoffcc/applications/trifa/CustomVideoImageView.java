@@ -2,13 +2,20 @@ package com.zoffcc.applications.trifa;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Matrix;
+import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.PointF;
+import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.view.Display;
 import android.view.MotionEvent;
+import android.view.Surface;
 import android.view.View;
+
+import org.khandaq.messenger.R;
 
 import static com.zoffcc.applications.trifa.CallingActivity.VIDEO_ROTATION_LOCK;
 import static com.zoffcc.applications.trifa.CallingActivity.device_orientation;
@@ -43,6 +50,24 @@ public class CustomVideoImageView extends androidx.appcompat.widget.AppCompatIma
     private boolean mDraggable = false;
     private static boolean matrix_was_reset = false;
     private float sum_scale_factor = 1;
+
+    // KHANDAQ (calls stage, 26.11): the call screen's way of showing the other person (rules R1 and R6 of the
+    // call stage spec), switched on by AirCallStageController; the group screen keeps the old way. The
+    // picture fills the stage when it is turned the stage's way and fits it otherwise, it is cut to its own
+    // width (the decoder's stride padding past it came out as the green stripe at the right edge), and it
+    // turns with the phone in its own matrix instead of turning and blowing up the whole view.
+    private boolean stageMode = false;
+    /** In the small box of a swapped stage, where it always fills. */
+    private boolean stageBoxed = false;
+    private boolean hasPicture = false;
+    private int pictureW = 0;
+    private int pictureH = 0;
+    private int stageRotation = 0;
+    private final Matrix stageMatrix = new Matrix();
+    private final RectF stageClip = new RectF();
+    private final Paint stageBars = new Paint();
+    /** Told on the main thread when the first picture of the other person comes (the header leaves the middle). */
+    private Runnable onStagePicture = null;
 
 
     public CustomVideoImageView(Context context)
@@ -110,6 +135,16 @@ public class CustomVideoImageView extends androidx.appcompat.widget.AppCompatIma
         mViewWidth = w;
         mViewHeight = h;
 
+        if (stageMode)
+        {
+            synchronized (VIDEO_ROTATION_LOCK)
+            {
+                stageRotation = currentStageRotation();
+                updateStageMatrix();
+            }
+            return;
+        }
+
         if (PREF__X_zoom_incoming_video)
         {
             matrix.reset();
@@ -126,6 +161,191 @@ public class CustomVideoImageView extends androidx.appcompat.widget.AppCompatIma
     {
         matrix.reset();
         matrix_was_reset = true;
+    }
+
+    /**
+     * KHANDAQ (calls stage, 26.11): the call screen's rules on or off (AirCallStageController switches them on
+     * unless the expert zoom of the incoming video is on, which keeps its own matrix).
+     */
+    void setStageMode(final boolean on)
+    {
+        synchronized (VIDEO_ROTATION_LOCK)
+        {
+            if (stageMode == on)
+            {
+                return;
+            }
+            stageMode = on;
+            if (on)
+            {
+                stageBars.setColor(AirUi.color(getContext(), R.color.kq_fixed_black));
+                setRotation(0f);
+                setScaleX(1f);
+                setScaleY(1f);
+                setScaleType(ScaleType.MATRIX);
+                stageRotation = currentStageRotation();
+                updateStageMatrix();
+            }
+            else
+            {
+                setScaleType(PREF__X_zoom_incoming_video ? ScaleType.MATRIX : ScaleType.CENTER_CROP);
+                matrix_was_reset = true;
+            }
+        }
+        invalidate();
+    }
+
+    boolean isStageMode()
+    {
+        return stageMode;
+    }
+
+    /** R6: in the small box of a swapped stage the other person always fills it. */
+    void setStageBoxed(final boolean boxed)
+    {
+        synchronized (VIDEO_ROTATION_LOCK)
+        {
+            if (stageBoxed == boxed)
+            {
+                return;
+            }
+            stageBoxed = boxed;
+            updateStageMatrix();
+        }
+        invalidate();
+    }
+
+    /** True once a picture of the other person has been shown on the stage. */
+    boolean hasStagePicture()
+    {
+        return hasPicture;
+    }
+
+    void setOnStagePicture(final Runnable listener)
+    {
+        onStagePicture = listener;
+    }
+
+    /**
+     * KHANDAQ (calls stage, 26.11): a frame with the size of its picture. The bitmap can be wider than the
+     * picture (MainActivity.allocate_video_buffer_1 sizes it to the decoder's stride), and the columns past
+     * the picture's width are no picture. Without the call screen's rules this is the old setBitmap.
+     */
+    public void setBitmap(final Bitmap bitmap, final int width, final int height)
+    {
+        if (!stageMode)
+        {
+            setBitmap(bitmap);
+            return;
+        }
+        synchronized (VIDEO_ROTATION_LOCK)
+        {
+            if ((bitmap == null) || bitmap.isRecycled())
+            {
+                return;
+            }
+            final int w = ((width > 0) && (width <= bitmap.getWidth())) ? width : bitmap.getWidth();
+            final int h = ((height > 0) && (height <= bitmap.getHeight())) ? height : bitmap.getHeight();
+            final int rotation = currentStageRotation();
+            final boolean first = !hasPicture;
+            if ((w != pictureW) || (h != pictureH) || (rotation != stageRotation) || first)
+            {
+                pictureW = w;
+                pictureH = h;
+                stageRotation = rotation;
+                hasPicture = true;
+                updateStageMatrix();
+            }
+            setImageBitmap(bitmap);
+            if (first && (onStagePicture != null))
+            {
+                post(onStagePicture);
+            }
+        }
+    }
+
+    /** The turn the picture still needs: the phone's own turn less what the display turned by itself. */
+    private int currentStageRotation()
+    {
+        int display = 0;
+        try
+        {
+            final Display d = getDisplay();
+            if (d != null)
+            {
+                switch (d.getRotation())
+                {
+                    case Surface.ROTATION_90:
+                        display = 90;
+                        break;
+                    case Surface.ROTATION_180:
+                        display = 180;
+                        break;
+                    case Surface.ROTATION_270:
+                        display = 270;
+                        break;
+                    default:
+                        display = 0;
+                        break;
+                }
+            }
+        }
+        catch (Exception ignored)
+        {
+        }
+        return AirCallStage.remainingRotation(device_orientation, display);
+    }
+
+    /** R1, R6: the picture's matrix (centre, turn, one scale for both axes) and the part of the view it covers. */
+    private void updateStageMatrix()
+    {
+        if (!stageMode)
+        {
+            return;
+        }
+        final int vw = getWidth();
+        final int vh = getHeight();
+        if ((vw <= 0) || (vh <= 0) || (pictureW <= 0) || (pictureH <= 0))
+        {
+            stageClip.setEmpty();
+            return;
+        }
+        final boolean sideways = AirCallStage.sideways(stageRotation);
+        final float shownW = sideways ? pictureH : pictureW;
+        final float shownH = sideways ? pictureW : pictureH;
+        final AirCallStage.Scale scale = stageBoxed ? AirCallStage.Scale.FILL
+                                                    : AirCallStage.scaleFor(shownW, shownH, vw, vh);
+        final float f = AirCallStage.factor(shownW, shownH, vw, vh, scale);
+        stageMatrix.reset();
+        stageMatrix.postTranslate(-pictureW / 2f, -pictureH / 2f);
+        stageMatrix.postRotate(stageRotation);
+        stageMatrix.postScale(f, f);
+        stageMatrix.postTranslate(vw / 2f, vh / 2f);
+        final float[] r = AirCallStage.place(shownW, shownH, vw, vh, scale);
+        stageClip.set(Math.max(0f, r[0]), Math.max(0f, r[1]), Math.min(vw, r[2]), Math.min(vh, r[3]));
+        setImageMatrix(stageMatrix);
+        invalidate();
+    }
+
+    @Override
+    protected void onDraw(final Canvas canvas)
+    {
+        if (!stageMode)
+        {
+            super.onDraw(canvas);
+            return;
+        }
+        if (!hasPicture || stageClip.isEmpty())
+        {
+            // No picture yet: the screen's ground shows through.
+            return;
+        }
+        // R1: a fitted picture stands on fixed-black, and only the picture's own width is drawn.
+        canvas.drawRect(0f, 0f, getWidth(), getHeight(), stageBars);
+        final int saved = canvas.save();
+        canvas.clipRect(stageClip);
+        super.onDraw(canvas);
+        canvas.restoreToCount(saved);
     }
 
     public void setBitmap(Bitmap bitmap)

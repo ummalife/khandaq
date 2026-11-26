@@ -179,6 +179,17 @@ final class AirTileView extends FrameLayout
     }
 
     /**
+     * KHANDAQ (calls stage, 26.11): initials in proportion to a big tile (the person of an audio call, 112 or 128
+     * dp) instead of the caption size of the tiles in the lists. Up to maxPx, down to 70 % of it.
+     */
+    void setLargeInitials(final float maxPx)
+    {
+        TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(initials, Math.max(1, Math.round(maxPx * 0.7f)),
+                                                                   Math.max(2, Math.round(maxPx)), 1,
+                                                                   TypedValue.COMPLEX_UNIT_PX);
+    }
+
+    /**
      * KHANDAQ (0.2.60): Khandaq Community's tile is the app's icon (the owner's rule, 2026-11-18), on every screen
      * that shows the group, in place of its initials, as a photo is. Called after {@link #bind}.
      */

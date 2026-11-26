@@ -15,6 +15,13 @@
     <string name="air_call_speaker_on">已开启</string>
     <string name="air_call_speaker_off">已关闭</string>
     <string name="air_call_switch_camera">切换摄像头</string>
+    <string name="air_call_flip">翻转</string>
+    <string name="air_call_flip_camera">翻转摄像头</string>
+    <string name="air_call_self_view">你的摄像头</string>
+    <string name="air_call_their_view">对方的视频</string>
+    <string name="air_call_swap_views">交换画面</string>
+    <string name="air_call_view_bigger">放大</string>
+    <string name="air_call_view_smaller">缩小</string>
     <string name="air_call_line_direct">直连</string>
     <string name="air_call_line_relay">经中继连接</string>
     <string name="air_call_line_none">当前没有连接</string>

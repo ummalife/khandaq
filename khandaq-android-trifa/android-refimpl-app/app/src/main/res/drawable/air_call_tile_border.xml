@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (calls stage, 26.11): the hairline over the small picture's edge (R4), drawn above the picture. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="@dimen/kq_radius_card" />
+    <stroke
+        android:width="@dimen/kq_stroke_hairline"
+        android:color="@color/air_call_tile_border" />
+</shape>

@@ -20,6 +20,7 @@
 package com.zoffcc.applications.trifa;
 
 import android.graphics.ImageFormat;
+import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.media.Image;
 import android.os.AsyncTask;
@@ -202,13 +203,18 @@ public class CameraWrapper
         initCamera();
     }
 
-    /*
+    /**
+     * KHANDAQ (calls stage, 26.11): the preview into your own picture's TextureView (CameraSurfacePreview),
+     * which can be clipped to round corners and keeps the frame's aspect; the SurfaceHolder variant above
+     * stays for a caller that still has one.
+     */
     public void doStartPreview(SurfaceTexture surface, float previewRate)
     {
-        Log.i(TAG, "doStartPreview()");
+        Log.i(TAG, "doStartPreview(texture)...");
 
         if (mIsPreviewing)
         {
+            Log.i(TAG, "doStartPreview(texture):stopPreview");
             mCamera.stopPreview();
             return;
         }
@@ -217,14 +223,79 @@ public class CameraWrapper
         {
             mCamera.setPreviewTexture(surface);
         }
-        catch (IOException e)
+        catch (Exception e)
         {
+            Log.i(TAG, "doStartPreview(texture):EE:" + e.getMessage());
             e.printStackTrace();
         }
 
         initCamera();
     }
-    */
+
+    /**
+     * KHANDAQ (calls stage, 26.11): the turn the preview needs for the display as it stands now. It was 90
+     * always, right for most phones held upright but sideways on a tablet in landscape (the system turns a
+     * large screen whatever the manifest says) and upside down for a camera mounted the other way round.
+     */
+    static int displayOrientationNow()
+    {
+        return AirCallStage.cameraDisplayOrientation(
+                (cameraInfo != null) && (cameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT),
+                (cameraInfo != null) ? cameraInfo.orientation : 90, displayDegrees());
+    }
+
+    /** The display's own turn, degrees, 0 without the call screen. */
+    static int displayDegrees()
+    {
+        try
+        {
+            if (CallingActivity.ca == null)
+            {
+                return 0;
+            }
+            switch (CallingActivity.ca.getWindowManager().getDefaultDisplay().getRotation())
+            {
+                case Surface.ROTATION_90:
+                    return 90;
+                case Surface.ROTATION_180:
+                    return 180;
+                case Surface.ROTATION_270:
+                    return 270;
+                default:
+                    return 0;
+            }
+        }
+        catch (Exception e)
+        {
+            return 0;
+        }
+    }
+
+    /**
+     * KHANDAQ (calls stage, 26.11): the display turned (a tablet, a window resized): the preview turns with it
+     * and your own picture takes the frame's new aspect. Nothing happens without an open camera.
+     */
+    static void refreshDisplayOrientation()
+    {
+        try
+        {
+            if (mCamera == null)
+            {
+                return;
+            }
+            final int orientation = displayOrientationNow();
+            mCamera.setDisplayOrientation(orientation);
+            final Camera.Size size = mCamera.getParameters().getPreviewSize();
+            if (size != null)
+            {
+                CallingActivity.on_camera_frame_shown(size.width, size.height, orientation);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "refreshDisplayOrientation:EE:" + e.getMessage());
+        }
+    }
 
     public void doStopCamera()
     {
@@ -500,7 +571,8 @@ public class CameraWrapper
             mCameraParamters.setPreviewSize(IMAGE_WIDTH, IMAGE_HEIGHT);
             Log.i(TAG, "initCamera:preview size after 1=" + mCameraParamters.getPreviewSize().width + "," +
                        mCameraParamters.getPreviewSize().height);
-            mCamera.setDisplayOrientation(90); // always 90 ??
+            final int display_orientation = displayOrientationNow();
+            mCamera.setDisplayOrientation(display_orientation);
             Log.i(TAG, "initCamera:preview size after 2=" + mCameraParamters.getPreviewSize().width + "," +
                        mCameraParamters.getPreviewSize().height);
 
@@ -523,6 +595,12 @@ public class CameraWrapper
             int bitsperpixel = ImageFormat.getBitsPerPixel(previewFormat);
             float byteperpixel = (float) bitsperpixel / 8.0f;
             Camera.Size camerasize = mCameraParamters2.getPreviewSize();
+            // KHANDAQ (calls stage, 26.11): the size the camera really took, turned as it shows, gives your own
+            // picture its box (it may not be the size asked for).
+            if (camerasize != null)
+            {
+                CallingActivity.on_camera_frame_shown(camerasize.width, camerasize.height, display_orientation);
+            }
             int frame_bytesize = (int) (((float) mCameraParamters.getPreviewSize().width *
                                          (float) mCameraParamters.getPreviewSize().height) * byteperpixel);
             Log.i(TAG,

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (calls stage, 26.11): the link of a call as a chip, a pill on the dark scrim (R8 of the call
+     stage spec), so "Via a relay" reads over any picture. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="@dimen/kq_radius_round" />
+    <solid android:color="@color/air_call_chip_ground" />
+</shape>

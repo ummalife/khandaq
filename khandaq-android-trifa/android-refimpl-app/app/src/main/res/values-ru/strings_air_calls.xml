@@ -15,6 +15,13 @@
     <string name="air_call_speaker_on">включён</string>
     <string name="air_call_speaker_off">выключен</string>
     <string name="air_call_switch_camera">Сменить камеру</string>
+    <string name="air_call_flip">Перевернуть</string>
+    <string name="air_call_flip_camera">Перевернуть камеру</string>
+    <string name="air_call_self_view">Ваша камера</string>
+    <string name="air_call_their_view">Видео собеседника</string>
+    <string name="air_call_swap_views">Поменять местами</string>
+    <string name="air_call_view_bigger">Увеличить</string>
+    <string name="air_call_view_smaller">Уменьшить</string>
     <string name="air_call_line_direct">Прямая связь</string>
     <string name="air_call_line_relay">Через ретранслятор</string>
     <string name="air_call_line_none">Связи сейчас нет</string>

@@ -15,6 +15,14 @@
     <string name="air_call_speaker_on">on</string>
     <string name="air_call_speaker_off">off</string>
     <string name="air_call_switch_camera">Switch camera</string>
+    <!-- KHANDAQ (calls stage, 26.11): the short word under the circle, its full name to TalkBack, and the two pictures of a video call with what a tap and a long press do to them. -->
+    <string name="air_call_flip">Flip</string>
+    <string name="air_call_flip_camera">Flip camera</string>
+    <string name="air_call_self_view">Your camera</string>
+    <string name="air_call_their_view">Their video</string>
+    <string name="air_call_swap_views">Swap the pictures</string>
+    <string name="air_call_view_bigger">Make bigger</string>
+    <string name="air_call_view_smaller">Make smaller</string>
     <string name="air_call_line_direct">Direct link</string>
     <string name="air_call_line_relay">Via a relay</string>
     <string name="air_call_line_none">No link right now</string>

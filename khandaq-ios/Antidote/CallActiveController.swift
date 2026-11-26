@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import AVFoundation
 import UIKit
 import SnapKit
 
@@ -19,14 +20,28 @@ private struct Constants {
 
     static let SmallBottomOffset: CGFloat = -KQSpace.x32
 
-    static let VideoPreviewOffset = -20.0
-    static let VideoPreviewSize = CGSize(width: 150.0, height: 110)
+    // KHANDAQ (calls stage, 26.11): the switch of the camera in the top trailing corner of the picture in
+    // picture: a 32 pt circle with a 20 pt glyph, 6 in from the corner, its touch the full 44 pt target.
+    static let SwitchCameraSide = KQSize.chip
     static let SwitchCameraOffset = KQSpace.x6
+}
+
+/// KHANDAQ (calls stage, 26.11): a small round button whose touch reaches the 44 pt target around it.
+private final class SwitchCameraButton: UIButton {
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        let grow = max(0, KQSize.targetIos - min(bounds.width, bounds.height)) / 2
+        return bounds.insetBy(dx: -grow, dy: -grow).contains(point)
+    }
 }
 
 /// A call that is ringing out or going on (redesign stage 3, E9): the person, "Calling" or the timer in
 /// tabular figures, the link, and the row of 64 pt controls at the bottom with their words: microphone,
 /// speaker, camera and end.
+///
+/// KHANDAQ (calls stage, 26.11): the video of the other person fills the stage in the shape of its frame
+/// (R1); yours stands in a box of the shape of your camera in a corner clear of the head and the row
+/// (R2 to R5), which you drag to another corner or tap to swap the two (R6). A call without video
+/// gathers the person's tile, the name, the state and the link in the middle (R9).
 class CallActiveController: CallBaseController {
     enum State {
         case none
@@ -93,6 +108,12 @@ class CallActiveController: CallBaseController {
         didSet {
             bigVideoButton?.isSelected = outgoingVideo
             smallVideoButton?.isSelected = outgoingVideo
+            // KHANDAQ (calls stage, 26.11): the coordinator sets this with every update of the call, which
+            // is also when the camera may have told its format or its turn.
+            refreshOwnFrame()
+            if outgoingVideo != oldValue {
+                updateStage()
+            }
         }
     }
 
@@ -102,19 +123,11 @@ class CallActiveController: CallBaseController {
                 return
             }
 
-            if let old = oldValue {
-                old.removeFromSuperview()
-            }
-
-            if let feed = videoFeed {
-                view.insertSubview(feed, belowSubview: videoPreviewView)
-
-                feed.bounds.size = view.bounds.size
-
-                feed.snp.makeConstraints {
-                    $0.edges.equalTo(view)
-                }
-
+            // KHANDAQ (calls stage, 26.11): the feed takes its place in a slot that keeps the shape of its
+            // frames (R1); it was pinned to the edges of the screen and drew them aspect-fit.
+            remoteSlot.show(videoFeed)
+            updateStage()
+            if isViewLoaded {
                 updateViewsWithTraitCollection(self.traitCollection)
             }
         }
@@ -126,26 +139,21 @@ class CallActiveController: CallBaseController {
                 return
             }
 
-            if let old = oldValue {
-                old.removeFromSuperlayer()
-                videoPreviewView.isHidden = true
+            // KHANDAQ (calls stage, 26.11): your camera covers its box, cropped, never stretched (R2);
+            // the preview's own gravity put bars inside the box.
+            (videoPreviewLayer as? AVCaptureVideoPreviewLayer)?.videoGravity = .resizeAspectFill
+            ownSlot.show(layer: videoPreviewLayer)
+            refreshOwnFrame()
+            updateStage()
+            if isViewLoaded {
+                updateViewsWithTraitCollection(self.traitCollection)
             }
-
-            if let layer = videoPreviewLayer {
-                videoPreviewView.layer.addSublayer(layer)
-                videoPreviewView.bringSubview(toFront: switchCameraButton)
-                videoPreviewView.isHidden = false
-                view.layoutIfNeeded()
-            }
-
-            updateViewsWithTraitCollection(self.traitCollection)
         }
     }
 
     fileprivate var showControls = true {
         didSet {
-            let offset = showControls ? Constants.SmallBottomOffset : smallContainerView.frame.size.height
-            smallContainerViewBottomConstraint.update(offset: offset)
+            applyControlsOffset()
 
             toggleTopContainer(hidden: !showControls)
 
@@ -155,7 +163,16 @@ class CallActiveController: CallBaseController {
         }
     }
 
-    fileprivate var videoPreviewView: UIView!
+    // KHANDAQ (calls stage, 26.11): the two videos, each in its slot; which one is the stage and which
+    // the box follows `swapped` (R6).
+    fileprivate let remoteSlot = AirCallVideoSlot()
+    fileprivate let ownSlot = AirCallVideoSlot()
+    fileprivate var swapped = false
+    /// The corner the box was last let go in; nil until then, bottom trailing.
+    fileprivate var ownCorner: AirCallStage.Corner?
+    fileprivate var draggingBox = false
+    fileprivate var snapAnimator: UIViewPropertyAnimator?
+    fileprivate var controlsTap: UITapGestureRecognizer!
     fileprivate var switchCameraButton: UIButton!
 
     fileprivate var bigContainerView: UIView!
@@ -173,7 +190,12 @@ class CallActiveController: CallBaseController {
     var debugVideoInfo: String = "" {
         didSet {
             _ = view
+            // KHANDAQ (calls stage, 26.11): never on the screen of a release build, whatever it is sent
+            // (R10); UserDefaultsManager.DebugMode already keeps it empty there.
+            #if DEBUG
             debugLabel?.text = debugVideoInfo
+            #endif
+            debugLabel?.isHidden = debugLabel?.text?.isEmpty ?? true
         }
     }
 
@@ -185,6 +207,15 @@ class CallActiveController: CallBaseController {
 
     override init(theme: Theme, callerName: String) {
         super.init(theme: theme, callerName: callerName)
+
+        // KHANDAQ (calls stage, 26.11): the camera says its format once it runs and when it changes,
+        // and the preview turns with the phone; the box takes the new shape (R2).
+        let center = NotificationCenter.default
+        for name in [NSNotification.Name.AVCaptureSessionDidStartRunning,
+                     NSNotification.Name.AVCaptureInputPortFormatDescriptionDidChange,
+                     NSNotification.Name.UIDeviceOrientationDidChange] {
+            center.addObserver(self, selector: #selector(CallActiveController.cameraMayHaveChanged), name: name, object: nil)
+        }
     }
 
     required convenience init?(coder aDecoder: NSCoder) {
@@ -193,13 +224,14 @@ class CallActiveController: CallBaseController {
 
     deinit {
         callDurationTimer?.invalidate()
+        NotificationCenter.default.removeObserver(self)
     }
 
     override func loadView() {
         super.loadView()
 
+        createStage()
         createGestureRecognizers()
-        createVideoPreviewView()
         createBigViews()
         createSmallViews()
         installConstraints()
@@ -211,6 +243,7 @@ class CallActiveController: CallBaseController {
         setButtonsInitValues()
 
         updateViewsWithTraitCollection(self.traitCollection)
+        updateStage()
     }
 
     override func willTransition(to newCollection: UITraitCollection, with coordinator: UIViewControllerTransitionCoordinator) {
@@ -218,12 +251,18 @@ class CallActiveController: CallBaseController {
         showControls = true
     }
 
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        // Hidden, the row and the head stay just past the safe edges, wherever those are now.
+        if !showControls {
+            applyControlsOffset()
+            toggleTopContainer(hidden: true)
+        }
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-
-        if let layer = videoPreviewLayer {
-            layer.frame.size = videoPreviewView.frame.size
-        }
+        layoutStage()
     }
 
     override func prepareForRemoval() {
@@ -276,6 +315,88 @@ extension CallActiveController {
     @objc func switchCameraButtonPressed() {
         delegate?.callActiveControllerSwitchCamera(self)
     }
+
+    /// R6: a tap on the box swaps the big and the small video; a tap again swaps them back.
+    @objc func boxTapped() {
+        guard videoFeed != nil, videoPreviewLayer != nil else {
+            return
+        }
+        swapped = !swapped
+        updateStage()
+    }
+
+    /// R6: the box follows the finger anywhere on the stage and, let go, snaps to the corner nearest to
+    /// where its speed carries it.
+    @objc func boxPanned(_ pan: UIPanGestureRecognizer) {
+        guard let box = pan.view else {
+            return
+        }
+        switch pan.state {
+            case .began:
+                draggingBox = true
+                snapAnimator?.stopAnimation(true)
+                snapAnimator = nil
+            case .changed:
+                let translation = pan.translation(in: view)
+                pan.setTranslation(.zero, in: view)
+                var frame = box.frame.offsetBy(dx: translation.x, dy: translation.y)
+                frame.origin.x = max(view.bounds.minX, min(frame.origin.x, view.bounds.maxX - frame.width))
+                frame.origin.y = max(view.bounds.minY, min(frame.origin.y, view.bounds.maxY - frame.height))
+                box.frame = frame
+            case .ended, .cancelled, .failed:
+                draggingBox = false
+                let area = ownArea()
+                let obstacles = ownObstacles()
+                let corner = AirCallStage.snapCorner(center: box.center, velocity: pan.velocity(in: view), size: box.bounds.size,
+                                                     area: area, obstacles: obstacles)
+                ownCorner = corner
+                let target = AirCallStage.ownRect(size: box.bounds.size, corner: corner, area: area, obstacles: obstacles)
+                guard !UIAccessibilityIsReduceMotionEnabled() else {
+                    box.frame = target
+                    return
+                }
+                let animator = UIViewPropertyAnimator(duration: KQMotion.layout, timingParameters: KQMotion.easeOut)
+                animator.addAnimations {
+                    box.frame = target
+                }
+                animator.startAnimation()
+                snapAnimator = animator
+            default:
+                break
+        }
+    }
+
+    @objc func cameraMayHaveChanged() {
+        DispatchQueue.main.async { [weak self] in
+            self?.refreshOwnFrame()
+        }
+    }
+}
+
+// MARK: Gestures
+extension CallActiveController: UIGestureRecognizerDelegate {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard let touched = touch.view else {
+            return true
+        }
+        // A tap on a button (the switch of the camera, a control of the row) is the button's.
+        if gestureRecognizer is UITapGestureRecognizer && touched is UIControl {
+            return false
+        }
+        // A touch on the box is the box's: it swaps or drags the videos rather than hiding the controls.
+        if gestureRecognizer === controlsTap, let box = currentBox {
+            return !touched.isDescendant(of: box)
+        }
+        return true
+    }
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let slot = gestureRecognizer.view as? AirCallVideoSlot else {
+            return true
+        }
+        // The slot on the stage has nothing to drag or swap.
+        return slot === currentBox
+    }
 }
 
 private extension CallActiveController {
@@ -298,28 +419,169 @@ private extension CallActiveController {
 
     func createGestureRecognizers() {
         let tapGR = UITapGestureRecognizer(target: self, action: #selector(CallActiveController.tapOnView))
+        tapGR.delegate = self
         view.addGestureRecognizer(tapGR)
+        controlsTap = tapGR
+
+        // Either slot can be the box, so both listen; only the box's recognizers begin.
+        for slot in [remoteSlot, ownSlot] {
+            let pan = UIPanGestureRecognizer(target: self, action: #selector(CallActiveController.boxPanned(_:)))
+            pan.delegate = self
+            slot.addGestureRecognizer(pan)
+
+            let tap = UITapGestureRecognizer(target: self, action: #selector(CallActiveController.boxTapped))
+            tap.delegate = self
+            slot.addGestureRecognizer(tap)
+        }
     }
 
-    func createVideoPreviewView() {
-        videoPreviewView = UIView()
-        videoPreviewView.backgroundColor = KQColor.lockBottom
-        videoPreviewView.layer.cornerRadius = KQRadius.card
-        videoPreviewView.clipsToBounds = true
-        view.addSubview(videoPreviewView)
+    /// KHANDAQ (calls stage, 26.11): the two slots of video, under the head and the controls, and the
+    /// switch of the camera, which stays in the corner of whichever is the box.
+    func createStage() {
+        remoteSlot.isHidden = true
+        ownSlot.isHidden = true
+        remoteSlot.accessibilityIdentifier = "air.call.video.remote"
+        ownSlot.accessibilityIdentifier = "air.call.video.own"
+        view.insertSubview(ownSlot, at: 0)
+        view.insertSubview(remoteSlot, at: 0)
 
-        videoPreviewView.isHidden = !outgoingVideo
+        // The 25 pt glyph drawn at the icon size, in the middle of the 32 pt circle.
+        let glyph = UIImage.templateNamed("switch-camera")
+        let glyphBounds = CGRect(x: 0, y: 0, width: KQSize.icon, height: KQSize.icon)
+        let image = UIGraphicsImageRenderer(bounds: glyphBounds).image { _ in
+            glyph.draw(in: AVMakeRect(aspectRatio: glyph.size, insideRect: glyphBounds))
+        }.withRenderingMode(.alwaysTemplate)
 
-        let image = UIImage.templateNamed("switch-camera")
-
-        switchCameraButton = UIButton()
+        switchCameraButton = SwitchCameraButton()
         switchCameraButton.tintColor = KQColor.fixedWhite
-        switchCameraButton.backgroundColor = KQColor.mediaControl
-        switchCameraButton.layer.cornerRadius = KQSize.targetIos / 2
+        // The dark scrim, as under the link chip, so the white glyph reads over any picture.
+        switchCameraButton.backgroundColor = KQColor.scrim
+        switchCameraButton.layer.cornerRadius = Constants.SwitchCameraSide / 2
         switchCameraButton.setImage(image, for: UIControlState())
         switchCameraButton.accessibilityLabel = String(localized: "air_call_switch_camera")
+        switchCameraButton.accessibilityIdentifier = "air.call.switch.camera"
         switchCameraButton.addTarget(self, action: #selector(CallActiveController.switchCameraButtonPressed), for: .touchUpInside)
-        videoPreviewView.addSubview(switchCameraButton)
+        ownSlot.addSubview(switchCameraButton)
+    }
+
+    /// The slot that is the box right now, if any.
+    var currentBox: AirCallVideoSlot? {
+        return slot(for: placement.box)
+    }
+
+    var placement: (stage: AirCallStage.Video?, box: AirCallStage.Video?) {
+        return AirCallStage.placement(remote: videoFeed != nil, own: videoPreviewLayer != nil, swapped: swapped)
+    }
+
+    func slot(for video: AirCallStage.Video?) -> AirCallVideoSlot? {
+        switch video {
+            case .some(.remote):
+                return remoteSlot
+            case .some(.own):
+                return ownSlot
+            case .none:
+                return nil
+        }
+    }
+
+    /// KHANDAQ (calls stage, 26.11): which video is where, and what the head does about it: over video
+    /// it gets its shadow (R8); with no video either way it gathers in the middle with the tile (R9),
+    /// and the controls, which only a video call hides, come back.
+    func updateStage() {
+        guard isViewLoaded else {
+            return
+        }
+        let remote = videoFeed != nil
+        let own = videoPreviewLayer != nil
+        if !(remote && own) {
+            swapped = false
+        }
+        let noVideo = !remote && !own && !outgoingVideo
+        centresHead = noVideo
+        headOverVideo = placement.stage != nil
+        if !remote && !own && !showControls {
+            showControls = true
+        }
+        view.setNeedsLayout()
+    }
+
+    /// R2: the shape of your camera as its preview shows it, read again whenever it may have changed.
+    func refreshOwnFrame() {
+        let frame = videoPreviewLayer.flatMap { AirCallCamera.shownFrame(of: $0) }
+        guard frame != ownSlot.layerFrame else {
+            return
+        }
+        ownSlot.layerFrame = frame
+        if isViewLoaded {
+            view.setNeedsLayout()
+        }
+    }
+
+    /// R5: the stage within its safe edges, 16 in.
+    func ownArea() -> CGRect {
+        return AirCallStage.ownArea(stage: view.bounds, safeInsets: view.safeAreaInsets)
+    }
+
+    /// R5: the row and what shows of the head, while they show.
+    func ownObstacles() -> [CGRect] {
+        guard showControls else {
+            return []
+        }
+        return [smallContainerView.frame, headContentFrame()]
+    }
+
+    /// R1 to R5: the stage takes the whole screen behind the head and the controls; the box its size
+    /// and corner, above them, unless a finger holds it.
+    func layoutStage() {
+        let current = placement
+        remoteSlot.isHidden = videoFeed == nil
+        ownSlot.isHidden = videoPreviewLayer == nil
+
+        if let stage = slot(for: current.stage) {
+            stage.isBox = false
+            stage.frame = view.bounds
+            if view.subviews.first !== stage {
+                view.sendSubview(toBack: stage)
+            }
+        }
+
+        // The switch of the camera belongs to the box; left in a slot that became the stage after a
+        // swap, it would stand under the status bar.
+        guard let box = slot(for: current.box) else {
+            switchCameraButton.isHidden = true
+            return
+        }
+        switchCameraButton.isHidden = false
+        box.isBox = true
+        let rightToLeft = view.effectiveUserInterfaceLayoutDirection == .rightToLeft
+        let size = AirCallStage.ownSize(frame: ownSlot.layerFrame, stage: view.bounds.size)
+        if draggingBox {
+            let center = box.center
+            box.bounds.size = size
+            box.center = center
+        }
+        else if snapAnimator?.isRunning != true {
+            let corner = ownCorner ?? .bottomTrailing(rightToLeft: rightToLeft)
+            box.frame = AirCallStage.ownRect(size: size, corner: corner, area: ownArea(), obstacles: ownObstacles())
+        }
+        if view.subviews.last !== debugLabel || view.subviews.dropLast().last !== box {
+            view.bringSubview(toFront: box)
+            view.bringSubview(toFront: debugLabel)
+        }
+
+        if switchCameraButton.superview !== box {
+            box.addSubview(switchCameraButton)
+        }
+        let side = Constants.SwitchCameraSide
+        let inset = Constants.SwitchCameraOffset
+        switchCameraButton.frame = CGRect(x: rightToLeft ? inset : box.bounds.width - inset - side, y: inset, width: side, height: side)
+    }
+
+    /// The row at the bottom while the controls show; hidden, just past the safe bottom, so no part of
+    /// it peeks over the home indicator.
+    func applyControlsOffset() {
+        let offset = showControls ? Constants.SmallBottomOffset : smallContainerView.frame.size.height + view.safeAreaInsets.bottom
+        smallContainerViewBottomConstraint.update(offset: offset)
     }
 
     func createBigViews() {
@@ -367,6 +629,7 @@ private extension CallActiveController {
 
     func createDebugLabel() {
         debugLabel = UILabel()
+        debugLabel.isHidden = true
         debugLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 11.0, weight: .medium)
         debugLabel.textColor = .systemYellow
         debugLabel.textAlignment = .center
@@ -390,19 +653,6 @@ private extension CallActiveController {
     }
 
     func installConstraints() {
-        videoPreviewView.snp.makeConstraints {
-            $0.trailing.equalTo(view).offset(Constants.VideoPreviewOffset)
-            $0.bottom.equalTo(smallContainerView.snp.top).offset(Constants.VideoPreviewOffset)
-            $0.width.equalTo(Constants.VideoPreviewSize.width)
-            $0.height.equalTo(Constants.VideoPreviewSize.height)
-        }
-
-        switchCameraButton.snp.makeConstraints {
-            $0.top.equalTo(videoPreviewView).offset(Constants.SwitchCameraOffset)
-            $0.trailing.equalTo(videoPreviewView).offset(-Constants.SwitchCameraOffset)
-            $0.size.equalTo(KQSize.targetIos)
-        }
-
         bigContainerView.snp.makeConstraints {
             $0.top.equalTo(topContainer.snp.bottom)
             $0.leading.trailing.bottom.equalTo(view)
@@ -440,8 +690,17 @@ private extension CallActiveController {
             // KHANDAQ: pin the control row above the home indicator (safe area), not the raw
             // screen bottom; on notch devices the row used to sit under the gesture bar.
             smallContainerViewBottomConstraint = $0.bottom.equalTo(view.safeAreaLayoutGuide.snp.bottom).offset(Constants.SmallBottomOffset).constraint
-            $0.leading.trailing.equalTo(view.safeAreaLayoutGuide).inset(KQSpace.x16)
+            // KHANDAQ (calls stage, 26.11): four columns of 96 at most, in the middle of a wide stage
+            // (R7); on a phone the full width less 16 each side, as before.
+            $0.centerX.equalTo(view.safeAreaLayoutGuide)
+            $0.leading.greaterThanOrEqualTo(view.safeAreaLayoutGuide).offset(KQSpace.x16)
+            $0.trailing.lessThanOrEqualTo(view.safeAreaLayoutGuide).offset(-KQSpace.x16)
+            $0.width.lessThanOrEqualTo(AirCallStage.rowMaxWidth)
+            $0.width.equalTo(view.safeAreaLayoutGuide).offset(-2 * KQSpace.x16).priority(999)
         }
+
+        // R9: a call without video centres its head between the safe top and the row.
+        pinHeadArea(above: smallContainerView.snp.top)
     }
 
     func setButtonsInitValues() {

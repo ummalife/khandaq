@@ -145,6 +145,7 @@ final class AirTileView: UIView {
     }
 
     private let side: CGFloat
+    private let cornerRadius: CGFloat
     private let backTile = CAShapeLayer()
     private let fill = CAShapeLayer()
     private let border = CAShapeLayer()
@@ -153,8 +154,12 @@ final class AirTileView: UIView {
     private let photoView = UIImageView()
     private var style: Style = .person(initials: "", tone: 0)
 
-    init(side: CGFloat) {
+    /// KHANDAQ (calls stage, 26.11): `initialsFont` and `cornerRadius` for a tile far larger than a row's,
+    /// such as the person on a call without video (R9); the tiles of rows keep their caption letters and
+    /// control corners.
+    init(side: CGFloat, initialsFont: UIFont = KQFont.font(.caption, weight: 600), cornerRadius: CGFloat = KQRadius.control) {
         self.side = side
+        self.cornerRadius = cornerRadius
         super.init(frame: CGRect(x: 0, y: 0, width: side, height: side))
 
         isAccessibilityElement = false
@@ -165,11 +170,11 @@ final class AirTileView: UIView {
         layer.addSublayer(fill)
 
         photoView.contentMode = .scaleAspectFill
-        photoView.layer.cornerRadius = KQRadius.control
+        photoView.layer.cornerRadius = cornerRadius
         photoView.clipsToBounds = true
         addSubview(photoView)
 
-        initialsLabel.font = KQFont.font(.caption, weight: 600)
+        initialsLabel.font = initialsFont
         initialsLabel.adjustsFontForContentSizeCategory = true
         // The tile keeps its size at every text size, so its letters stop growing where two of them
         // still fit: at the accessibility sizes they were cut to "...". The name beside it grows.
@@ -229,14 +234,14 @@ final class AirTileView: UIView {
         super.layoutSubviews()
         let inset = KQStroke.hairline / 2
         let rect = bounds.insetBy(dx: inset, dy: inset)
-        let path = UIBezierPath(roundedRect: rect, cornerRadius: KQRadius.control).cgPath
+        let path = UIBezierPath(roundedRect: rect, cornerRadius: cornerRadius).cgPath
         fill.path = path
         border.path = path
 
         // The second tile peeks out behind a group, towards the trailing edge and up.
         let isRightToLeft = effectiveUserInterfaceLayoutDirection == .rightToLeft
         let offset = CGPoint(x: isRightToLeft ? -KQSpace.x4 : KQSpace.x4, y: -KQSpace.x4)
-        backTile.path = UIBezierPath(roundedRect: rect.offsetBy(dx: offset.x, dy: offset.y), cornerRadius: KQRadius.control).cgPath
+        backTile.path = UIBezierPath(roundedRect: rect.offsetBy(dx: offset.x, dy: offset.y), cornerRadius: cornerRadius).cgPath
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {

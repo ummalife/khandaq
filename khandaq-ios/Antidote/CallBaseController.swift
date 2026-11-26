@@ -13,7 +13,7 @@ class CallBaseController: UIViewController {
 
     let callerName: String
 
-    /// The head: the name, the state and the link.
+    /// The head: the name, the state and the link; on a call without video the person's tile too.
     var topContainer: UIView!
     var callerLabel: UILabel!
     /// The state of the call: "Calling", "Incoming call", the timer, "Call ended".
@@ -29,10 +29,52 @@ class CallBaseController: UIViewController {
         }
     }
 
+    /// KHANDAQ (calls stage, 26.11): the person on a call without video (R9): their photo, else their
+    /// initials in their tone. Nil shows the initials of the name on the screen.
+    var person: AirCallPerson? {
+        didSet {
+            guard isViewLoaded else {
+                return
+            }
+            applyPerson()
+        }
+    }
+
+    /// KHANDAQ (calls stage, 26.11): a call without video either way gathers the person's tile, the
+    /// name, the state and the link in the middle of `headArea` (R9); otherwise the head stands at the
+    /// top without the tile.
+    var centresHead = false {
+        didSet {
+            guard isViewLoaded, centresHead != oldValue else {
+                return
+            }
+            applyHeadPlacement()
+        }
+    }
+
+    /// KHANDAQ (calls stage, 26.11): over video the name and the state get a soft shadow so they read
+    /// on any picture (R8); no band of gradient behind them.
+    var headOverVideo = false {
+        didSet {
+            guard isViewLoaded, headOverVideo != oldValue else {
+                return
+            }
+            applyHeadShadow()
+        }
+    }
+
+    /// Where a centred head stands: from the safe top down to the controls, which a subclass pins its
+    /// bottom to with `pinHeadArea(above:)` (the safe bottom until it does).
+    let headArea = UILayoutGuide()
+
+    /// The link as a chip under the state (R8).
+    let linkChip = AirCallLinkChip()
+
     fileprivate var topContainerTopConstraint: Constraint!
-    fileprivate let linkRow = UIStackView()
-    fileprivate let linkMark = AirLinkMarkView()
-    fileprivate let linkLabel = UILabel()
+    fileprivate var headCentreConstraints: [Constraint] = []
+    fileprivate var headAreaBottomConstraint: Constraint!
+    fileprivate var personTile: AirTileView!
+    fileprivate var personTileSideConstraint: Constraint!
     fileprivate var infoIsTimer = false
     fileprivate var infoFontCategory = UIApplication.shared.preferredContentSizeCategory
 
@@ -70,15 +112,28 @@ class CallBaseController: UIViewController {
         createTopViews()
         installConstraints()
         applyLink()
+        applyPerson()
+        applyHeadPlacement()
+        applyHeadShadow()
+        infoFontCategory = UIApplication.shared.preferredContentSizeCategory
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
+        // KHANDAQ (calls stage, 26.11): the traits can change while loadView is still building the head
+        // (the dark override reaching the new view); loadView applies them itself then.
+        guard personTileSideConstraint != nil else {
+            return
+        }
         let category = UIApplication.shared.preferredContentSizeCategory
         if category != infoFontCategory {
             infoFontCategory = category
             applyInfoFont()
         }
+        if traitCollection.userInterfaceIdiom != previousTraitCollection?.userInterfaceIdiom {
+            personTileSideConstraint.update(offset: personTileSide)
+        }
+        applyHeadShadow()
     }
 
     /**
@@ -90,8 +145,31 @@ class CallBaseController: UIViewController {
     }
 
     func toggleTopContainer(hidden: Bool) {
-        let offset = hidden ? -topContainer.frame.size.height : 0.0
-        topContainerTopConstraint.update(offset: offset)
+        // KHANDAQ (calls stage, 26.11): hidden, the head goes above the screen whole; moved up by its own
+        // height only, the chip stayed in sight under the status bar.
+        let offset = hidden ? -(topContainer.frame.size.height + KQSpace.x40 + view.safeAreaInsets.top) : 0.0
+        topContainerTopConstraint.update(offset: KQSpace.x40 + offset)
+    }
+
+    /// KHANDAQ (calls stage, 26.11): the bottom of `headArea` at the top of the controls. A required pin,
+    /// not one above a fallback of low priority: the solver stretched the row of controls up to the
+    /// safe bottom to keep such a fallback once the row went down out of sight.
+    func pinHeadArea(above item: ConstraintItem) {
+        headAreaBottomConstraint.deactivate()
+        headArea.snp.makeConstraints {
+            headAreaBottomConstraint = $0.bottom.equalTo(item).constraint
+        }
+    }
+
+    /// KHANDAQ (calls stage, 26.11): what of the head is on the screen, in the coordinates of `view`,
+    /// for the picture in picture to keep clear of (R5); empty while the head is hidden or empty.
+    func headContentFrame() -> CGRect {
+        topContainer.layoutIfNeeded()
+        var frame = CGRect.null
+        for part in (topContainer as? UIStackView)?.arrangedSubviews ?? [] where !part.isHidden {
+            frame = frame.union(part.convert(part.bounds, to: view))
+        }
+        return frame.isNull ? .zero : frame
     }
 
     /// The state of the call: a word, or the timer in tabular figures so its width does not jump.
@@ -105,9 +183,24 @@ class CallBaseController: UIViewController {
 }
 
 private extension CallBaseController {
+    /// R9: the person's tile is 112 pt on phones and 128 pt on tablets.
+    var personTileSide: CGFloat {
+        return traitCollection.userInterfaceIdiom == .pad ? AirCallStage.avatarSideTablet : AirCallStage.avatarSidePhone
+    }
+
     func createTopViews() {
-        topContainer = UIView()
+        // KHANDAQ (calls stage, 26.11): one column, each part in the middle at its own width, so the
+        // picture in picture can stand beside a short name (R5, R11) and the group can be centred (R9).
+        let head = UIStackView()
+        head.axis = .vertical
+        head.alignment = .center
+        topContainer = head
         view.addSubview(topContainer)
+        view.addLayoutGuide(headArea)
+
+        // The tile of a row, at the size of the call screen: the display letters and the sheet corners.
+        personTile = AirTileView(side: AirCallStage.avatarSidePhone, initialsFont: KQFont.font(.display), cornerRadius: KQRadius.sheet)
+        head.addArrangedSubview(personTile)
 
         callerLabel = UILabel()
         callerLabel.text = callerName
@@ -117,52 +210,84 @@ private extension CallBaseController {
         callerLabel.adjustsFontForContentSizeCategory = true
         callerLabel.numberOfLines = 2
         callerLabel.accessibilityTraits = UIAccessibilityTraitHeader
-        topContainer.addSubview(callerLabel)
+        head.addArrangedSubview(callerLabel)
 
         infoLabel = UILabel()
         infoLabel.textColor = KQColor.fixedWhite
         infoLabel.textAlignment = .center
         infoLabel.numberOfLines = 0
         applyInfoFont()
-        topContainer.addSubview(infoLabel)
+        head.addArrangedSubview(infoLabel)
 
-        linkLabel.font = KQFont.font(.label)
-        linkLabel.adjustsFontForContentSizeCategory = true
-        linkLabel.textColor = KQColor.fixedWhite
-        linkLabel.numberOfLines = 0
-        linkLabel.isAccessibilityElement = true
-        linkRow.axis = .horizontal
-        linkRow.alignment = .center
-        linkRow.spacing = KQSpace.x8
-        linkRow.addArrangedSubview(linkMark)
-        linkRow.addArrangedSubview(linkLabel)
-        topContainer.addSubview(linkRow)
+        head.addArrangedSubview(linkChip)
+
+        // R9: 16 between the tile and the name, 6 between the name and the state, 12 before the chip.
+        head.setCustomSpacing(KQSpace.x16, after: personTile)
+        head.setCustomSpacing(KQSpace.x6, after: callerLabel)
+        head.setCustomSpacing(KQSpace.x12, after: infoLabel)
     }
 
     func installConstraints() {
         topContainer.snp.makeConstraints {
             // Under the notch and the Dynamic Island; the stored constraint hides the head during a video
-            // call by moving it up by its own height.
-            topContainerTopConstraint = $0.top.equalTo(view.safeAreaLayoutGuide).constraint
+            // call by moving it above the screen.
+            topContainerTopConstraint = $0.top.equalTo(view.safeAreaLayoutGuide).offset(KQSpace.x40).constraint
             $0.leading.trailing.equalTo(view.safeAreaLayoutGuide).inset(KQSpace.x24)
         }
-
-        callerLabel.snp.makeConstraints {
-            $0.top.equalToSuperview().offset(KQSpace.x40)
-            $0.leading.trailing.equalToSuperview()
+        // On a phone on its side the group needs nearly all the height above the row: it may reach the
+        // safe top and keeps 16 above the row. Short of room it leaves the middle first; then the tile
+        // gives way, not the words.
+        headCentreConstraints = topContainer.snp.prepareConstraints {
+            $0.centerY.equalTo(headArea).priority(.medium)
+            $0.top.greaterThanOrEqualTo(view.safeAreaLayoutGuide)
+            $0.bottom.lessThanOrEqualTo(headArea).offset(-KQSpace.x16)
         }
 
-        infoLabel.snp.makeConstraints {
-            $0.top.equalTo(callerLabel.snp.bottom).offset(KQSpace.x8)
-            $0.leading.trailing.equalToSuperview()
+        headArea.snp.makeConstraints {
+            $0.top.leading.trailing.equalTo(view.safeAreaLayoutGuide)
+            headAreaBottomConstraint = $0.bottom.equalTo(view.safeAreaLayoutGuide).constraint
         }
 
-        linkRow.snp.makeConstraints {
-            $0.top.equalTo(infoLabel.snp.bottom).offset(KQSpace.x12)
-            $0.centerX.equalToSuperview()
-            $0.leading.greaterThanOrEqualToSuperview()
-            $0.trailing.lessThanOrEqualToSuperview()
-            $0.bottom.equalToSuperview().offset(-KQSpace.x16)
+        personTile.snp.makeConstraints {
+            personTileSideConstraint = $0.size.equalTo(personTileSide).priority(700).constraint
+            $0.width.equalTo(personTile.snp.height)
+        }
+        personTile.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        personTile.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        for part in [callerLabel!, infoLabel!, linkChip] as [UIView] {
+            part.snp.makeConstraints {
+                $0.width.lessThanOrEqualToSuperview()
+            }
+        }
+        callerLabel.setContentCompressionResistancePriority(UILayoutPriority(rawValue: 999), for: .vertical)
+        infoLabel.setContentCompressionResistancePriority(UILayoutPriority(rawValue: 999), for: .vertical)
+    }
+
+    func applyHeadPlacement() {
+        personTile.isHidden = !centresHead
+        if centresHead {
+            topContainerTopConstraint.deactivate()
+            headCentreConstraints.forEach { $0.activate() }
+        }
+        else {
+            headCentreConstraints.forEach { $0.deactivate() }
+            topContainerTopConstraint.activate()
+        }
+    }
+
+    func applyPerson() {
+        let tile = person?.tile ?? .person(initials: AirInitials.from(callerName), tone: AirTone.index(for: callerName))
+        personTile.configure(style: tile, photo: person?.photo)
+    }
+
+    /// R8: `fixed-black` at 50 %, a blur of 4 and 1 pt down; the radius of a layer shadow is half the blur.
+    func applyHeadShadow() {
+        for label in [callerLabel!, infoLabel!] {
+            label.layer.shadowColor = label.airCGColor(KQColor.fixedBlack)
+            label.layer.shadowOpacity = headOverVideo ? 0.5 : 0
+            label.layer.shadowRadius = KQSpace.x4 / 2
+            label.layer.shadowOffset = CGSize(width: 0, height: 1)
         }
     }
 
@@ -173,11 +298,10 @@ private extension CallBaseController {
 
     func applyLink() {
         guard let link = link else {
-            linkRow.isHidden = true
+            linkChip.isHidden = true
             return
         }
-        linkRow.isHidden = false
-        linkMark.configure(link)
-        linkLabel.text = AirCallText.line(link)
+        linkChip.isHidden = false
+        linkChip.configure(link)
     }
 }

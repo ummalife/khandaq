@@ -103,7 +103,9 @@ private extension CallIncomingController {
     func installConstraints() {
         controls.snp.makeConstraints {
             $0.leading.trailing.equalTo(view.safeAreaLayoutGuide).inset(KQSpace.x32)
-            $0.top.greaterThanOrEqualTo(topContainer.snp.bottom).offset(KQSpace.x24)
+            // KHANDAQ (calls stage, 26.11): the head lost the 16 pt it kept under the link line; the
+            // controls keep the same room under it.
+            $0.top.greaterThanOrEqualTo(topContainer.snp.bottom).offset(KQSpace.x40)
             $0.bottom.equalTo(view.safeAreaLayoutGuide).offset(-KQSpace.x32)
         }
     }

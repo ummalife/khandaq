@@ -69,6 +69,18 @@ constexpr qint64 syncedTextKnownMs = (200 * 60 + 5 * 60) * 1000LL;
  */
 qint64 syncedTextTimeMs(const SyncedText& text);
 
+/**
+ * KHANDAQ (group notify parity, 2026-11-20): whether a text of another member that a group just
+ * showed makes a sound and a notification too, besides counting as unread on the row of the
+ * group, as each one does that does not show in front of the person
+ * (Widget::newGroupMessageAlert). One relayed from the history of the group never does: it was
+ * written while this computer slept or was offline, the testers took such notifications for new
+ * messages, and its author is only what the member who relayed it says (K-01). A live one does
+ * when it mentions us, or when the group tells of every message (Settings::getGroupAlwaysNotify).
+ * A relayed file counts nothing at all (Widget::onGroupFileReceived).
+ */
+bool groupEntryNotifies(bool relayed, bool mentionsUs, bool alwaysNotify);
+
 /** The request for the history of a group, packet 0x01 of version 1: 8 bytes, nothing after. */
 QByteArray historyRequestPacket();
 

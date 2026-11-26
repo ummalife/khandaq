@@ -36,6 +36,7 @@ import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
@@ -587,6 +588,44 @@ public class HelperMsgNotification
         }
     }
 
+    /** The group {@code group_id} is the chat on screen (its activity is resumed). */
+    static boolean is_viewing_group_chat(final String group_id)
+    {
+        if ((group_id == null) || (MainActivity.group_message_list_activity == null))
+        {
+            return false;
+        }
+        try
+        {
+            final String open_id = MainActivity.group_message_list_activity.get_current_group_id();
+            return (open_id != null) && group_id.equalsIgnoreCase(open_id);
+        }
+        catch (Exception e)
+        {
+            return false;
+        }
+    }
+
+    /**
+     * KHANDAQ (2026-11-20, notification parity): the chat of {@code key} is on screen, a contact's or a group's. A
+     * message of the chat on screen plays the short message sound and posts nothing; that held for a contact
+     * only, and a group whose chat was open stayed silent.
+     */
+    static boolean is_viewing_chat(final String key)
+    {
+        return is_viewing_friend_chat(key) || is_viewing_group_chat(key);
+    }
+
+    /** "Name: text" when a member of a group wrote it ({@code member} not blank), else the text alone. */
+    static String with_group_member(@Nullable final Context context, @Nullable final String member, final String text)
+    {
+        if ((context == null) || (member == null) || member.trim().isEmpty())
+        {
+            return text;
+        }
+        return context.getString(R.string.air_band_sender_text_format, member.trim(), text);
+    }
+
     static void play_message_sound_only()
     {
         if ((!PREF__notification) || (!PREF__notification_sound) || (context_s == null))
@@ -710,6 +749,23 @@ public class HelperMsgNotification
             }
         }
         final AirBand.Content band = band_content;
+        // KHANDAQ (2026-11-20, notification parity): in a group the member who wrote leads the text of the system
+        // notification ("Name: text"), as the in-app band says it (AirBand.forMessage), and as iOS and the desktop
+        // say it. Only the group's name was there, so nobody could tell who wrote. Read here, off the main thread,
+        // as the band's content is.
+        String member_name = null;
+        if (PREF__notification_show_content && !TextUtils.isEmpty(group_peer_key) && !TextUtils.isEmpty(nf_key))
+        {
+            try
+            {
+                member_name = HelperGroup.tox_group_peer_get_name__wrapper(nf_key, group_peer_key);
+            }
+            catch (Throwable ignored)
+            {
+                // The group may be gone from toxcore; the text still says enough.
+            }
+        }
+        final String group_member = member_name;
         Runnable myRunnable = new Runnable()
         {
             @Override
@@ -736,7 +792,7 @@ public class HelperMsgNotification
                                 // It could not come down: as before the band.
                                 break;
                             case QUIET:
-                                if (!is_viewing_friend_chat(nf_key))
+                                if (!is_viewing_chat(nf_key))
                                 {
                                     // The backlog of coming back and a late delivery: no band, no sound.
                                     return;
@@ -748,7 +804,7 @@ public class HelperMsgNotification
                         }
                     }
 
-                    if (appInForeground || is_viewing_friend_chat(nf_key))
+                    if (appInForeground || is_viewing_chat(nf_key))
                     {
                         // KHANDAQ (#H3 parity): suppress the ring for the first 3s after the app becomes
                         // active. On entry the Tox backlog / offline-queue flushes and each flushed message
@@ -822,14 +878,16 @@ public class HelperMsgNotification
                                 final String preview = trim_message_preview(nf_text);
                                 if (!preview.isEmpty())
                                 {
-                                    b.setContentText(preview);
-                                    b.setStyle(new NotificationCompat.BigTextStyle().bigText(preview));
+                                    final String said = with_group_member(context_s, group_member, preview);
+                                    b.setContentText(said);
+                                    b.setStyle(new NotificationCompat.BigTextStyle().bigText(said));
                                 }
                                 else
                                 {
                                     // KHANDAQ #200: an empty preview is almost always a media/file message:
                                     // show an attachment label instead of the generic "new message" body.
-                                    b.setContentText(context_s.getString(R.string.notification_media_generic));
+                                    b.setContentText(with_group_member(context_s, group_member, context_s.getString(
+                                            R.string.notification_media_generic)));
                                 }
                             }
                             else

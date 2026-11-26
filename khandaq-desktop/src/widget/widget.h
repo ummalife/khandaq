@@ -249,6 +249,8 @@ public slots:
     /**
      * KHANDAQ (0.2.63): a text a member relayed from the history of the group
      * (Core::groupSyncedMessageReceived): shown under the time it was written, alerting nobody.
+     * KHANDAQ (group notify parity, 2026-11-20): it counts as unread as a live one does, still
+     * without a sound or a notification (ChatHistory::syncedMessageAdded).
      */
     void onGroupSyncedMessageReceived(int groupnumber, const ToxPk& author, const QString& message,
                                       uint32_t messageId, const QDateTime& sentAt);

@@ -6025,8 +6025,10 @@ public class HelperGroup
             //      "noti_and_badge:002group:" + group_message_list_activity.get_current_group_id() + ":" + group_id);
             if (group_message_list_activity.get_current_group_id().equalsIgnoreCase(group_id))
             {
-                // no notifcation and no badge update
-                do_notification = false;
+                // KHANDAQ (2026-11-20, notification parity): no badge for the chat on screen, but no longer
+                // silence either. A message of a contact whose chat is open plays the short message sound and
+                // posts nothing (show_msg_notification); a group was quiet altogether. do_notification keeps
+                // what the mutes decided above, so a muted group stays quiet.
                 do_badge_update = false;
             }
         }
@@ -7911,12 +7913,8 @@ public class HelperGroup
     private static boolean should_notify_incoming_group_file(final String groupId, final String peerPubkey,
                                                              final GroupDB groupDb)
     {
-        if ((group_message_list_activity != null)
-            && group_message_list_activity.get_current_group_id().equalsIgnoreCase(groupId))
-        {
-            return false;
-        }
-
+        // KHANDAQ (2026-11-20, notification parity): the chat on screen is no longer asked here. Its message gets
+        // the short sound and nothing posted from show_msg_notification, as a file of a contact whose chat is open.
         try
         {
             if ((groupDb != null) && groupDb.notification_silent)
@@ -8049,11 +8047,40 @@ public class HelperGroup
             final boolean viewing = (group_message_list_activity != null)
                     && group_message_list_activity.get_current_group_id().equalsIgnoreCase(groupId);
             insert_into_group_message_db(m, viewing);
+            // KHANDAQ (2026-11-20, notification parity): a file of another member is told when its row appears, as
+            // a file of a contact is when it is offered (MainActivity). It was told when its last chunk was in: a
+            // video took minutes before anyone heard of it, and in Khandaq Community, where a file of another
+            // member waits for a tap (KhandaqCommunity.fileComesByItself), it was never told at all.
+            notify_incoming_group_file(groupId, m, displayName);
         }
         catch (Exception e)
         {
             HelperGeneric.logI(TAG, "handle_incoming_group_file_begin:EE:" + e.getMessage());
         }
+    }
+
+    /** The notification of a file of another member, under the mutes of the group and of that member. */
+    private static void notify_incoming_group_file(final String groupId, final GroupMessage m, final String displayName)
+    {
+        GroupDB groupDb = null;
+        try
+        {
+            groupDb = (GroupDB) orma.selectFromGroupDB().
+                    group_identifierEq(groupId.toLowerCase(Locale.ROOT)).
+                    toList().get(0);
+        }
+        catch (Exception ignored)
+        {
+        }
+        if (!should_notify_incoming_group_file(groupId, m.tox_group_peer_pubkey, groupDb))
+        {
+            return;
+        }
+        // KHANDAQ (0.2.64): the file's kind in words, as for a file of one person (MainActivity).
+        change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier,
+                                (groupDb != null) ? groupDb.name : null,
+                                HelperMsgNotification.media_label_for_filename(context_s, displayName),
+                                m.sent_timestamp, m.tox_group_peer_pubkey);
     }
 
     static void handle_incoming_group_file_complete(final long groupNumber, final long peerId,
@@ -8145,36 +8172,9 @@ public class HelperGroup
                     });
                 }
 
-                GroupDB groupDb = null;
-                try
-                {
-                    groupDb = (GroupDB) orma.selectFromGroupDB().
-                            group_identifierEq(group_id.toLowerCase()).
-                            toList().get(0);
-                }
-                catch (Exception ignored)
-                {
-                }
-
-                final String peer_pubkey = existing.tox_group_peer_pubkey;
-                if (should_notify_incoming_group_file(group_id, peer_pubkey, groupDb))
-                {
-                    String groupname = null;
-                    try
-                    {
-                        if (groupDb != null)
-                        {
-                            groupname = groupDb.name;
-                        }
-                    }
-                    catch (Exception ignored)
-                    {
-                    }
-                    // KHANDAQ (0.2.64): the file's kind in words, as for a file of one person (MainActivity).
-                    change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, existing.group_identifier,
-                                            groupname,
-                                            HelperMsgNotification.media_label_for_filename(context_s, displayName));
-                }
+                // KHANDAQ (2026-11-20, notification parity): no notification at the end of a file whose row was
+                // there already. The row told of it when it appeared (handle_incoming_group_file_begin); or the
+                // person tapped to fetch it; or it came from history, which decides on its own notification.
 
                 HelperFriend.refresh_chat_list_group_row_wrapper(group_id);
                 HelperFriend.add_all_friends_clear_wrapper(0);
@@ -11296,8 +11296,8 @@ public class HelperGroup
                 //      "group_custom_packet_cb:noti_and_badge:002group:" + group_message_list_activity.get_current_group_id() + ":" + group_id);
                 if (group_message_list_activity.get_current_group_id().equalsIgnoreCase(group_id))
                 {
-                    // no notifcation and no badge update
-                    do_notification = false;
+                    // KHANDAQ (2026-11-20, notification parity): as for a text (the live callback above), the chat
+                    // on screen gets no badge and the short message sound from show_msg_notification.
                     do_badge_update = false;
                 }
             }

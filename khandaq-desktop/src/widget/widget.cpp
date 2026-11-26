@@ -95,6 +95,7 @@
 #include "src/model/group.h"
 #include "src/model/air/aircommunity.h"
 #include "src/model/air/airgroupfilerepair.h"
+#include "src/model/air/airhistorysync.h"
 #include "src/model/air/airmedia.h"
 #include "src/model/air/airmessagemarks.h"
 #include "src/model/air/airpreferences.h"
@@ -3338,8 +3339,9 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
         qDebug() << "onGroupFileReceived: a file of Khandaq Community waits for Accept,"
                  << fileData.size() << "bytes;" << heldGroupFiles.count() << "held,"
                  << heldGroupFiles.bytes() << "bytes";
-        // As below: a synced row's sender is unauthenticated, so it alerts nobody.
-        if (!wasSynced) {
+        // As below: a synced row alerts nobody and counts nothing, and a file whose BEGIN made its
+        // entry alerted then, not again for Accept.
+        if (!arrived && !wasSynced) {
             newGroupMessageAlert(groupId, sender, groupFileWords(fileName),
                                  settings.getGroupAlwaysNotify());
         }
@@ -3414,12 +3416,18 @@ void Widget::onGroupFileReceived(int groupnumber, const ToxPk& sender, const QSt
     // stands behind.
     //
     // Live rows are unaffected: toxcore authenticates their sender.
-    if (!wasSynced) {
-        newGroupMessageAlert(groupId, sender, groupFileWords(fileName),
-                             settings.getGroupAlwaysNotify());
-    } else {
+    //
+    // KHANDAQ (group notify parity, 2026-11-20): a file whose BEGIN made its entry alerted then
+    // (onGroupFileArrivalStarted), and not again. A synced file, unlike a relayed text, does not
+    // count as unread either: the ids of the files that came are kept in memory only
+    // (ngcFileMsgIdSeen), so after a restart the history sync can bring a small file of the last
+    // hours again, and each such copy would count once more.
+    if (wasSynced) {
         qDebug() << "onGroupFileReceived: synced row, storing without a notification"
                  << "(attribution to" << sender.toString().left(8) << "is unauthenticated)";
+    } else if (!arrived) {
+        newGroupMessageAlert(groupId, sender, groupFileWords(fileName),
+                             settings.getGroupAlwaysNotify());
     }
 }
 
@@ -3624,7 +3632,8 @@ void Widget::onGroupFileArrivalStarted(int groupnumber, const ToxPk& sender,
                  ToxFile::RECEIVING);
     file.resumeFileId = fileId;
     // One that stopped coming before has its entry of then back.
-    file.continued = stoppedGroupFileArrivals.remove(fileId);
+    const bool entryOfBefore = stoppedGroupFileArrivals.remove(fileId);
+    file.continued = entryOfBefore;
     // INITIALIZING creates the history record; TRANSMITTING shows the bar, which the chunks move.
     file.status = ToxFile::INITIALIZING;
     updateGroupFileInChatLog(groupId, sender, file);
@@ -3633,6 +3642,15 @@ void Widget::onGroupFileArrivalStarted(int groupnumber, const ToxPk& sender,
     file.progress.addSample(0, QTime::currentTime());
     updateGroupFileInChatLog(groupId, sender, file);
     groupFileArrivals.insert(fileId, GroupFileArrival{groupId, sender, file});
+    // KHANDAQ (group notify parity, 2026-11-20): a file of a member alerts once, as its entry
+    // shows, as a file of a person does once it is offered (onFileReceiveRequested), not when the
+    // last of its chunks came, minutes later for a large one: onGroupFileReceived says nothing of
+    // a file whose entry its BEGIN made. One that goes on in its entry of before is no news, as
+    // between two people. Chunks come only live, from the member toxcore vouches for.
+    if (!entryOfBefore) {
+        newGroupMessageAlert(groupId, sender, groupFileWords(fileName),
+                             settings.getGroupAlwaysNotify());
+    }
 }
 
 void Widget::onGroupFileArrivalProgress(const QByteArray& fileId, qint64 bytesReceived)
@@ -3885,14 +3903,21 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
         std::make_shared<ChatHistory>(*newgroup, history, *core, settings, *messageDispatcher,
                                       *friendList, *groupList, airLocal);
 
-    auto notifyReceivedCallback = [this, groupId](const ToxPk& author, const Message& message) {
+    // KHANDAQ (group notify parity, 2026-11-20): a text a member relayed from the history of the
+    // group (synced) was written while this computer slept or was offline. It counts as unread,
+    // and a mention of us marks the row, as a live text does, muted group or not; but it makes no
+    // sound, notification or blink (Air::groupEntryNotifies). The history tells only of one it did
+    // not keep already (ChatHistory::syncedMessageAdded), so what was read before counts nothing.
+    const auto alertGroupText = [this, groupId](const ToxPk& author, const Message& message,
+                                                bool synced) {
         auto isTargeted = std::any_of(message.metadata.begin(), message.metadata.end(),
                                       [](MessageMetadata metadata) {
                                           return metadata.type == MessageMetadataType::selfMention;
                                       });
         const bool alerted =
             newGroupMessageAlert(groupId, author, AirStrings::messageWords(message.content),
-                                 isTargeted || settings.getGroupAlwaysNotify());
+                                 Air::groupEntryNotifies(synced, isTargeted,
+                                                         settings.getGroupAlwaysNotify()));
         // The row carries an @ until the group is opened (GroupChatroom::resetEventFlags).
         if (alerted && isTargeted) {
             if (Group* group = groupList->findGroup(groupId)) {
@@ -3900,10 +3925,17 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
             }
         }
     };
+    auto notifyReceivedCallback = [alertGroupText](const ToxPk& author, const Message& message) {
+        alertGroupText(author, message, false);
+    };
 
     auto notifyReceivedConnection =
         connect(messageDispatcher.get(), &IMessageDispatcher::messageReceived, notifyReceivedCallback);
     groupAlertConnections.insert(groupId, notifyReceivedConnection);
+    connect(chatHistory.get(), &ChatHistory::syncedMessageAdded, this,
+            [alertGroupText](const ToxPk& author, const Message& message) {
+                alertGroupText(author, message, true);
+            });
 
     auto form = new GroupChatForm(*core, newgroup, *chatHistory, *messageDispatcher,
         settings, *documentCache, *smileyPack, style, *messageBoxManager, *friendList, *groupList);

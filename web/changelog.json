@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-26T17:50:38Z",
+  "generated_at": "2026-11-26T23:02:11Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,91 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.70",
+      "date": "2026-11-27",
+      "title": "Calls: every video in its own shape, your picture to drag and swap, on every client",
+      "summary": "The call screen is redone on Android, iPhone and iPad, and the desktop. Neither video is ever stretched: the other person's fills the screen when it is turned the same way and otherwise shows whole on black. Your own picture keeps your camera's shape, stays clear of the edges, the name and the buttons, goes to the corner you throw it to, and a tap swaps it with the big one. The buttons are even circles with one-line words, and an audio call puts the person in the middle. Also: the attach sheet in the dark theme, a group header when only you are online, and Android 16 screens below the status bar.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "Video on a call is never stretched",
+          "description": "The other person's video fills the screen when it is turned the same way as the screen, and shows whole on black when it is not. It is laid out again when either of you turns the phone or the window changes size. On Android, a green strip no longer runs down the edge of the video.",
+          "platforms": [
+            "android",
+            "ios",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Your own picture: your camera's shape, drag it, swap it",
+          "description": "Your picture in the corner keeps the shape of your camera instead of being squashed into a fixed box. It has rounded corners and stays 16 points clear of the screen's edges, the name and the buttons. Drag it and it goes to the corner you throw it to; tap it and it swaps with the big picture. On Android a long press still makes it bigger, as far as the room between the name and the buttons allows.",
+          "platforms": [
+            "android",
+            "ios",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "The call buttons in one even row",
+          "description": "Equal circles, each with its word on one line: Flip instead of Switch camera, which wrapped to two lines. The camera and the microphone are crossed out while off. On tablets and the desktop the row stays centred.",
+          "platforms": [
+            "android",
+            "ios",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "An audio call puts the person in the middle",
+          "description": "The avatar, the name, the time and the connection stand together in the middle of the screen. The connection, direct or through a relay, is a small dark label under the time on every call. The call screen is dark in the light theme too.",
+          "platforms": [
+            "android",
+            "ios",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Screens stay below the status bar on Android 16",
+          "description": "Network diagnostics, search, the ringtone and the other screens that went under the clock and the status bar icons on Android 16 now start below them, and their bottoms stay above the gesture bar.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "A group says when only you are online",
+          "description": "The header of a group said nobody was online when you were the only one. It now says only you are online.",
+          "platforms": [
+            "android",
+            "ios",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "The attach sheet in the dark theme",
+          "description": "Its top corners show the dimmed chat behind them, not white.",
+          "platforms": [
+            "android"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.69",
       "date": "2026-11-26",

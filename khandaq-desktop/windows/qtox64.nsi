@@ -7,7 +7,7 @@ Unicode True
 !define APP_NAME "Khandaq"
 !define COMP_NAME "Khandaq"
 !define WEB_SITE "https://khandaq.org"
-!define VERSION "0.2.69.0"
+!define VERSION "0.2.70.0"
 !define DESCRIPTION "Khandaq Messenger Installer"
 !define COPYRIGHT "Khandaq Project"
 !define INSTALLER_NAME "Khandaq-installer.exe"
@@ -362,7 +362,7 @@ Section "Install"
   ${WriteRegStr} "${REG_ROOT}" "${REG_APP_PATH}" "" "$INSTDIR\${MAIN_APP_EXE}"
   ${WriteRegStr} "${REG_ROOT}" "${REG_APP_PATH}" "Path" "$INSTDIR\bin\"
   ${WriteRegStr} ${REG_ROOT} "${UNINSTALL_PATH}" "DisplayName" "Khandaq"
-  ${WriteRegStr} ${REG_ROOT} "${UNINSTALL_PATH}" "DisplayVersion" "0.2.69"
+  ${WriteRegStr} ${REG_ROOT} "${UNINSTALL_PATH}" "DisplayVersion" "0.2.70"
   ${WriteRegStr} ${REG_ROOT} "${UNINSTALL_PATH}" "Publisher" "Khandaq Project"
   ; KHANDAQ (0.2.68 installer review): quoted, like every command line below, and with the app's
   ; icon in Settings > Apps instead of a blank one.

@@ -28,19 +28,19 @@ Message content is **end-to-end encrypted** by Tox. Khandaq infrastructure provi
 
 ## Download pre-built clients
 
-All binaries are hosted on **[GitHub Releases](https://github.com/ummalife/khandaq/releases/tag/v0.2.69)** (not in git):
+All binaries are hosted on **[GitHub Releases](https://github.com/ummalife/khandaq/releases/tag/v0.2.70)** (not in git):
 
 | Platform | Download |
 |----------|----------|
 | Android | [Google Play](https://play.google.com/store/apps/details?id=com.khandaq.messenger) (not distributed as an APK here) |
-| Windows 10 and 11 (x64), installer | [khandaq-windows-installer.exe](https://github.com/ummalife/khandaq/releases/download/v0.2.69/khandaq-windows-installer.exe) |
-| Windows 10 and 11 (x64), portable | [khandaq-windows-x86_64.zip](https://github.com/ummalife/khandaq/releases/download/v0.2.69/khandaq-windows-x86_64.zip) |
-| macOS 11 or later (Apple Silicon, tested on macOS 26) | [khandaq-macos.zip](https://github.com/ummalife/khandaq/releases/download/v0.2.69/khandaq-macos.zip) |
-| Linux x86_64 (portable, glibc 2.38 or newer) | [khandaq-linux-x86_64-portable.tar.gz](https://github.com/ummalife/khandaq/releases/download/v0.2.69/khandaq-linux-x86_64-portable.tar.gz) |
-| Debian 13 / Ubuntu 24.04 or newer (.deb) | [khandaq-messenger_amd64.deb](https://github.com/ummalife/khandaq/releases/download/v0.2.69/khandaq-messenger_amd64.deb) |
-| iOS | [TestFlight](https://testflight.apple.com/join/4ppS8ZN5) (build 143011; not distributed as IPA here) |
+| Windows 10 and 11 (x64), installer | [khandaq-windows-installer.exe](https://github.com/ummalife/khandaq/releases/download/v0.2.70/khandaq-windows-installer.exe) |
+| Windows 10 and 11 (x64), portable | [khandaq-windows-x86_64.zip](https://github.com/ummalife/khandaq/releases/download/v0.2.70/khandaq-windows-x86_64.zip) |
+| macOS 11 or later (Apple Silicon, tested on macOS 26) | [khandaq-macos.zip](https://github.com/ummalife/khandaq/releases/download/v0.2.70/khandaq-macos.zip) |
+| Linux x86_64 (portable, glibc 2.38 or newer) | [khandaq-linux-x86_64-portable.tar.gz](https://github.com/ummalife/khandaq/releases/download/v0.2.70/khandaq-linux-x86_64-portable.tar.gz) |
+| Debian 13 / Ubuntu 24.04 or newer (.deb) | [khandaq-messenger_amd64.deb](https://github.com/ummalife/khandaq/releases/download/v0.2.70/khandaq-messenger_amd64.deb) |
+| iOS | [TestFlight](https://testflight.apple.com/join/4ppS8ZN5) (build 143012; not distributed as IPA here) |
 
-Verify downloads with [SHA256SUMS.txt](https://github.com/ummalife/khandaq/releases/download/v0.2.69/SHA256SUMS.txt).
+Verify downloads with [SHA256SUMS.txt](https://github.com/ummalife/khandaq/releases/download/v0.2.70/SHA256SUMS.txt).
 
 ---
 

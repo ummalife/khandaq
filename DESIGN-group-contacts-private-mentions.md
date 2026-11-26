@@ -32,13 +32,14 @@ with the header of every Khandaq NGC packet:
 |-----------|-------|-------------------------------------------------------------|
 | magic     | 6     | `66 77 88 11 34 35`                                         |
 | version   | 1     | `01`                                                        |
-| pkt id    | 1     | `41` offer, `42` accept                                     |
+| pkt id    | 1     | `61` offer, `62` accept                                     |
 | address   | 38    | the sender's own Tox address (`tox_self_get_address`): key 32, nospam 4, checksum 2 |
 | nonce     | 8     | random bytes of the offer; the accept repeats them          |
 
 54 bytes exactly; any other length, or an address whose checksum does not hold, is dropped.
-`41`/`42` are free in every client (history sync uses `01`–`04`, files `11`, video `21`, audio
-`31`). A client older than this drops them: its dispatcher knows only its own ids.
+`61`/`62` are free in every client (history sync uses `01`–`04`, files `11`–`14`, video `21`,
+audio `31`, edit, delete, reaction and leave notice `41`–`44`, the HSK announce `50`). A client older
+than this drops them: its dispatcher knows only its own ids.
 
 ### Who does what
 
@@ -125,8 +126,8 @@ The wire format stays the one all three clients read since 2026-08: a block befo
 ```
 
 **Handles** are made the same way everywhere, from the member's name in the group:
-letters and digits of any script are kept, a run of spaces, `-` or `.` becomes one `_`, everything
-else is dropped, `_` at the end is trimmed; an empty result is `u` + the first 8 hex of the member
+letters and digits of any script are kept, with the combining marks that follow them (Indic vowel
+signs), a run of spaces, `-` or `.` becomes one `_`, everything else is dropped, `_` at the end is trimmed; an empty result is `u` + the first 8 hex of the member
 key; a handle that two members would share gets `_` + the first 4 hex of the member key.
 `@Иса Дагестани` → `@Иса_Дагестани`, `@محمد علي` → `@محمد_علي`.
 
@@ -137,7 +138,7 @@ case and diacritics ignored, any script). A tap, or Enter/Tab on the desktop, pu
 of what was typed; Escape, a space, or the caret leaving the word closes it. Arrow keys move the
 choice on the desktop.
 
-**Sending:** every `@token` in the body (`@([\p{L}\p{N}_]+)`, Unicode-aware on every client) that is
+**Sending:** every `@token` in the body (`@([\p{L}\p{M}\p{N}_]+)`, Unicode-aware on every client) that is
 the handle of a member at that moment goes into the block with the member's key; others stay plain
 text.
 

@@ -26,6 +26,7 @@
 #include "content/spinner.h"
 #include "content/airlabel.h"
 #include "content/text.h"
+#include "src/model/air/airmention.h"
 #include "src/model/air/airmodel.h"
 #include "src/widget/air/airstrings.h"
 #include "src/widget/air/airstyle.h"
@@ -72,6 +73,26 @@ AirLabel* timeLabel(const QDateTime& date)
     return new AirLabel(entryTime(date), AirTokens::TextRole::Caption, AirLabel::Ink::Ink3, -1, true);
 }
 
+/**
+ * KHANDAQ (26.11.2026): where a mention starts and ends in the words while they go through the
+ * formatting (escaping, smileys, links, markdown), which leaves characters of the private use area
+ * as they are; createBody turns them into the link at the end.
+ */
+const QChar mentionOpen(0xE000);
+const QChar mentionClose(0xE001);
+
+/** The words with each mention of spans between mentionOpen and mentionClose. */
+QString markMentions(const QString& words, const QVector<Air::MentionSpan>& spans)
+{
+    QString marked = words;
+    // From the end, so that the places of the earlier spans hold.
+    for (auto it = spans.crbegin(); it != spans.crend(); ++it) {
+        marked.insert(it->start + it->length, mentionClose);
+        marked.insert(it->start, mentionOpen);
+    }
+    return marked;
+}
+
 /** Where the reactions under an entry take their pictures: where the messages take theirs. */
 const SmileyPack* reactionPictures(const SmileyPack& smileyPack, const Settings& settings)
 {
@@ -88,11 +109,17 @@ QFont ChatMessage::bodyFont(Settings& settings)
     return chosen;
 }
 
-Text* ChatMessage::createBody(const QString& words, const QString& sender, MessageType type,
+Text* ChatMessage::createBody(const QString& rawMessage, const QString& sender, MessageType type,
                               DocumentCache& documentCache, SmileyPack& smileyPack,
                               Settings& settings, Style& style)
 {
-    QString text = words.toHtmlEscaped();
+    const QString words = AirStrings::messageWords(rawMessage);
+    // A text that holds the marks itself shows its mentions plain.
+    const QVector<Air::MentionSpan> spans =
+        words.contains(mentionOpen) || words.contains(mentionClose)
+            ? QVector<Air::MentionSpan>()
+            : Air::mentionSpans(words, Air::readMentions(rawMessage));
+    QString text = markMentions(words, spans).toHtmlEscaped();
 
     // Avoid UI freeze on pathological markdown from untrusted contacts (#11).
     const int kMaxMarkdownChars = 16000;
@@ -114,6 +141,21 @@ Text* ChatMessage::createBody(const QString& words, const QString& sender, Messa
     if (styleType != Settings::StyleType::NONE) {
         text = TextFormatter::applyMarkdown(text, styleType == Settings::StyleType::WITH_CHARS);
     }
+
+    // Each mention a link to the member, in the order of the words; ink and bold (the
+    // stylesheet's "mention"), so it holds on both themes and on the ground of a mention of you.
+    for (const Air::MentionSpan& span : spans) {
+        const int open = text.indexOf(mentionOpen);
+        if (open < 0) {
+            break;
+        }
+        text.replace(open, 1,
+                     QStringLiteral("<a class=\"mention\" href=\"%1\">")
+                         .arg(Air::mentionLink(span.key).toHtmlEscaped()));
+    }
+    text.replace(mentionClose, QStringLiteral("</a>"));
+    // An open mark the formatting cut off has no link to open.
+    text.remove(mentionOpen);
 
     switch (type) {
     case NORMAL:
@@ -157,8 +199,7 @@ ChatMessage::Ptr ChatMessage::createChatMessage(const AirLook& look, const QStri
     const Air::MessageText read = Air::readMessageText(rawMessage);
     msg->setLayout(Layout::AirEntry);
     msg->addColumn(authorLabel(look), ColumnFormat());
-    msg->addColumn(createBody(AirStrings::messageWords(rawMessage), sender, type, documentCache,
-                              smileyPack, settings, style),
+    msg->addColumn(createBody(rawMessage, sender, type, documentCache, smileyPack, settings, style),
                    ColumnFormat());
     msg->addColumn(timeLabel(date), ColumnFormat());
     if (look.hasMark) {
@@ -170,6 +211,11 @@ ChatMessage::Ptr ChatMessage::createChatMessage(const AirLook& look, const QStri
                    ColumnFormat());
     msg->addColumn(new AirEntryNotes(marks, reactionPictures(smileyPack, settings)), ColumnFormat());
     msg->setEntryParts(quote, quote + 1);
+    // KHANDAQ (26.11.2026): a private message of a group says so on its first line, on its ground.
+    if (!look.privateNote.isEmpty()) {
+        msg->addColumn(new AirPrivateNote(look.privateNote), ColumnFormat());
+        msg->setPrivatePart(msg->getColumnCount() - 1);
+    }
     return msg;
 }
 
@@ -338,8 +384,8 @@ bool ChatMessage::updateMessage(const QString& rawMessage, const Air::EntryMarks
     }
     // Its author changed the words: the text is drawn again, and so is the quote it opens with.
     rawText = rawMessage;
-    replaceContent(1, createBody(AirStrings::messageWords(rawMessage), senderName, messageType,
-                                 documentCache, smileyPack, settings, style));
+    replaceContent(1, createBody(rawMessage, senderName, messageType, documentCache, smileyPack,
+                                 settings, style));
     if (auto* const quote = qobject_cast<AirQuote*>(quotePart())) {
         const Air::MessageText read = Air::readMessageText(rawMessage);
         quote->setQuote(read.replyName, read.reply ? read.replyPreview : QString());
@@ -379,9 +425,16 @@ QString ChatMessage::spokenText() const
         return spoken(0);
     case Layout::AirEntry: {
         const auto* const mark = qobject_cast<const AirMark*>(getContent(3));
-        return AirStrings::spokenEntry(spokenWho, spoken(2), spoken(1),
-                                       mark ? mark->getStatus() : Air::EntryStatus::None,
-                                       mentionsYou, spokenPart(quotePart()), spokenPart(notesPart()));
+        // KHANDAQ (26.11.2026): who gets a private message is said before its quote and words.
+        const QString privateNote = spokenPart(privatePart());
+        const QString quote = spokenPart(quotePart());
+        return AirStrings::spokenEntry(
+            spokenWho, spoken(2), spoken(1), mark ? mark->getStatus() : Air::EntryStatus::None,
+            mentionsYou,
+            privateNote.isEmpty() || quote.isEmpty()
+                ? privateNote + quote
+                : privateNote + QStringLiteral(", ") + quote,
+            spokenPart(notesPart()));
     }
     case Layout::Columns:
         break;

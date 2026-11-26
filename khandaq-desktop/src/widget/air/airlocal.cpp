@@ -284,13 +284,17 @@ void AirLocal::keepContactOffer(const Air::LocalStore::ContactOffer& offer)
     }
 }
 
-void AirLocal::dropContactOffer(const QByteArray& nonce)
+Air::LocalStore::ContactOffer AirLocal::takeContactOffer(const QByteArray& nonce,
+                                                         const QString& groupKey,
+                                                         const QString& memberKey)
 {
-    if (store.dropContactOffer(nonce)) {
+    const Air::LocalStore::ContactOffer taken = store.takeContactOffer(nonce, groupKey, memberKey);
+    if (!taken.isNull()) {
         saveLater.stop();
         save();
         emit memberContactsChanged();
     }
+    return taken;
 }
 
 Air::LocalStore::MemberContact AirLocal::memberContact(const QString& groupKey,

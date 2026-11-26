@@ -122,7 +122,14 @@ public:
      */
     Air::LocalStore::ContactOffer contactOffer(const QByteArray& nonce) const;
     void keepContactOffer(const Air::LocalStore::ContactOffer& offer);
-    void dropContactOffer(const QByteArray& nonce);
+    /**
+     * Takes the offer with this nonce in one step (Air::LocalStore::takeContactOffer) and writes
+     * the rest at once; a null offer when none is taken. Both answers to an offer come to the
+     * thread of the window, so the first one to arrive takes it and the second one finds nothing.
+     */
+    Air::LocalStore::ContactOffer takeContactOffer(const QByteArray& nonce,
+                                                   const QString& groupKey = QString(),
+                                                   const QString& memberKey = QString());
     /** Who a member of a group is among the contacts, both sides of the exchange; written at once. */
     Air::LocalStore::MemberContact memberContact(const QString& groupKey,
                                                  const QString& memberKey) const;

@@ -2127,6 +2127,86 @@
         <translation>Не отправлено: нет связи с группой или участник вышел. Попробуйте ещё раз.</translation>
     </message>
     <message>
+        <source>Privately to %1: other members don&apos;t see this</source>
+        <comment>first line of our private message in the feed of a group: %1 is the member it went to</comment>
+        <translation>Лично для %1: другие участники этого не видят</translation>
+    </message>
+    <message>
+        <source>Privately to you: other members don&apos;t see this</source>
+        <comment>first line of a private message to us in the feed of a group</comment>
+        <translation>Лично вам: другие участники этого не видят</translation>
+    </message>
+    <message>
+        <source>Add to contacts</source>
+        <comment>member menu and a member&apos;s private messages: asks the member to become a contact</comment>
+        <translation>Добавить в контакты</translation>
+    </message>
+    <message>
+        <source>Open the conversation</source>
+        <comment>member menu and a member&apos;s private messages: the member is a contact already</comment>
+        <translation>Открыть переписку</translation>
+    </message>
+    <message>
+        <source>%1 is offline in this group: ask again when they are back</source>
+        <comment>toast: the offer to become contacts goes only while the member is online in the group; %1 is the member</comment>
+        <translation>%1 не в сети в этой группе: попросите ещё раз, когда участник вернётся</translation>
+    </message>
+    <message>
+        <source>Request sent: %1 will be in your contacts once they accept</source>
+        <comment>toast after the offer to become contacts went: %1 is the member</comment>
+        <translation>Запрос отправлен: %1 появится в ваших контактах, когда примет его</translation>
+    </message>
+    <message>
+        <source>The request did not leave. Try again.</source>
+        <comment>toast: the offer to become contacts could not be sent</comment>
+        <translation>Запрос не ушёл. Попробуйте ещё раз.</translation>
+    </message>
+    <message>
+        <source>%1 is now in your contacts</source>
+        <comment>toast: the member accepted the offer to become contacts; %1 is the member</comment>
+        <translation>%1 теперь в ваших контактах</translation>
+    </message>
+    <message>
+        <source>From the group «%1»</source>
+        <comment>contact request card of a member of a group: %1 is the group</comment>
+        <translation>Из группы «%1»</translation>
+    </message>
+    <message>
+        <source>%1, from the group «%2»</source>
+        <comment>notification of a contact request of a member of a group: %1 is the member, %2 the group</comment>
+        <translation>%1, из группы «%2»</translation>
+    </message>
+    <message>
+        <source>I accepted your request from the group «%1»</source>
+        <comment>the words of the contact request that accepts the offer of a member: %1 is the group</comment>
+        <translation>Ваш запрос из группы «%1» принят</translation>
+    </message>
+    <message>
+        <source>Key in this group</source>
+        <comment>a member&apos;s private messages: the title over the member&apos;s key in the group</comment>
+        <translation>Ключ в этой группе</translation>
+    </message>
+    <message>
+        <source>This key is theirs only in this group: it does not add them as a contact. Use Add to contacts.</source>
+        <comment>a member&apos;s private messages: under the member&apos;s key in the group</comment>
+        <translation>Этот ключ принадлежит участнику только в этой группе: по нему нельзя добавить в контакты. Нажмите «Добавить в контакты».</translation>
+    </message>
+    <message>
+        <source>«%1» in the group «%2»</source>
+        <comment>row over the list and New contact: the key typed is the key of a member in one of your groups; %1 is the member, %2 the group</comment>
+        <translation>«%1» в группе «%2»</translation>
+    </message>
+    <message>
+        <source>Send a contact request</source>
+        <comment>row over the list and New contact: sends the member the offer to become contacts</comment>
+        <translation>Отправить запрос в контакты</translation>
+    </message>
+    <message>
+        <source>Members to mention</source>
+        <comment>the list of members over the field after @</comment>
+        <translation>Кого упомянуть</translation>
+    </message>
+    <message>
         <source>Mute in this group</source>
         <comment>member menu: no notifications for this member&apos;s messages</comment>
         <translation>Без звука в этой группе</translation>

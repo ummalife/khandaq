@@ -374,6 +374,84 @@ QFont quoteNameFont()
 }
 } // namespace
 
+namespace {
+/** The lock before the note of a private entry: as tall as a line of the caption it stands in. */
+constexpr int privateLockSide = AirTokens::Size::iconSmall;
+} // namespace
+
+AirPrivateNote::AirPrivateNote(const QString& note_)
+    : note{note_}
+{
+}
+
+void AirPrivateNote::fit()
+{
+    using namespace AirTokens;
+    const int room = static_cast<int>(width) - privateLockSide - Space::s4;
+    lines = room > 0 ? AirPaint::linesOf(note, air().font(TextRole::Caption), room, 2)
+                     : QStringList();
+}
+
+void AirPrivateNote::setWidth(float width_)
+{
+    prepareGeometryChange();
+    width = width_;
+    fit();
+}
+
+QRectF AirPrivateNote::boundingRect() const
+{
+    if (lines.isEmpty()) {
+        return QRectF();
+    }
+    const qreal caption = air().lineHeight(AirTokens::TextRole::Caption);
+    return QRectF(0, 0, width, qMax<qreal>(privateLockSide, lines.size() * caption));
+}
+
+void AirPrivateNote::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget)
+{
+    using namespace AirTokens;
+    std::ignore = option;
+    if (lines.isEmpty()) {
+        return;
+    }
+    const bool rightToLeft = QGuiApplication::layoutDirection() == Qt::RightToLeft;
+    const QColor tint = air().color(Color::Private);
+    const qreal dpr = widget ? widget->devicePixelRatioF() : qApp->devicePixelRatio();
+    const qreal caption = air().lineHeight(TextRole::Caption);
+    const qreal lockX = rightToLeft ? width - privateLockSide : 0;
+    painter->drawPixmap(QPointF(lockX, (caption - privateLockSide) / 2.0),
+                        air().icon(QStringLiteral("lock"), tint, privateLockSide, dpr));
+
+    painter->setFont(air().font(TextRole::Caption));
+    painter->setPen(tint);
+    const int textStart = privateLockSide + Space::s4;
+    const int room = static_cast<int>(width) - textStart;
+    const int flags = static_cast<int>(startEdge()) | Qt::TextSingleLine;
+    qreal y = 0;
+    for (const QString& line : lines) {
+        const QRect box(rightToLeft ? 0 : textStart, static_cast<int>(y), room,
+                        static_cast<int>(caption));
+        AirPaint::ownText(*painter, box, flags, line);
+        y += caption;
+    }
+}
+
+QString AirPrivateNote::getText() const
+{
+    return note;
+}
+
+QString AirPrivateNote::getSpokenText() const
+{
+    return note;
+}
+
+qreal AirPrivateNote::getAscent() const
+{
+    return QFontMetricsF(air().font(AirTokens::TextRole::Caption)).ascent();
+}
+
 AirQuote::AirQuote(const QString& name_, const QString& preview_)
     : name{name_}
     , preview{preview_}

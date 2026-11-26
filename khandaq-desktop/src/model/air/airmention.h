@@ -126,4 +126,9 @@ bool mentionsKey(const QString& raw, const QString& key);
  */
 QVector<MentionSpan> mentionSpans(const QString& words, const QVector<Mention>& mentions);
 
+/** The link a transcript makes of a mention of the member with this key: "kqmention:" and the key. */
+QString mentionLink(const QString& key);
+/** The member's key, upper case, of a link mentionLink made; empty for any other link. */
+QString mentionLinkKey(const QString& link);
+
 } // namespace Air

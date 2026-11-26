@@ -81,6 +81,7 @@ private slots:
     void eachReactionIsAChipFromTheStartEdge();
     void aChipIsTheRaisedPlateWithItsEmojiDrawn();
     void chipsStopWhereTheColumnEnds();
+    void aPrivateEntrySaysSoWithTheLockInThePrivateColour();
 };
 
 void TestAirEntryNotes::chipsTakeALineOfTheirOwn()
@@ -163,6 +164,54 @@ void TestAirEntryNotes::chipsStopWhereTheColumnEnds()
     const QVector<QRectF> plates = notes.plates();
     QVERIFY2(!plates.isEmpty() && plates.size() < emoji.size(), "the chips do not stop at the column's end");
     QVERIFY(plates.last().right() <= 120);
+}
+
+/**
+ * KHANDAQ (26.11.2026): the first line of a private message in the feed of a group: the lock and
+ * the note, both in the private colour, from the start edge, on at most two lines of the caption.
+ */
+void TestAirEntryNotes::aPrivateEntrySaysSoWithTheLockInThePrivateColour()
+{
+    const AirStyle& air = AirStyle::instance();
+    const QString words = QStringLiteral("Privately to Maryam: other members don't see this");
+    AirPrivateNote note(words);
+    QCOMPARE(note.getText(), words);
+    QCOMPARE(note.getSpokenText(), words);
+    const int width = 600;
+    note.setWidth(width);
+    const qreal caption = air.lineHeight(AirTokens::TextRole::Caption);
+    QCOMPARE(note.boundingRect().height(), qMax<qreal>(Size::iconSmall, caption));
+
+    // Painted on the private ground: the lock at the start edge, then the words, in that colour.
+    const QColor tint = air.color(Color::Private);
+    const QColor ground = air.color(Color::PrivateSoft);
+    const int height = static_cast<int>(std::ceil(note.boundingRect().height()));
+    QImage image(width, height, QImage::Format_ARGB32_Premultiplied);
+    image.fill(ground);
+    QPainter painter(&image);
+    note.paint(&painter, nullptr, nullptr);
+    painter.end();
+    const auto tinted = [&image, &tint](int fromX, int toX) {
+        int count = 0;
+        for (int y = 0; y < image.height(); ++y) {
+            for (int x = fromX; x < toX; ++x) {
+                const QColor pixel = image.pixelColor(x, y);
+                const int distance = std::abs(pixel.red() - tint.red())
+                                     + std::abs(pixel.green() - tint.green())
+                                     + std::abs(pixel.blue() - tint.blue());
+                count += distance < 90 ? 1 : 0;
+            }
+        }
+        return count;
+    };
+    QVERIFY2(tinted(0, Size::iconSmall) > 0, "no lock at the start edge");
+    QVERIFY2(tinted(Size::iconSmall + Space::s4, width) > 0, "no words after the lock");
+
+    // Narrow, the words take two lines at most; with no room for them, nothing shows.
+    note.setWidth(Size::iconSmall + Space::s4 + 90);
+    QCOMPARE(note.boundingRect().height(), 2 * caption);
+    note.setWidth(Size::iconSmall);
+    QCOMPARE(note.boundingRect().height(), 0.0);
 }
 
 int main(int argc, char* argv[])

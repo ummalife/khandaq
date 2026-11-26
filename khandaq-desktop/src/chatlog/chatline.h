@@ -27,6 +27,7 @@
 
 class ChatWidget;
 class ChatLineContent;
+class QGraphicsRectItem;
 class QGraphicsScene;
 class QStyleOptionGraphicsItem;
 class QFont;
@@ -142,6 +143,13 @@ protected:
     void setEntryParts(int quote, int notes);
     ChatLineContent* quotePart() const;
     ChatLineContent* notesPart() const;
+    /**
+     * KHANDAQ (26.11.2026): a private message of a group (DESIGN-group-contacts-private-mentions.md,
+     * part 2): the note that says so, on the first line under the author, and the private-soft
+     * ground under the whole entry, behind its contents and the selection.
+     */
+    void setPrivatePart(int note);
+    ChatLineContent* privatePart() const;
     void updateBBox();
     void layoutAir(QPointF scenePos);
     void visibilityChanged(bool visible);
@@ -159,4 +167,7 @@ private:
     bool collapsed = false;
     int quoteColumn = -1;
     int notesColumn = -1;
+    int privateColumn = -1;
+    /** The ground of a private entry; null for any other line. */
+    QGraphicsRectItem* ground = nullptr;
 };

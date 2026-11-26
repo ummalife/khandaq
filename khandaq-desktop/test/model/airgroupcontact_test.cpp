@@ -107,6 +107,7 @@ private slots:
     void offerOfAMemberWaitsAsARequest();
     void offerOfAMemberIsCheckedAsItComes();
     void ownOffersWaitForTheirAccept();
+    void anOfferIsTakenOnceAndOnlyByItsMember();
     void membersBehindContactsAreKept();
     void privateEntriesAreMarkedOnThisDevice();
 };
@@ -343,7 +344,42 @@ void TestAirGroupContact::ownOffersWaitForTheirAccept()
     QVERIFY(!store.keepContactOffer(offer, now.addDays(31)));
     offer.nonce = nonce.left(7);
     QVERIFY(!store.keepContactOffer(offer, now));
-    QVERIFY(store.dropContactOffer(QByteArray()) == false);
+    QVERIFY(store.takeContactOffer(QByteArray()).isNull());
+}
+
+void TestAirGroupContact::anOfferIsTakenOnceAndOnlyByItsMember()
+{
+    LocalStore store;
+    LocalStore::ContactOffer offer;
+    offer.groupKey = groupKey;
+    offer.memberKey = memberKey;
+    offer.memberName = QStringLiteral("Maryam");
+    offer.nonce = nonce;
+    offer.date = now.toMSecsSinceEpoch();
+    QVERIFY(store.keepContactOffer(offer, now));
+
+    // An accept with the nonce from another member, or over another group, counts for nothing and
+    // leaves the offer to its member.
+    const QString otherKey = QString(64, QLatin1Char('C'));
+    QVERIFY(store.takeContactOffer(nonce, groupKey, otherKey).isNull());
+    QVERIFY(store.takeContactOffer(nonce, otherKey, memberKey).isNull());
+    QVERIFY(store.takeContactOffer(QByteArray::fromHex("2222222222222222"), groupKey, memberKey)
+                .isNull());
+    QVERIFY(!store.contactOffer(nonce).isNull());
+
+    // The member's own accept takes it, in any case of the keys; the request with the marker that
+    // comes second finds nothing to accept.
+    const LocalStore::ContactOffer taken =
+        store.takeContactOffer(nonce, groupKey.toLower(), memberKey.toLower());
+    QCOMPARE(taken.memberName, QStringLiteral("Maryam"));
+    QVERIFY(store.takeContactOffer(nonce).isNull());
+    QVERIFY(reloaded(store).contactOffers().isEmpty());
+
+    // The request may come first: then it takes the offer by its nonce alone, and the accept finds
+    // nothing.
+    QVERIFY(store.keepContactOffer(offer, now));
+    QCOMPARE(store.takeContactOffer(nonce).memberKey, memberKey);
+    QVERIFY(store.takeContactOffer(nonce, groupKey, memberKey).isNull());
 }
 
 void TestAirGroupContact::membersBehindContactsAreKept()

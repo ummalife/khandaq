@@ -364,15 +364,19 @@ void TestChatHistory::aPrivateMessageNeverGoesToTheGroup()
     // Nothing was told as a text relayed from the group either.
     QVERIFY(told.empty());
 
-    // The conversation opens again, from the database: both are there, and nothing goes.
+    // The conversation opens again, from the database: both are there, still apart, and nothing
+    // goes.
     open();
     QCOMPARE(chatHistory->getNextIdx().get(), before + 2);
+    QCOMPARE(chatHistory->privateEntry(ChatLogIdx(before)), received);
+    QCOMPARE(chatHistory->privateEntry(ChatLogIdx(before + 1)), written);
     QVERIFY(groupSender.sent.isEmpty());
     QCOMPARE(groupSender.receipts, 0);
 
-    // A text to the group goes as before, and alone.
+    // A text to the group goes as before, and alone, and is no private entry.
     dispatcher->sendMessage(false, QStringLiteral("To everyone"));
     QCOMPARE(groupSender.sent, QStringList{QStringLiteral("To everyone")});
+    QVERIFY(chatHistory->privateEntry(ChatLogIdx(before + 2)).isNull());
 }
 
 int main(int argc, char* argv[])

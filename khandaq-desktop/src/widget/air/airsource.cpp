@@ -492,9 +492,19 @@ QVector<Air::Request> AirSource::requests() const
         if (hiddenRequests.contains(waiting.publicKey)) {
             continue;
         }
-        cards.append(Air::Request::make(waiting.publicKey, waiting.message,
-                                        timeText(QDateTime::fromMSecsSinceEpoch(waiting.date)),
-                                        waiting.date));
+        const QString time = timeText(QDateTime::fromMSecsSinceEpoch(waiting.date));
+        // KHANDAQ (26.11.2026): an offer of a member of a group says who they are there, and where.
+        cards.append(waiting.fromGroup()
+                         ? Air::Request::fromMember(waiting.publicKey,
+                                                    waiting.memberName.trimmed().isEmpty()
+                                                        ? Air::unnamedAuthorName(waiting.memberKey)
+                                                        : waiting.memberName,
+                                                    waiting.groupName.trimmed().isEmpty()
+                                                        ? Air::groupedKey(waiting.groupKey)
+                                                        : waiting.groupName,
+                                                    time, waiting.date)
+                         : Air::Request::make(waiting.publicKey, waiting.message, time,
+                                              waiting.date));
     }
     for (const Air::LocalStore::WaitingInvite& invite : local->invites()) {
         if (hiddenRequests.contains(Air::Request::invitationId(invite.id))) {

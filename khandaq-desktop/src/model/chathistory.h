@@ -106,6 +106,8 @@ public:
      */
     void addPrivateEntry(const ToxPk& author, const QString& text, const QDateTime& time,
                          const Air::PrivateEntry& entry);
+    /** KHANDAQ (26.11.2026): by the mark addPrivateEntry kept, for a text of a group. */
+    Air::PrivateEntry privateEntry(ChatLogIdx idx) const override;
     /**
      * KHANDAQ (0.2.57): the newest entry loaded of the file with this Tox file id, in this
      * direction (SessionChatLog::findFileEntry): what an offer of it goes on with.

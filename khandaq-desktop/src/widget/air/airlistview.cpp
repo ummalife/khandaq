@@ -113,16 +113,22 @@ int balancedWidth(const QFontMetrics& metrics, int width, int flags, const QStri
 /** The ground of the request cards stays lit this long after the Requests filter, then fades. */
 constexpr int glowHoldMs = 900;
 
-/** The words that open a card: the message of a request, the name of the group of an invitation. */
+/**
+ * The words that open a card: the message of a request, the name of the group of an invitation,
+ * the name of a member of a group who offers to become contacts (KHANDAQ 26.11.2026).
+ */
 QString requestLead(const Air::Request& request)
 {
+    if (request.fromGroup()) {
+        return request.memberName;
+    }
     return request.isInvitation() ? request.groupName : flatText(request.message);
 }
 
 QFont requestLeadFont(const Air::Request& request)
 {
-    return request.isInvitation() ? weighted(TextRole::Body, QFont::DemiBold)
-                                  : air().font(TextRole::Body);
+    return request.isInvitation() || request.fromGroup() ? weighted(TextRole::Body, QFont::DemiBold)
+                                                         : air().font(TextRole::Body);
 }
 
 /** The verb of a card: Accept a person, Join a group. */
@@ -137,6 +143,9 @@ QString acceptText(const Air::Request& request)
  */
 QString requestNote(const Air::Request& request)
 {
+    if (request.fromGroup()) {
+        return AirStrings::text(Text::GroupContactFrom).arg(request.groupName);
+    }
     if (!request.isInvitation()) {
         return AirStrings::text(Text::RequestKey).arg(Air::groupedKey(request.publicKey));
     }
@@ -147,9 +156,15 @@ QString requestNote(const Air::Request& request)
     return note;
 }
 
-/** The part of the quiet line set apart: the key in mono, the inviter's name in ink-2. */
+/**
+ * The part of the quiet line set apart: the key in mono, the inviter's name or the group of a
+ * member in ink-2.
+ */
 QString requestNoteRun(const Air::Request& request)
 {
+    if (request.fromGroup()) {
+        return request.groupName;
+    }
     return request.isInvitation() ? request.inviterName : Air::groupedKey(request.publicKey);
 }
 
@@ -168,7 +183,7 @@ int requestNoteBlock(QPainter* painter, const QRect& rect, Qt::LayoutDirection d
     plain.setForeground(air().color(Color::Ink3));
     QTextCharFormat apart;
     apart.setForeground(air().color(Color::Ink2));
-    if (!request.isInvitation()) {
+    if (!request.isInvitation() && !request.fromGroup()) {
         apart.setFont(air().font(TextRole::Mono));
     }
     QVector<QTextLayout::FormatRange> formats;

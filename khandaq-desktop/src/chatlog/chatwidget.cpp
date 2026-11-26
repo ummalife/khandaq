@@ -24,6 +24,7 @@
 #include "content/airlabel.h"
 #include "content/filetransferwidget.h"
 #include "content/text.h"
+#include "src/model/air/airmention.h"
 #include "src/widget/air/airaccessible.h"
 #include "src/widget/air/airstrings.h"
 #include "src/widget/air/airstyle.h"
@@ -86,11 +87,14 @@ ChatMessage::Ptr createMessage(const ChatMessage::AirLook& look, const QString& 
     auto messageType = chatLogMessage.message.isAction ? ChatMessage::MessageType::ACTION
                                                        : ChatMessage::MessageType::NORMAL;
 
+    // KHANDAQ (26.11.2026): a mention of the key the group knows us by marks it too, also once it
+    // comes back from the history without the marks the dispatcher gave it.
     const bool bSelfMentioned =
-        std::any_of(chatLogMessage.message.metadata.begin(), chatLogMessage.message.metadata.end(),
-                    [](const MessageMetadata& metadata) {
-                        return metadata.type == MessageMetadataType::selfMention;
-                    });
+        look.mentionsYou
+        || std::any_of(chatLogMessage.message.metadata.begin(),
+                       chatLogMessage.message.metadata.end(), [](const MessageMetadata& metadata) {
+                           return metadata.type == MessageMetadataType::selfMention;
+                       });
 
     if (bSelfMentioned) {
         messageType = ChatMessage::MessageType::ALERT;
@@ -461,6 +465,7 @@ void ChatWidget::mousePressEvent(QMouseEvent* ev)
         clickPos = ev->pos();
         clearSelection();
         authorPressed = authorNameAt(mapToScene(ev->pos()), pressedAuthor);
+        pressedMention = mentionAt(mapToScene(ev->pos()));
     } else {
         // KHANDAQ (0.2.58): only left clicks add up to a double or a triple click. A right click
         // opens the chat menu, which takes the release, so the multi-click timer never restarted
@@ -491,6 +496,17 @@ void ChatWidget::mouseReleaseEvent(QMouseEvent* ev)
     selectionScrollDir = AutoScrollDirection::NoDirection;
 
     multiClickTimer->start();
+
+    // KHANDAQ (26.11.2026): so does a press and a release on the same mention, under the pointer.
+    if (ev->button() == Qt::LeftButton && !pressedMention.isEmpty()) {
+        const QString key = pressedMention;
+        pressedMention.clear();
+        if (selectionMode == SelectionMode::None && mentionAt(mapToScene(ev->pos())) == key) {
+            const QPoint at = viewport()->mapToGlobal(ev->pos());
+            QTimer::singleShot(0, this, [this, key, at] { emit mentionClicked(key, at); });
+            return;
+        }
+    }
 
     // KHANDAQ (0.2.58): a press and a release on the same author's name, with no selection made
     // between them, opens the member's menu under the name. It opens once this event is done: the
@@ -884,6 +900,20 @@ bool ChatWidget::idxOfLine(const ChatLine::Ptr& line, ChatLogIdx& idx) const
     return false;
 }
 
+bool ChatWidget::selectedRange(ChatLogIdx& first, ChatLogIdx& last) const
+{
+    if (selectionMode != SelectionMode::Multi || !selFirstRow || !selLastRow) {
+        return false;
+    }
+    if (!idxOfLine(selFirstRow, first) || !idxOfLine(selLastRow, last)) {
+        return false;
+    }
+    if (last < first) {
+        std::swap(first, last);
+    }
+    return true;
+}
+
 bool ChatWidget::selectedEntry(ChatLogIdx& idx) const
 {
     // The text of an entry is its content 1; a selection that spans entries is Multi.
@@ -911,6 +941,18 @@ bool ChatWidget::opensAuthorMenu(const ChatLogItem& item) const
     const ToxPk& sender = item.getSender();
     return !sender.isEmpty() && sender != core.getSelfPublicKey()
            && (groupSelfKey.isEmpty() || sender != groupSelfKey);
+}
+
+QString ChatWidget::mentionAt(QPointF scenePos) const
+{
+    if (!groupChat) {
+        return QString();
+    }
+    const auto* const text = qobject_cast<const Text*>(getContentFromPos(scenePos));
+    if (!text) {
+        return QString();
+    }
+    return Air::mentionLinkKey(text->anchorAt(scenePos));
 }
 
 bool ChatWidget::authorNameAt(QPointF scenePos, ChatLogIdx& idx, QRectF* name) const
@@ -1401,7 +1443,8 @@ void ChatWidget::renderMessages(ChatLogIdx begin, ChatLogIdx end)
         bool prevIdxRendered = i != begin || chatLineStorage->contains(i - 1);
 
         auto chatMessage = alreadyRendered ? (*chatLineStorage)[i] : ChatLine::Ptr();
-        renderItem(chatLog.at(i), needsToHideName(i, prevIdxRendered), colorizeNames, chatMessage);
+        renderItem(i, chatLog.at(i), needsToHideName(i, prevIdxRendered), colorizeNames,
+                   chatMessage);
 
         if (!alreadyRendered) {
             linesToRender.insert({i, chatMessage});
@@ -1768,12 +1811,13 @@ void ChatWidget::setTypingNotification()
 }
 
 
-void ChatWidget::renderItem(const ChatLogItem& item, bool hideName, bool colorizeNames_, ChatLine::Ptr& chatMessage)
+void ChatWidget::renderItem(ChatLogIdx idx, const ChatLogItem& item, bool hideName,
+                            bool colorizeNames_, ChatLine::Ptr& chatMessage)
 {
     // Every author has a tone of their own in the redesign, so the colorized names option has
     // nothing left to switch.
     std::ignore = colorizeNames_;
-    const ChatMessage::AirLook look = lookOf(item);
+    const ChatMessage::AirLook look = lookOf(idx, item);
 
     switch (item.getContentType()) {
     case ChatLogItem::ContentType::message: {
@@ -1826,9 +1870,24 @@ void ChatWidget::renderItem(const ChatLogItem& item, bool hideName, bool coloriz
     }
 }
 
-ChatMessage::AirLook ChatWidget::lookOf(const ChatLogItem& item) const
+ChatMessage::AirLook ChatWidget::lookOf(ChatLogIdx idx, const ChatLogItem& item) const
 {
     ChatMessage::AirLook look;
+    // KHANDAQ (26.11.2026): a private message with a member stands apart in the feed of the group,
+    // and a mention of our key in it marks a message as one that mentions us.
+    if (groupChat && item.getContentType() == ChatLogItem::ContentType::message) {
+        const Air::PrivateEntry entry = chatLog.privateEntry(idx);
+        if (!entry.isNull()) {
+            look.privateNote = entry.ours ? AirStrings::text(AirStrings::Text::PrivateNoteTo)
+                                                .arg(entry.peerName.trimmed().isEmpty()
+                                                         ? Air::unnamedAuthorName(entry.peerKey)
+                                                         : entry.peerName)
+                                          : AirStrings::text(AirStrings::Text::PrivateNoteToYou);
+        }
+        look.mentionsYou = !groupSelfKey.isEmpty()
+                           && Air::mentionsKey(item.getContentAsMessage().message.content,
+                                               groupSelfKey.toString());
+    }
     const bool isSelf = item.getSender() == core.getSelfPublicKey();
     if (isSelf) {
         look.who = AirStrings::text(AirStrings::Text::You);

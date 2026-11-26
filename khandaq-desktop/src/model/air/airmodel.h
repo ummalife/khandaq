@@ -265,9 +265,14 @@ struct Request
     /** Who asks: the person, or the contact who invites. */
     QString publicKey;
     QString message;
-    /** An invitation: the name of the group, and the inviter as the list calls them. */
+    /**
+     * An invitation: the name of the group, and the inviter as the list calls them. KHANDAQ
+     * (26.11.2026): a request of a member of a group (fromGroup) has the group's name here too.
+     */
     QString groupName;
     QString inviterName;
+    /** KHANDAQ (26.11.2026): a request of a member of a group: their name in it. */
+    QString memberName;
     /** An invitation: Join goes through the inviter, so it can go now only while they are online. */
     bool inviterOnline = false;
     QString timeText;
@@ -279,9 +284,17 @@ struct Request
     static Request invitation(const QString& inviteId, const QString& inviterKey,
                               const QString& groupName, const QString& inviterName,
                               bool inviterOnline, const QString& timeText, qint64 date);
+    /**
+     * KHANDAQ (26.11.2026): a member of a group who offers to become contacts over it: a card of a
+     * person, under the name the group knows them by, which says the group.
+     */
+    static Request fromMember(const QString& publicKey, const QString& memberName,
+                              const QString& groupName, const QString& timeText, qint64 date);
     /** The id an invitation's card carries. */
     static QString invitationId(const QString& inviteId);
     bool isInvitation() const;
+    /** A request of a member of a group, made by fromMember. */
+    bool fromGroup() const;
     bool operator==(const Request& other) const;
 };
 

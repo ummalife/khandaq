@@ -376,6 +376,15 @@ Request Request::invitation(const QString& inviteId, const QString& inviterKey,
     return request;
 }
 
+Request Request::fromMember(const QString& publicKey, const QString& memberName,
+                            const QString& groupName, const QString& timeText, qint64 date)
+{
+    Request request = make(publicKey, QString(), timeText, date);
+    request.memberName = emptyIfNull(memberName).trimmed();
+    request.groupName = emptyIfNull(groupName).trimmed();
+    return request;
+}
+
 QString Request::invitationId(const QString& inviteId)
 {
     return QStringLiteral("invite:") + inviteId;
@@ -386,11 +395,17 @@ bool Request::isInvitation() const
     return kind == Kind::Group;
 }
 
+bool Request::fromGroup() const
+{
+    return kind == Kind::Friend && !groupName.isEmpty();
+}
+
 bool Request::operator==(const Request& other) const
 {
     return kind == other.kind && id == other.id && publicKey == other.publicKey
            && message == other.message && groupName == other.groupName
-           && inviterName == other.inviterName && inviterOnline == other.inviterOnline
+           && inviterName == other.inviterName && memberName == other.memberName
+           && inviterOnline == other.inviterOnline
            && timeText == other.timeText && date == other.date;
 }
 

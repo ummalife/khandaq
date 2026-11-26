@@ -92,6 +92,11 @@ public:
      */
     bool selectedEntry(ChatLogIdx& idx) const;
     /**
+     * KHANDAQ (26.11.2026): the first and the last entry a selection across entries takes; false
+     * without one.
+     */
+    bool selectedRange(ChatLogIdx& first, ChatLogIdx& last) const;
+    /**
      * KHANDAQ (0.2.58): the key a group knows us by besides the key of our profile; our entries
      * carry either, and the name over them opens no menu.
      */
@@ -154,6 +159,11 @@ signals:
      * group. globalPos is under the name, at its start edge: where the member's menu opens.
      */
     void authorClicked(ChatLogIdx idx, QPoint globalPos);
+    /**
+     * KHANDAQ (26.11.2026): a click on a mention in the words of a group: the member's key in the
+     * group, and where the pointer was.
+     */
+    void mentionClicked(const QString& memberKey, QPoint globalPos);
 public slots:
     void forceRelayout();
     void reloadTheme();
@@ -232,11 +242,12 @@ private:
     void moveMultiSelectionDown(int offset);
     void setTypingNotification();
 
-    void renderItem(const ChatLogItem &item, bool hideName, bool colorizeNames_, ChatLine::Ptr &chatMessage);
+    void renderItem(ChatLogIdx idx, const ChatLogItem& item, bool hideName, bool colorizeNames_,
+                    ChatLine::Ptr& chatMessage);
     void renderFile(const ChatMessage::AirLook& look, ToxFile file, QDateTime timestamp,
                     const Air::EntryMarks& marks, ChatLine::Ptr& chatMessage);
     bool needsToHideName(ChatLogIdx idx, bool prevIdxRendered) const;
-    ChatMessage::AirLook lookOf(const ChatLogItem& item) const;
+    ChatMessage::AirLook lookOf(ChatLogIdx idx, const ChatLogItem& item) const;
     Air::EntryStatus statusOf(const ChatLogItem& item) const;
     bool isCollapsedAt(ChatLogIdx idx) const;
     /**
@@ -255,6 +266,8 @@ private:
     bool opensAuthorMenu(const ChatLogItem& item) const;
     /** The entry whose author's name, one that opens a menu, stands at scenePos; name is where. */
     bool authorNameAt(QPointF scenePos, ChatLogIdx& idx, QRectF* name = nullptr) const;
+    /** KHANDAQ (26.11.2026): the key of the member a mention at scenePos names; empty for none. */
+    QString mentionAt(QPointF scenePos) const;
     /** The names that open a menu, set again: after our key in the group changed. */
     void refreshAuthorNames();
     /**
@@ -334,6 +347,8 @@ private:
     /** A left press landed on a name that opens a menu: a release on it, without a drag, opens it. */
     bool authorPressed = false;
     ChatLogIdx pressedAuthor{0};
+    /** KHANDAQ (26.11.2026): the member whose mention a left press landed on; empty for none. */
+    QString pressedMention;
     bool personOnline = true;
     qint64 seenUpToMs = -1;
     QString personName;

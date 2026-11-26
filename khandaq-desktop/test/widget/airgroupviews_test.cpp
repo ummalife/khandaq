@@ -164,6 +164,7 @@ private slots:
     void aGroupByInvitationOnlySharesNoKeyAndItsFounderOpensIt();
     void privateThreadTellsAnObserverWhyItCannotAnswer();
     void getNowBandShowsWhoFitsAndCountsTheRest();
+    void mentionListTakesTheKeysOfTheFieldWhileItShows();
 };
 
 /**
@@ -705,7 +706,9 @@ void TestAirGroupViews::dossierSaysTheRoleAndListsTheMembers()
 
 /**
  * KHANDAQ (0.2.58): a member's row and their name over a message in the transcript open the same
- * menu. Someone no longer in the group gets what a key still allows: Copy key, Mute and Hide.
+ * menu. Someone no longer in the group gets what a key still allows: Mute and Hide. KHANDAQ
+ * (26.11.2026): their key in the group adds nobody, so the menu has no Copy key: it offers Add to
+ * contacts, or, for a member who is a contact, Open the conversation and Copy ID.
  */
 void TestAirGroupViews::memberMenuIsTheSameFromTheRowAndFromTheirName()
 {
@@ -745,15 +748,18 @@ void TestAirGroupViews::memberMenuIsTheSameFromTheRowAndFromTheirName()
         return texts;
     };
 
-    QStringList expected{AirStrings::text(Text::GroupWritePrivately),
-                         AirStrings::text(Text::DossierCopyKey),
-                         AirStrings::text(Text::GroupMemberUnmute),
-                         AirStrings::text(Text::GroupMemberHide), QStringLiteral("-")};
+    QStringList roleActions;
     for (const Air::MemberAction action :
          Air::memberActions(Air::GroupRole::Member, Air::GroupRole::Founder)) {
-        expected.append(AirStrings::memberActionText(action));
+        roleActions.append(AirStrings::memberActionText(action));
     }
-    QVERIFY(expected.size() > 5);
+    QVERIFY(!roleActions.isEmpty());
+    const QStringList expected =
+        QStringList{AirStrings::text(Text::GroupWritePrivately),
+                    AirStrings::text(Text::GroupContactAdd),
+                    AirStrings::text(Text::GroupMemberUnmute),
+                    AirStrings::text(Text::GroupMemberHide), QStringLiteral("-")}
+        + roleActions;
 
     // From the row of the member.
     QAbstractButton* row = nullptr;
@@ -770,11 +776,50 @@ void TestAirGroupViews::memberMenuIsTheSameFromTheRowAndFromTheirName()
     const QPoint underName = host.mapToGlobal(QPoint(200, 300));
     QCOMPARE(menuOf([&] { dossier->showMemberMenu(liWei, underName, info); }), expected);
 
-    // No longer in the group: what a key still allows, nothing that needs them in it.
+    // A member who is a contact: their conversation, and their whole ID to copy.
+    Air::LocalStore::MemberContact contact;
+    contact.groupKey = groupKey;
+    contact.memberKey = liWei.publicKey;
+    contact.contactKey = QString(64, QLatin1Char('C'));
+    contact.address = QString(76, QLatin1Char('C'));
+    contact.memberName = liWei.name;
+    info.memberContacts.insert(liWei.publicKey, contact);
+    QCOMPARE(menuOf([&] { dossier->showMemberMenu(liWei, underName, info); }),
+             QStringList({AirStrings::text(Text::GroupWritePrivately),
+                          AirStrings::text(Text::GroupContactOpen),
+                          AirStrings::text(Text::YouCopyId),
+                          AirStrings::text(Text::GroupMemberUnmute),
+                          AirStrings::text(Text::GroupMemberHide), QStringLiteral("-")})
+                 + roleActions);
+    QStringList opened;
+    QObject::connect(dossier, &AirGroupDossier::openContactRequested, dossier,
+                     [&opened](const QString& contactKey) { opened.append(contactKey); });
+    QTimer::singleShot(0, [] {
+        auto* const menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+        if (!menu) {
+            return;
+        }
+        for (QAction* const action : menu->actions()) {
+            if (action->text() == AirStrings::text(Text::GroupContactOpen)) {
+                menu->setActiveAction(action);
+            }
+        }
+        QTest::keyClick(menu, Qt::Key_Return);
+    });
+    dossier->showMemberMenu(liWei, underName, info);
+    QCOMPARE(opened, QStringList{contact.contactKey});
+
+    // No longer in the group: what a key still allows, nothing that needs them in it; a contact
+    // still opens.
     info.hiddenMembers.insert(liWei.publicKey);
     QCOMPARE(menuOf([&] { dossier->showMemberMenu(liWei, underName, info, false); }),
-             (QStringList{AirStrings::text(Text::DossierCopyKey),
+             (QStringList{AirStrings::text(Text::GroupContactOpen),
+                          AirStrings::text(Text::YouCopyId),
                           AirStrings::text(Text::GroupMemberUnmute),
+                          AirStrings::text(Text::GroupMemberShow)}));
+    info.memberContacts.clear();
+    QCOMPARE(menuOf([&] { dossier->showMemberMenu(liWei, underName, info, false); }),
+             (QStringList{AirStrings::text(Text::GroupMemberUnmute),
                           AirStrings::text(Text::GroupMemberShow)}));
 
     // Mute from the name asks for the same change as from the row.
@@ -1013,6 +1058,80 @@ void TestAirGroupViews::getNowBandShowsWhoFitsAndCountsTheRest()
     QTest::keyClick(band, Qt::Key_Space);
     QTest::mouseClick(band, Qt::LeftButton);
     QCOMPARE(clicks.count(), 3);
+}
+
+/**
+ * KHANDAQ (26.11.2026): the members to mention over the field. The field keeps the keyboard: while
+ * the list shows, Up and Down move the choice round the ends, Enter and Tab take it without a line
+ * break or a tab in the field, Escape closes the list; once it is closed the keys are the field's
+ * again. A click takes a row; the choice stays on its member while what is offered changes.
+ */
+void TestAirGroupViews::mentionListTakesTheKeysOfTheFieldWhileItShows()
+{
+    QWidget host;
+    host.resize(600, 500);
+    auto* const field = new QTextEdit(&host);
+    field->setGeometry(0, 440, 600, 60);
+    auto* const list = new AirMentionList(field, &host);
+    host.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&host));
+    QVERIFY(!list->isVisible());
+
+    QVector<Air::MentionChoice> choices;
+    for (quint32 i = 1; i <= 8; ++i) {
+        Air::MentionChoice choice;
+        choice.member = member(i, QStringLiteral("Member %1").arg(i), Air::GroupRole::Member, true);
+        choice.handle = QStringLiteral("Member_%1").arg(i);
+        choices.append(choice);
+    }
+    QStringList taken;
+    int dismissed = 0;
+    QObject::connect(list, &AirMentionList::chosen, list,
+                     [&taken](const Air::MentionChoice& choice) { taken.append(choice.handle); });
+    QObject::connect(list, &AirMentionList::dismissed, list, [&dismissed] { ++dismissed; });
+
+    list->setChoices(choices);
+    QVERIFY(list->isVisible());
+    // As many rows as fit at once; typing narrows the rest down.
+    QCOMPARE(list->sizeHint().height(),
+             AirMentionList::maxRows * AirTokens::Size::rowDeskCompact + 2 * AirTokens::Space::s4);
+    list->setGeometry(0, 0, 360, list->sizeHint().height());
+    QCOMPARE(list->choice().handle, QStringLiteral("Member_1"));
+
+    QTest::keyClick(field, Qt::Key_Down);
+    QCOMPARE(list->choice().handle, QStringLiteral("Member_2"));
+    QTest::keyClick(field, Qt::Key_Up);
+    QTest::keyClick(field, Qt::Key_Up);
+    QCOMPARE(list->choice().handle, QStringLiteral("Member_6"));
+
+    QTest::keyClick(field, Qt::Key_Tab);
+    QTest::keyClick(field, Qt::Key_Return);
+    QCOMPARE(taken, (QStringList{QStringLiteral("Member_6"), QStringLiteral("Member_6")}));
+    QVERIFY(field->toPlainText().isEmpty());
+
+    // The choice stays on its member while the members offered change.
+    list->setChoices(choices.mid(3));
+    QCOMPARE(list->choice().handle, QStringLiteral("Member_6"));
+
+    // A click takes the row under it.
+    QTest::mouseClick(list, Qt::LeftButton, Qt::NoModifier,
+                      QPoint(list->width() / 2,
+                             AirTokens::Space::s4 + AirTokens::Size::rowDeskCompact
+                                 + AirTokens::Size::rowDeskCompact / 2));
+    QCOMPARE(taken.last(), QStringLiteral("Member_5"));
+
+    QTest::keyClick(field, Qt::Key_Escape);
+    QCOMPARE(dismissed, 1);
+    QVERIFY(!list->isVisible());
+    // Closed, the keys are the field's again.
+    QTest::keyClick(field, Qt::Key_Return);
+    QCOMPARE(taken.size(), 3);
+    QCOMPARE(field->toPlainText(), QStringLiteral("\n"));
+
+    list->setChoices(choices.mid(0, 2));
+    QVERIFY(list->isVisible());
+    list->setChoices({});
+    QVERIFY(!list->isVisible());
 }
 
 int main(int argc, char* argv[])

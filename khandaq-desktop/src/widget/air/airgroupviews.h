@@ -20,6 +20,7 @@
 #pragma once
 
 #include "src/model/air/airgroup.h"
+#include "src/model/air/airmention.h"
 
 #include <QAbstractButton>
 #include <QBasicTimer>
@@ -33,6 +34,7 @@ class AirTextField;
 class AirTile;
 class QLabel;
 class QPainter;
+class QTextEdit;
 class QVBoxLayout;
 
 /**
@@ -203,4 +205,54 @@ private:
     QLabel* empty = nullptr;
     QWidget* rowsHolder = nullptr;
     QVBoxLayout* rows = nullptr;
+};
+
+/**
+ * KHANDAQ (26.11.2026): the members to mention, over the field of a group, as Telegram has them
+ * (DESIGN-group-contacts-private-mentions.md, part 3): the tile, the name and the @handle of each,
+ * the chosen one on the sunken ground. The field keeps the keyboard: while the list shows, Up and
+ * Down move the choice, Enter or Tab takes it and Escape closes the list; a click takes a row. The
+ * form says what to offer (setChoices) and where the list stands.
+ */
+class AirMentionList : public QWidget
+{
+    Q_OBJECT
+public:
+    /** The most members shown at once: what follows the "@" narrows the rest down. */
+    static constexpr int maxRows = 6;
+
+    /** field is the one the list listens to; parent is where it stands. */
+    AirMentionList(QTextEdit* field, QWidget* parent);
+
+    /** The members to offer, in order, the first one chosen; none hides the list. */
+    void setChoices(const QVector<Air::MentionChoice>& choices);
+    /** Moves the choice by delta rows, round the ends. */
+    void moveChoice(int delta);
+    /** The member chosen now; one without a handle when none is offered. */
+    Air::MentionChoice choice() const;
+
+    QSize sizeHint() const override;
+
+signals:
+    /** Enter, Tab or a click took choice. */
+    void chosen(const Air::MentionChoice& choice);
+    /** Escape closed the list over the mention being typed. */
+    void dismissed();
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+    void paintEvent(QPaintEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+
+private:
+    QRect rowRect(int row) const;
+    int rowAt(const QPoint& pos) const;
+    void placeTiles();
+
+    QTextEdit* field = nullptr;
+    QVector<Air::MentionChoice> offered;
+    QVector<AirTile*> tiles;
+    int current = 0;
 };

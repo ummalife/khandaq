@@ -113,6 +113,7 @@ private slots:
     void readsTheOlderBlock();
     void tellsWhomTheBlockNames();
     void spansCoverWholeHandles();
+    void aMentionLinkCarriesTheMemberKeyOnly();
 };
 
 void TestAirMention::handleKeepsLettersOfAnyScript()
@@ -413,6 +414,17 @@ void TestAirMention::spansCoverWholeHandles()
     QCOMPARE(spans.at(1).key, key('B'));
     QCOMPARE(spans.at(2).start, words.size() - 4);
     QVERIFY(mentionSpans(words, {}).isEmpty());
+}
+
+void TestAirMention::aMentionLinkCarriesTheMemberKeyOnly()
+{
+    QCOMPARE(mentionLinkKey(mentionLink(key('a'))), key('A'));
+    QCOMPARE(mentionLinkKey(QStringLiteral("KQMENTION:") + key('b')), key('B'));
+    // Any other link, or one that holds no whole key, opens no member.
+    QVERIFY(mentionLinkKey(QStringLiteral("https://khandaq.app/") + key('A')).isEmpty());
+    QVERIFY(mentionLinkKey(QStringLiteral("kqmention:1234")).isEmpty());
+    QVERIFY(mentionLinkKey(QStringLiteral("kqmention:") + QString(64, QLatin1Char('G'))).isEmpty());
+    QVERIFY(mentionLinkKey(QString()).isEmpty());
 }
 
 QTEST_GUILESS_MAIN(TestAirMention)

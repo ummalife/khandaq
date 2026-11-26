@@ -24,6 +24,8 @@
 #include "src/core/toxpk.h"
 #include "src/model/air/aircommunity.h"
 #include "src/model/air/airgroup.h"
+#include "src/model/air/airlocalstore.h"
+#include "src/model/air/airmention.h"
 #include "src/persistence/igroupsettings.h"
 
 #include <QPointer>
@@ -35,6 +37,7 @@ class MainWindow;
 class AirGetNowBand;
 class AirGroupDossier;
 class AirLocal;
+class AirMentionList;
 class AirSource;
 class AirPrivateThread;
 class Group;
@@ -98,6 +101,19 @@ signals:
     void leaveRequested(const GroupId& groupId);
     /** KHANDAQ (0.2.57): Accept on a file of the group held for a tap: the main window writes it. */
     void heldFileAccepted(const GroupId& groupId, const ToxFile& file);
+    /**
+     * KHANDAQ (26.11.2026): "Add to contacts" on a member who is not a contact: the main window
+     * offers them our ID over the group.
+     */
+    void contactOfferRequested(const GroupId& groupId, const ToxPk& member);
+    /** KHANDAQ (26.11.2026): "Open the conversation" with the contact a member is. */
+    void contactConversationRequested(const ToxPk& contactKey);
+    /**
+     * KHANDAQ (26.11.2026): a private message went to the member with peerKey in the group: it
+     * stands in the feed of the group too, for us alone.
+     */
+    void privateMessageSent(const GroupId& groupId, const QString& peerKey, const QString& peerName,
+                            const QString& text);
 
 private slots:
     void onScreenshotClicked() override;
@@ -142,6 +158,14 @@ protected:
      * whose the entry is (replyAuthorOf): one that does not go is not sent again, as on Android.
      */
     void reactTo(ChatLogIdx idx, const QString& emoji) override;
+    /** KHANDAQ (26.11.2026): the members the words mention by @handle, before the words. */
+    QString mentionBlockFor(const QString& words) const override;
+    /**
+     * KHANDAQ (26.11.2026): a private message in the feed is answered in private, never quoted
+     * into the group.
+     */
+    bool repliesElsewhere(ChatLogIdx idx) const override;
+    void replyElsewhere(ChatLogIdx idx) override;
 
 private:
     void retranslateUi();
@@ -154,6 +178,23 @@ private:
      * the dossier opens, under the name; for someone no longer in the group, what their key allows.
      */
     void showAuthorMenu(ChatLogIdx idx, const QPoint& globalPos);
+    /**
+     * The menu of the member with this key at globalPos; absentName names them when they are not
+     * in the group now.
+     */
+    void showMemberMenu(const QString& memberKey, const QString& absentName,
+                        const QPoint& globalPos);
+    /**
+     * KHANDAQ (26.11.2026): the contact a member is: kept so on this device and a contact still;
+     * a null one otherwise.
+     */
+    Air::LocalStore::MemberContact contactOf(const QString& memberKey) const;
+    /** KHANDAQ (26.11.2026): the list over the field follows the mention typed at the caret. */
+    void refreshMentions();
+    /** Puts "@handle " in place of the mention being typed. */
+    void insertMention(const Air::MentionChoice& choice);
+    /** The list stands over the composer, at its start edge. */
+    void placeMentions();
     /** Opens the mail to support about menuReport in the person's mail app. */
     void report();
     /** Asks toxcore again who is in the group and what you may do, and shows it everywhere. */
@@ -213,4 +254,7 @@ private:
     QAction* reportAction = nullptr;
     /** The entry the menu was opened on, as Report mails it. */
     Air::GroupReport menuReport;
+    AirMentionList* mentionList = nullptr;
+    /** Where the "@" of the mention Escape closed the list over stands; -1 for none. */
+    int mentionDismissedAt = -1;
 };

@@ -140,6 +140,33 @@ private:
 };
 
 /**
+ * KHANDAQ (26.11.2026): the first line of a private message of a group in its feed
+ * (DESIGN-group-contacts-private-mentions.md, part 2): a small lock and who gets it ("Privately to
+ * Maryam: other members don't see this"), both in the private colour and the caption, the words
+ * wrapped on at most two lines. The entry stands on the private-soft ground (ChatLine).
+ */
+class AirPrivateNote : public ChatLineContent
+{
+    Q_OBJECT
+public:
+    explicit AirPrivateNote(const QString& note);
+
+    void setWidth(float width) override;
+    QRectF boundingRect() const override;
+    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override;
+    QString getText() const override;
+    QString getSpokenText() const override;
+    qreal getAscent() const override;
+
+private:
+    void fit();
+
+    QString note;
+    qreal width = 0;
+    QStringList lines;
+};
+
+/**
  * The quote of a reply above its words (stage 3, item 10), as khandaq-ios ChatReplyQuoteView draws
  * it: on the sunken ground with the small radius, who wrote the quoted message in the caption at
  * weight 600, then the quoted words on at most two lines, both in ink-2. The plate is as wide as its

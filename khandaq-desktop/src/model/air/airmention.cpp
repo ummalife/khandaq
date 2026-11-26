@@ -460,4 +460,23 @@ QVector<MentionSpan> mentionSpans(const QString& words, const QVector<Mention>& 
     return spans;
 }
 
+QString mentionLink(const QString& key)
+{
+    return QStringLiteral("kqmention:") + key.toUpper();
+}
+
+QString mentionLinkKey(const QString& link)
+{
+    const QString prefix = QStringLiteral("kqmention:");
+    if (!link.startsWith(prefix, Qt::CaseInsensitive)) {
+        return QString();
+    }
+    const QString key = link.mid(prefix.size()).toUpper();
+    const bool hex = key.size() == 64 && std::all_of(key.cbegin(), key.cend(), [](QChar c) {
+        return (c >= QLatin1Char('0') && c <= QLatin1Char('9'))
+               || (c >= QLatin1Char('A') && c <= QLatin1Char('F'));
+    });
+    return hex ? key : QString();
+}
+
 } // namespace Air

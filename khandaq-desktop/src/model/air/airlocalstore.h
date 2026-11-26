@@ -274,7 +274,15 @@ public:
      * keys that are not keys, a nonce not of 8 bytes, or an offer older than the keep at now.
      */
     bool keepContactOffer(const ContactOffer& offer, const QDateTime& now);
-    bool dropContactOffer(const QByteArray& nonce);
+    /**
+     * Takes the offer with this nonce: returns it and drops it in one step, so that of the two
+     * answers that may come to one offer (the accept over the group, the Tox request with its
+     * marker) only the first one adds the contact, and the other finds nothing. With groupKey and
+     * memberKey, only an offer that went to that member of that group is taken; any other stays.
+     * A null offer when none is taken.
+     */
+    ContactOffer takeContactOffer(const QByteArray& nonce, const QString& groupKey = QString(),
+                                  const QString& memberKey = QString());
     /** Drops the offers older than Air::contactOfferKeepMs at now. */
     bool pruneContactOffers(const QDateTime& now);
 

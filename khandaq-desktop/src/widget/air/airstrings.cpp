@@ -455,6 +455,22 @@ const Source sources[] = {
     {Text::PrivateEmpty, QT_TRANSLATE_NOOP3("Air", "Nothing written privately yet.", "private messages: none yet")},
     {Text::PrivateReceived, QT_TRANSLATE_NOOP3("Air", "%1 wrote to you privately", "band of a private message in a group: %1 is the member")},
     {Text::PrivateFailed, QT_TRANSLATE_NOOP3("Air", "Not sent: the group is not connected or the member left. Try again.", "private messages: toxcore refused the message")},
+    {Text::PrivateNoteTo, QT_TRANSLATE_NOOP3("Air", "Privately to %1: other members don't see this", "first line of our private message in the feed of a group: %1 is the member it went to")},
+    {Text::PrivateNoteToYou, QT_TRANSLATE_NOOP3("Air", "Privately to you: other members don't see this", "first line of a private message to us in the feed of a group")},
+    {Text::GroupContactAdd, QT_TRANSLATE_NOOP3("Air", "Add to contacts", "member menu and a member's private messages: asks the member to become a contact")},
+    {Text::GroupContactOpen, QT_TRANSLATE_NOOP3("Air", "Open the conversation", "member menu and a member's private messages: the member is a contact already")},
+    {Text::GroupContactOffline, QT_TRANSLATE_NOOP3("Air", "%1 is offline in this group: ask again when they are back", "toast: the offer to become contacts goes only while the member is online in the group; %1 is the member")},
+    {Text::GroupContactSent, QT_TRANSLATE_NOOP3("Air", "Request sent: %1 will be in your contacts once they accept", "toast after the offer to become contacts went: %1 is the member")},
+    {Text::GroupContactFailed, QT_TRANSLATE_NOOP3("Air", "The request did not leave. Try again.", "toast: the offer to become contacts could not be sent")},
+    {Text::GroupContactAdded, QT_TRANSLATE_NOOP3("Air", "%1 is now in your contacts", "toast: the member accepted the offer to become contacts; %1 is the member")},
+    {Text::GroupContactFrom, QT_TRANSLATE_NOOP3("Air", "From the group «%1»", "contact request card of a member of a group: %1 is the group")},
+    {Text::GroupContactBand, QT_TRANSLATE_NOOP3("Air", "%1, from the group «%2»", "notification of a contact request of a member of a group: %1 is the member, %2 the group")},
+    {Text::GroupContactWords, QT_TRANSLATE_NOOP3("Air", "I accepted your request from the group «%1»", "the words of the contact request that accepts the offer of a member: %1 is the group")},
+    {Text::GroupMemberKeyTitle, QT_TRANSLATE_NOOP3("Air", "Key in this group", "a member's private messages: the title over the member's key in the group")},
+    {Text::GroupMemberKeyNote, QT_TRANSLATE_NOOP3("Air", "This key is theirs only in this group: it does not add them as a contact. Use Add to contacts.", "a member's private messages: under the member's key in the group")},
+    {Text::CmdMemberTitle, QT_TRANSLATE_NOOP3("Air", "«%1» in the group «%2»", "row over the list and New contact: the key typed is the key of a member in one of your groups; %1 is the member, %2 the group")},
+    {Text::CmdMemberNote, QT_TRANSLATE_NOOP3("Air", "Send a contact request", "row over the list and New contact: sends the member the offer to become contacts")},
+    {Text::MentionListName, QT_TRANSLATE_NOOP3("Air", "Members to mention", "the list of members over the field after @")},
     {Text::GroupMemberMute, QT_TRANSLATE_NOOP3("Air", "Mute in this group", "member menu: no notifications for this member's messages")},
     {Text::GroupMemberUnmute, QT_TRANSLATE_NOOP3("Air", "Unmute in this group", "member menu")},
     {Text::GroupMemberMuted, QT_TRANSLATE_NOOP3("Air", "%1 muted in this group", "toast: %1 is the member")},
@@ -1480,6 +1496,11 @@ QString spokenRequest(const Air::Request& request)
             from += QLatin1Char(' ') + text(Text::InviteWait).arg(request.inviterName);
         }
         return spokenParts({text(Text::InviteTag), request.timeText, request.groupName, from});
+    }
+    // KHANDAQ (26.11.2026): a member of a group: their name there, and the group.
+    if (request.fromGroup()) {
+        return spokenParts({text(Text::RequestTag), request.timeText, request.memberName,
+                            text(Text::GroupContactFrom).arg(request.groupName)});
     }
     // The start of the key without the spaces of its groups, as iOS says it.
     QString key = Air::groupedKey(request.publicKey);

@@ -415,6 +415,19 @@ void ChatHistory::addPrivateEntry(const ToxPk& author, const QString& text, cons
     sessionChatLog.onRelayedMessageReceived(author, name, message);
 }
 
+Air::PrivateEntry ChatHistory::privateEntry(ChatLogIdx idx) const
+{
+    if (friendChat || !entryStore || idx < getFirstIdx() || idx >= getNextIdx()) {
+        return Air::PrivateEntry();
+    }
+    const ChatLogItem& item = at(idx);
+    if (item.getContentType() != ChatLogItem::ContentType::message) {
+        return Air::PrivateEntry();
+    }
+    return entryStore->privateEntry(Air::textEntryKey(chatKey(), item.getSender().toString(),
+                                                      item.getTimestamp().toMSecsSinceEpoch()));
+}
+
 QString ChatHistory::relayedAuthorName(const ToxPk& author) const
 {
     const QString known = chat.getDisplayedName(author);

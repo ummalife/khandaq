@@ -997,13 +997,26 @@ bool LocalStore::keepContactOffer(const ContactOffer& offer, const QDateTime& no
     return true;
 }
 
-bool LocalStore::dropContactOffer(const QByteArray& nonce)
+LocalStore::ContactOffer LocalStore::takeContactOffer(const QByteArray& nonce,
+                                                     const QString& groupKey,
+                                                     const QString& memberKey)
 {
-    const int before = offers.size();
-    offers.erase(std::remove_if(offers.begin(), offers.end(),
-                                [&nonce](const ContactOffer& offer) { return offer.nonce == nonce; }),
-                 offers.end());
-    return offers.size() != before;
+    if (nonce.size() != static_cast<int>(groupContactNonceSize)) {
+        return ContactOffer();
+    }
+    for (int i = 0; i < offers.size(); ++i) {
+        const ContactOffer& offer = offers.at(i);
+        if (offer.nonce != nonce) {
+            continue;
+        }
+        // No two offers share a nonce (keepContactOffer): this one went to someone else.
+        if ((!groupKey.isEmpty() && offer.groupKey != normalizedKey(groupKey))
+            || (!memberKey.isEmpty() && offer.memberKey != normalizedKey(memberKey))) {
+            return ContactOffer();
+        }
+        return offers.takeAt(i);
+    }
+    return ContactOffer();
 }
 
 bool LocalStore::pruneContactOffers(const QDateTime& now)

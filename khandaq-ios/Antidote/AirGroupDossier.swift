@@ -573,9 +573,9 @@ final class AirGroupDossierController: AirScrollController {
 }
 
 /// The actions on another member of a group: write privately, open the conversation or add the contact,
-/// copy the key, mute, and the roles and removal the founder and the moderators may give, each confirmed,
-/// a role change taken back from its toast. KHANDAQ (0.2.58): one sheet for the member's row in the dossier
-/// and for the name over the member's entry in the conversation (ChatGroupController.openAuthor).
+/// copy the ID of a member who is a contact, mute, and the roles and removal the founder and the moderators may
+/// give, each confirmed, a role change taken back from its toast. KHANDAQ (0.2.58): one sheet for the member's row
+/// in the dossier and for the name over the member's entry in the conversation (ChatGroupController.openAuthor).
 final class AirGroupMemberSheet {
     /// Opens the conversation with a member who is a contact; without it the sheet does not offer one.
     var onOpenFriend: ((OCTFriend) -> Void)?
@@ -618,20 +618,26 @@ final class AirGroupMemberSheet {
         sheet.addAction(UIAlertAction(title: String(localized: "air_group_write_privately"), style: .default) { [weak self] _ in
             self?.openPrivate(with: peer)
         })
-        if let friend = friend(withKey: member.publicKey), let open = onOpenFriend {
-            sheet.addAction(UIAlertAction(title: String(localized: "air_group_open_chat"), style: .default) { _ in
-                open(friend)
-            })
+        // KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): the contact behind a member is the one the
+        // two of them exchanged IDs for; their key in the group is theirs there only and makes no contact.
+        let contact = AirGroupContactOffer.contact(ofMemberKey: member.publicKey, in: chat,
+                                                   submanagerGroups: submanagerGroups, submanagerObjects: submanagerObjects)
+        if let friend = contact {
+            if let open = onOpenFriend {
+                sheet.addAction(UIAlertAction(title: String(localized: "air_group_open_chat"), style: .default) { _ in
+                    open(friend)
+                })
+            }
         }
         else if !member.publicKey.isEmpty {
             sheet.addAction(UIAlertAction(title: String(localized: "air_group_add_contact"), style: .default) { [weak self] _ in
                 self?.addContact(member)
             })
         }
-        if !member.publicKey.isEmpty {
-            sheet.addAction(UIAlertAction(title: String(localized: "air_group_copy_member_key"), style: .default) { [weak self] _ in
-                UIPasteboard.general.string = member.publicKey
-                self?.toast(String(localized: "air_group_member_key_copied"))
+        if contact != nil, let address = submanagerGroups.contactAddress(forMemberPublicKeyHex: member.publicKey, in: chat) {
+            sheet.addAction(UIAlertAction(title: String(localized: "group_member_action_copy_id"), style: .default) { [weak self] _ in
+                UIPasteboard.general.string = address
+                self?.toast(String(localized: "group_member_action_copy_done"))
             })
         }
         let silent = peer.peerNotificationsSilent
@@ -673,14 +679,6 @@ final class AirGroupMemberSheet {
             }
         }
         return nil
-    }
-
-    private func friend(withKey key: String) -> OCTFriend? {
-        guard !key.isEmpty else {
-            return nil
-        }
-        let found = submanagerObjects.friends(predicate: NSPredicate(format: "publicKey ==[c] %@", key))
-        return found.count > 0 ? found.firstObject : nil
     }
 
     /// Where a sheet that shows as a popover points: at the source while it is on the screen; else, as the
@@ -771,14 +769,10 @@ final class AirGroupMemberSheet {
         host?.navigationController?.pushViewController(controller, animated: true)
     }
 
+    /// The member is asked over the group to exchange IDs; they become a contact once they accept.
     private func addContact(_ member: AirGroupMember) {
-        do {
-            // A group gives only the 64-character key, not a whole ID: the contact is added by key.
-            try submanagerFriends.addFriend(byPublicKey: member.publicKey)
-            toast(String(localized: "air_group_contact_added_format", member.name))
-        }
-        catch let error as NSError {
-            handleErrorWithType(.toxAddFriend, error: error)
+        AirGroupContactOffer.send(toMemberKey: member.publicKey, name: member.name, in: chat, submanagerGroups: submanagerGroups) { [weak self] text in
+            self?.toast(text)
         }
     }
 }

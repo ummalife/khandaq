@@ -87,32 +87,33 @@ enum GroupPeerActionsPresenter {
         })
 
         if let pubkey = peer.peerPublicKeyHex, !pubkey.isEmpty {
-            if let friend = friend(withPublicKeyHex: pubkey, submanagerObjects: submanagerObjects),
-               let onOpenFriend = onOpenFriend {
-                alert.addAction(UIAlertAction(title: String(localized: "group_member_action_open_chat"), style: .default) { _ in
-                    onOpenFriend(friend)
+            // KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): a member's key is theirs in this group
+            // only, so adding it as a contact without a request (#15) made a contact that never came online. The
+            // contact behind a member is the one the two of them exchanged IDs for over the group; the ID copied is
+            // that contact's, never the key of the group.
+            let contact = AirGroupContactOffer.contact(ofMemberKey: pubkey, in: chat,
+                                                       submanagerGroups: submanagerGroups, submanagerObjects: submanagerObjects)
+            if let friend = contact {
+                if let onOpenFriend = onOpenFriend {
+                    alert.addAction(UIAlertAction(title: String(localized: "air_group_open_chat"), style: .default) { _ in
+                        onOpenFriend(friend)
+                    })
+                }
+                if let address = submanagerGroups.contactAddress(forMemberPublicKeyHex: pubkey, in: chat) {
+                    alert.addAction(UIAlertAction(title: String(localized: "group_member_action_copy_id"), style: .default) { _ in
+                        UIPasteboard.general.string = address
+                        AirToast.show(String(localized: "group_member_action_copy_done"), in: viewController.view)
+                    })
+                }
+            }
+            else {
+                alert.addAction(UIAlertAction(title: String(localized: "air_group_add_contact"), style: .default) { _ in
+                    // E21: what came of it is a toast, not a dialog to dismiss.
+                    AirGroupContactOffer.send(toMemberKey: pubkey, name: peerName, in: chat, submanagerGroups: submanagerGroups) { text in
+                        AirToast.show(text, in: viewController.view)
+                    }
                 })
             }
-            else if let submanagerFriends = submanagerFriends {
-                alert.addAction(UIAlertAction(title: String(localized: "group_member_action_add_friend"), style: .default) { _ in
-                    do {
-                        // KHANDAQ (#15): a group peer exposes only a 64-hex public key, not a full
-                        // 76-hex Tox ID, so sendFriendRequest(toAddress:) rejected it ("ошибка на всех").
-                        // Add by public key (tox_friend_add_norequest) instead.
-                        try submanagerFriends.addFriend(byPublicKey: pubkey.uppercased())
-                        // E21: a confirmation is a toast, not a dialog to dismiss.
-                        AirToast.show(String(localized: "group_member_action_add_friend_sent"), in: viewController.view)
-                    }
-                    catch let error as NSError {
-                        handleErrorWithType(.toxAddFriend, error: error)
-                    }
-                })
-            }
-
-            alert.addAction(UIAlertAction(title: String(localized: "group_member_action_copy_id"), style: .default) { _ in
-                UIPasteboard.general.string = pubkey.uppercased()
-                AirToast.show(String(localized: "group_member_action_copy_done"), in: viewController.view)
-            })
         }
 
         if peer.peerNotificationsSilent {
@@ -154,22 +155,6 @@ enum GroupPeerActionsPresenter {
         }
 
         viewController.present(alert, animated: true, completion: nil)
-    }
-
-    private static func friend(withPublicKeyHex pubkey: String, submanagerObjects: OCTSubmanagerObjects) -> OCTFriend? {
-        let normalized = pubkey.uppercased()
-        let friends = submanagerObjects.friends()
-
-        for index in 0..<friends.count {
-            guard let friend = friends[index] as? OCTFriend else {
-                continue
-            }
-            if friend.publicKey.uppercased() == normalized {
-                return friend
-            }
-        }
-
-        return nil
     }
 
     private static func addRoleChangeActions(to alert: UIAlertController,

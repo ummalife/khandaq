@@ -41,6 +41,7 @@ class FriendsTabCoordinator: ActiveSessionNavigationCoordinator {
         let controller = AirNewContactController(
             submanagerFriends: toxManager.friends,
             submanagerObjects: toxManager.objects,
+            submanagerGroups: toxManager.groups,
             ownAddress: toxManager.user.userAddress,
             prefilled: prefilledAddress
         )

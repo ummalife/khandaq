@@ -40,6 +40,9 @@ class GroupPeerPrivateController: PortraitChatController {
     /// keeps room for the messages.
     fileprivate let intro = AirGroupPrivateIntroView()
     fileprivate var observers: [NSObjectProtocol] = []
+    /// KHANDAQ (26.11.2026): whether the field takes the caret once the screen is up, as when Reply on a private entry
+    /// of the group's feed opens it to answer that entry.
+    var focusesFieldOnAppear = false
     /// The words of a send that failed, shown under the field until the text changes.
     fileprivate var sendFailure: String?
     /// The height of the thread at the last layout, and whether its end was in sight before the next:
@@ -192,6 +195,10 @@ class GroupPeerPrivateController: PortraitChatController {
         observers.append(center.addObserver(forName: AirSelfNetwork.didChange, object: nil, queue: .main) { [weak self] _ in
             self?.refreshComposeState(animated: true)
         })
+        // KHANDAQ (26.11.2026): once the member is a contact, the key of the group and Add to contacts leave the screen.
+        observers.append(center.addObserver(forName: .octGroupContactAdded, object: nil, queue: .main) { [weak self] _ in
+            self?.refreshMember(animated: true)
+        })
         observers.append(center.addObserver(forName: AirNetworkNotice.didChange, object: nil, queue: .main) { [weak self] _ in
             self?.networkBand.follow(AirNetworkNotice.shared, animated: true)
         })
@@ -264,6 +271,12 @@ class GroupPeerPrivateController: PortraitChatController {
         super.viewDidAppear(animated)
         markPrivateThreadRead()
         scrollToBottom(animated: false)
+        if focusesFieldOnAppear {
+            focusesFieldOnAppear = false
+            if groupRight.canWritePrivately {
+                _ = chatInputView.becomeFirstResponder()
+            }
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -340,9 +353,29 @@ private extension GroupPeerPrivateController {
         let presence = member.map { AirGroupRoster.statusLine(for: $0, now: Date().timeIntervalSince1970) }
             ?? String(localized: "air_group_member_offline")
         band.configure(online: isMemberOnline, presence: presence)
+        // KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): a member who is not a contact shows their key
+        // in this group here, with what it is not, and Add to contacts.
+        let isContact = AirGroupContactOffer.contact(ofMemberKey: peerKey, in: chat, submanagerGroups: submanagerGroups,
+                                                     submanagerObjects: submanagerObjects) != nil
         intro.configure(String(localized: "air_group_private_note_format",
                                groupName.isEmpty ? String(localized: "group_chat_default_title") : groupName,
-                               AirTranscript.shortName(name)))
+                               AirTranscript.shortName(name)),
+                        memberKey: isContact ? nil : (peerKey.isEmpty ? nil : peerKey))
+        intro.memberKeyView.onCopy = { [weak self] in
+            guard let self = self else {
+                return
+            }
+            UIPasteboard.general.string = self.peerKey
+            AirToast.show(String(localized: "air_group_member_key_copied"), in: self.view, above: self.chatInputView)
+        }
+        intro.memberKeyView.onAdd = { [weak self] in
+            guard let self = self else {
+                return
+            }
+            AirGroupContactOffer.send(toMemberKey: self.peerKey, name: name, in: self.chat, submanagerGroups: self.submanagerGroups) { text in
+                AirToast.show(text, in: self.view, above: self.chatInputView)
+            }
+        }
         sizeIntro()
         titleView.spokenPresence = presence
 
@@ -597,8 +630,10 @@ final class AirGroupPrivateBandView: UIView {
     }
 }
 
-/// The start of a member's private messages: who sees them, in the quiet caption of a note.
+/// The start of a member's private messages: who sees them, in the quiet caption of a note, and the member's key in
+/// this group while they are not a contact (AirGroupMemberKeyView).
 final class AirGroupPrivateIntroView: UIView {
+    let memberKeyView = AirGroupMemberKeyView()
     private let label = AirKit.label(.caption, color: KQColor.ink3, lines: 0)
 
     override init(frame: CGRect) {
@@ -606,8 +641,12 @@ final class AirGroupPrivateIntroView: UIView {
         backgroundColor = .clear
         accessibilityIdentifier = "air.group.private.intro"
         label.textAlignment = .center
-        addSubview(label)
-        label.snp.makeConstraints {
+        memberKeyView.isHidden = true
+        let stack = UIStackView(arrangedSubviews: [memberKeyView, label])
+        stack.axis = .vertical
+        stack.spacing = KQSpace.x8
+        addSubview(stack)
+        stack.snp.makeConstraints {
             $0.top.equalToSuperview().offset(KQSpace.x16)
             $0.bottom.equalToSuperview().offset(-KQSpace.x8)
             $0.leading.equalTo(safeAreaLayoutGuide).offset(KQSpace.x24)
@@ -619,7 +658,11 @@ final class AirGroupPrivateIntroView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func configure(_ text: String) {
+    func configure(_ text: String, memberKey: String? = nil) {
         label.text = text
+        if let key = memberKey {
+            memberKeyView.configure(key: key)
+        }
+        memberKeyView.isHidden = memberKey == nil
     }
 }

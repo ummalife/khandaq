@@ -304,6 +304,8 @@ final class AirNewContactController: AirScrollController {
 
     private weak var submanagerFriends: OCTSubmanagerFriends?
     private weak var submanagerObjects: OCTSubmanagerObjects?
+    /// KHANDAQ (26.11.2026): to tell the key of a member of one of our groups (memberMatch).
+    private weak var submanagerGroups: OCTSubmanagerGroups?
     private let ownAddress: String
     private let prefilled: String?
     private let blocks: AirLocalStore
@@ -326,6 +328,9 @@ final class AirNewContactController: AirScrollController {
     private let sendBarBackground = UIView()
 
     private var verdict: AirIdVerdict = .empty
+    /// The member of one of our groups whose key there the field holds: their key in the group is not the start
+    /// of an ID, so the screen offers to ask them instead (DESIGN-group-contacts-private-mentions.md).
+    private var memberMatch: AirGroupMemberMatch?
     private var formHeight: CGFloat = 0
     private var sentKey: String?
     private var sentPath: AirPathView?
@@ -335,9 +340,15 @@ final class AirNewContactController: AirScrollController {
     private var friendResults: Results<OCTFriend>?
 
     /// `prefilled`: an ID from the command line or a link, checked as if pasted.
-    init(submanagerFriends: OCTSubmanagerFriends, submanagerObjects: OCTSubmanagerObjects, ownAddress: String, prefilled: String?, blocks: AirLocalStore = AirLocalStore.shared) {
+    init(submanagerFriends: OCTSubmanagerFriends,
+         submanagerObjects: OCTSubmanagerObjects,
+         submanagerGroups: OCTSubmanagerGroups? = nil,
+         ownAddress: String,
+         prefilled: String?,
+         blocks: AirLocalStore = AirLocalStore.shared) {
         self.submanagerFriends = submanagerFriends
         self.submanagerObjects = submanagerObjects
+        self.submanagerGroups = submanagerGroups
         self.ownAddress = ownAddress
         self.prefilled = prefilled
         self.blocks = blocks
@@ -587,7 +598,14 @@ final class AirNewContactController: AirScrollController {
     private func refresh(animated: Bool, fromUser: Bool) {
         let hex = currentHex
         let previous = verdict
+        let previousMatch = memberMatch
         verdict = decide(hex)
+        if case .partial = verdict, let objects = submanagerObjects, let groups = submanagerGroups {
+            memberMatch = AirGroupMemberMatch.find(hex: hex, submanagerObjects: objects, submanagerGroups: groups)
+        }
+        else {
+            memberMatch = nil
+        }
         fieldAction.isHidden = !hex.isEmpty
         clearAction.isHidden = hex.isEmpty
         ruler.update(count: hex.count, check: verdict.checkState, animated: animated)
@@ -601,8 +619,15 @@ final class AirNewContactController: AirScrollController {
                 verdictLabel.text = String(localized: "air_nc_verdict_empty")
                 verdictLabel.textColor = KQColor.ink3
             case .partial(let left):
-                verdictLabel.text = String(localized: "air_nc_verdict_left", left)
-                verdictLabel.textColor = KQColor.ink2
+                if let member = memberMatch {
+                    verdictLabel.text = member.title
+                    verdictLabel.textColor = KQColor.ink2
+                    link = String(localized: "air_cmd_member_note")
+                }
+                else {
+                    verdictLabel.text = String(localized: "air_nc_verdict_left", left)
+                    verdictLabel.textColor = KQColor.ink2
+                }
             case .badCheck:
                 verdictLabel.text = String(localized: "air_nc_verdict_bad")
                 verdictLabel.textColor = KQColor.danger
@@ -652,6 +677,9 @@ final class AirNewContactController: AirScrollController {
         if fromUser, kind(previous) != kind(verdict), let text = verdictLabel.text, kind(verdict) != 0 {
             UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification, text)
         }
+        else if fromUser, memberMatch != nil, memberMatch != previousMatch, let text = verdictLabel.text {
+            UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification, text)
+        }
     }
 
     /// The verdicts VoiceOver announces when one turns into another: not every character typed.
@@ -698,6 +726,17 @@ final class AirNewContactController: AirScrollController {
                 delegate?.newContactOpenChat(self, publicKey: key)
             case .theyAsked:
                 delegate?.newContactOpenRequests(self)
+            case .partial:
+                guard let member = memberMatch, let groups = submanagerGroups else {
+                    break
+                }
+                view.endEditing(true)
+                AirGroupContactOffer.send(toMemberKey: member.memberKey, name: member.name, in: member.chat, submanagerGroups: groups) { [weak self] text in
+                    guard let self = self else {
+                        return
+                    }
+                    AirToast.show(text, in: self.view)
+                }
             default:
                 break
         }
@@ -859,10 +898,12 @@ extension AirNewContactController: UIImagePickerControllerDelegate, UINavigation
 /// Over the Air list while the command line holds the start of an ID: "New contact with this ID" and
 /// what is wrong with it so far, as a row of the list (the dashed tile of a pending contact).
 final class AirCommandIdRow: UIControl {
-    /// A person's ID, or a group's key (64 characters are both a whole key and the start of an ID).
+    /// A person's ID, or a group's key (64 characters are both a whole key and the start of an ID), or a member of
+    /// one of our groups whose key there the line holds (DESIGN-group-contacts-private-mentions.md).
     enum Kind {
         case contact
         case group
+        case member
     }
 
     private let kind: Kind
@@ -884,6 +925,9 @@ final class AirCommandIdRow: UIControl {
             case .group:
                 accessibilityIdentifier = "air.command.joinGroup"
                 tile.configure(style: .pendingGroup, photo: nil)
+            case .member:
+                accessibilityIdentifier = "air.command.memberContact"
+                tile.configure(style: .pending, photo: nil)
         }
         titleLabel.text = title
         let texts = AirKit.column([titleLabel, noteLabel], spacing: KQSpace.x2)
@@ -912,6 +956,8 @@ final class AirCommandIdRow: UIControl {
                 return String(localized: "air_cmd_new_contact")
             case .group:
                 return String(localized: "air_cmd_join_group")
+            case .member:
+                return titleLabel.text ?? ""
         }
     }
 
@@ -923,6 +969,13 @@ final class AirCommandIdRow: UIControl {
         noteLabel.text = note
         accessibilityLabel = title
         accessibilityValue = note
+    }
+
+    /// The member the line holds the key of: "«B» in the group «G»", and "Send a contact request".
+    func configure(member: AirGroupMemberMatch) {
+        tile.configure(style: .person(initials: AirInitials.from(member.name), tone: AirTone.index(for: member.memberKey)), photo: nil)
+        titleLabel.text = member.title
+        configure(note: String(localized: "air_cmd_member_note"))
     }
 
     override var isHighlighted: Bool {

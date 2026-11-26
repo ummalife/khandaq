@@ -1112,6 +1112,118 @@ final class GroupEditMenuTests: XCTestCase, GroupScreenTesting {
     }
 }
 
+/**
+ KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): Reply on a private entry of a group's feed would
+ quote the private words to every member, so it opens the private conversation with the other one of the two and
+ quotes nothing into the group; once that member is gone from the group, a private entry has no Reply.
+ */
+final class GroupPrivateReplyTests: XCTestCase, GroupScreenTesting {
+    fileprivate let lastRead: TimeInterval = 1_800_000_000
+    fileprivate var directories: [URL] = []
+    fileprivate var window: UIWindow?
+    fileprivate var screen: ChatGroupController?
+    fileprivate var kept: [AnyObject] = []
+    private let boris = String(repeating: "c4", count: 32)
+
+    override func tearDown() {
+        closeGroupScreen()
+        super.tearDown()
+    }
+
+    func testReplyOnAPrivateEntryOpensThePrivateConversationWithTheOtherMember() throws {
+        let (chat, realmManager) = try group()
+        try addMember(peerId: 7, key: boris, name: "Борис", to: chat, realmManager)
+        try store("Всем привет", at: lastRead - 20, in: chat, realmManager, peer: 7, messageId: 42)
+        try storePrivate("Только тебе", from: 7, key: boris, in: chat, realmManager)
+        let screen = openOutOfWindow(chat, realmManager)
+
+        XCTAssertNotNil(try replyAction(on: "Всем привет", in: screen), "no Reply on a message to the group")
+        let reply = try XCTUnwrap(try replyAction(on: "Только тебе", in: screen), "no Reply on a private entry")
+        reply.handler()
+
+        let conversation = try XCTUnwrap(screen.navigationController?.topViewController as? GroupPeerPrivateController,
+                                         "Reply did not open the private conversation")
+        XCTAssertEqual(conversation.peer.peerPublicKeyHex, boris)
+        XCTAssertTrue(conversation.focusesFieldOnAppear, "the field of the private conversation is not made ready")
+        XCTAssertNil(screen.replyController.pendingMeta, "the private words were quoted into the group")
+    }
+
+    func testAPrivateEntryHasNoReplyOnceTheOtherMemberIsGone() throws {
+        let (chat, realmManager) = try group()
+        try storePrivate("Только тебе", from: 7, key: boris, in: chat, realmManager)
+        let screen = openOutOfWindow(chat, realmManager)
+
+        XCTAssertNil(try replyAction(on: "Только тебе", in: screen), "Reply on a private entry of a member who left")
+    }
+
+    /// The group's screen in a navigation stack that is in no window: it loads its feed, and the screen Reply pushes
+    /// neither slides in nor appears, so nothing of either runs on once the test has let their submanagers go.
+    private func openOutOfWindow(_ chat: OCTChat, _ realmManager: OCTRealmManager) -> ChatGroupController {
+        let realm: RLMRealm = realmManager.realm
+        let groups = OCTSubmanagerGroupsMock()
+        groups.realm = realm
+        let objects = OCTSubmanagerObjectsMock(realm: realm)
+        let friends = OCTSubmanagerFriendsMock()
+        let chats = OCTSubmanagerChatsMock(realm: realm)
+        let user = OCTSubmanagerUserMock()
+        let delegate = QuietGroupScreenDelegate()
+        let screen = ChatGroupController(theme: ThemeAppearance.resolvedTheme(),
+                                         chat: chat,
+                                         submanagerGroups: groups,
+                                         submanagerObjects: objects,
+                                         submanagerFriends: friends,
+                                         submanagerChats: chats,
+                                         submanagerUser: user,
+                                         delegate: delegate)
+        let navigation = UINavigationController(rootViewController: screen)
+        screen.loadViewIfNeeded()
+        screen.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        screen.view.layoutIfNeeded()
+        // The stack first, so it goes before the submanagers its screens hold weakly.
+        kept += [navigation, groups, objects, friends, chats, user, delegate]
+        self.screen = screen
+        return screen
+    }
+
+    /// A member of the group as objcTox keeps them.
+    private func addMember(peerId: Int32, key: String, name: String, to chat: OCTChat, _ realmManager: OCTRealmManager) throws {
+        let peer = try appClass("OCTGroupPeer", as: OCTGroupPeer.Type.self).init()
+        peer.chatUniqueIdentifier = chat.uniqueIdentifier
+        peer.peerId = peerId
+        peer.peerName = name
+        peer.peerPublicKeyHex = key
+        realmManager.add(peer)
+    }
+
+    /// A private message the member with `key` sent us in the group; the row keeps their key in lower case, as
+    /// objcTox stores it.
+    private func storePrivate(_ text: String, from peerId: Int32, key: String, in chat: OCTChat, _ realmManager: OCTRealmManager) throws {
+        let message = try store(text, at: lastRead - 10, in: chat, realmManager, peer: peerId)
+        try inOneWrite(realmManager) {
+            message.groupPrivateMessage = true
+            message.groupPrivatePeerId = peerId
+            message.groupPrivatePeerPubkey = key
+        }
+    }
+
+    /// Reply in the menu of the entry with `text`; nil when its menu has none.
+    private func replyAction(on text: String, in screen: ChatGroupController) throws -> ChatContextMenuAction? {
+        let table = try XCTUnwrap(screen.tableView)
+        for row in 0..<table.numberOfRows(inSection: 0) {
+            let message = screen.messageEntry(atDisplayIndex: row).message
+            guard MessageReplyHelper.plainBody(for: message) == text else {
+                continue
+            }
+            let indexPath = IndexPath(row: row, section: 0)
+            let cell = try XCTUnwrap(screen.tableView(table, cellForRowAt: indexPath) as? ChatMovableDateCell, "row \(row) is no message")
+            return screen.groupContextActions(for: cell, message: message, indexPath: indexPath)
+                .first { $0.title == String(localized: "chat_reply_action") }
+        }
+        XCTFail("the feed has no entry \(text)")
+        return nil
+    }
+}
+
 /// The group screen's delegate in a test: nothing to open.
 private final class QuietGroupScreenDelegate: ChatGroupControllerDelegate {
     func chatGroupControllerWillAppear(_ controller: ChatGroupController) {}

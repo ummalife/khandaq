@@ -68,6 +68,11 @@ enum NotificationFreshness {
 
 class NotificationCoordinator: NSObject {
     weak var delegate: NotificationCoordinatorDelegate?
+    /// KHANDAQ (26.11.2026): your key and your name in a group, to tell the messages that mention you
+    /// (ActiveSessionCoordinator reads them from the group's members).
+    var groupSelfIdentity: ((OCTChat) -> (key: String?, name: String?))?
+    /// KHANDAQ (26.11.2026): the member of a group behind a contact request, when one asked from a group.
+    var groupContactOffer: ((OCTFriendRequest) -> OCTGroupContactOffer?)?
 
     fileprivate let theme: Theme
     fileprivate let userDefaults = UserDefaultsManager()
@@ -648,7 +653,11 @@ private extension NotificationCoordinator {
 
     func notificationObjectFromRequest(_ request: OCTFriendRequest) -> NotificationObject {
         let title = String(localized: "notification_incoming_contact_request")
-        let body = request.message ?? ""
+        var body = request.message ?? ""
+        // A member who asked from a group: their name there over the group it came from.
+        if let offer = groupContactOffer?(request), !offer.memberName.isEmpty {
+            body = offer.memberName + "\n" + body
+        }
         let action = NotificationAction.openRequest(requestUniqueIdentifier: request.uniqueIdentifier)
 
         return NotificationObject(title: title, body: body, action: action, soundName: "isotoxin_NewMessage.aac", icon: nil, tile: .pending)
@@ -792,7 +801,9 @@ private extension NotificationCoordinator {
             return AirLocalStore.shared.isMuted(publicKey: friend.publicKey)
         }
 
-        if chat.groupNotificationsSilent {
+        // KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): a message that mentions you notifies in a
+        // group set quiet too, except in Khandaq Community, where everyone can write to everyone.
+        if chat.groupNotificationsSilent && !mentionsSelf(message, in: chat) {
             return true
         }
 
@@ -806,6 +817,18 @@ private extension NotificationCoordinator {
         }
 
         return false
+    }
+
+    func mentionsSelf(_ message: OCTMessageAbstract, in chat: OCTChat) -> Bool {
+        guard !message.isOutgoing(), !KhandaqCommunity.isCommunity(chat), let text = message.messageText?.text,
+              text.contains(GroupMentionHelper.mentionBlockPrefix) else {
+            return false
+        }
+        let mentions = GroupMentionHelper.parse(text).mentions
+        guard !mentions.isEmpty, let identity = groupSelfIdentity?(chat) else {
+            return false
+        }
+        return AirGroupTranscript.mentionsMe(mentions, selfKey: identity.key, selfName: identity.name)
     }
 
     // func chatsBadge() -> Int {

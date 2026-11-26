@@ -31,6 +31,13 @@ class BubbleView: UIView {
     // never the author it names, so until a signature says otherwise the name on the bubble is a
     // claim and the UI has to say so in words rather than let it read as established.
     fileprivate let unverifiedLabel = UILabel()
+    // KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): a private message in the feed of a group says
+    // on its first line who sees it, behind a small lock, in the private colour.
+    fileprivate let privateNoteRow = UIStackView()
+    fileprivate let privateNoteLabel = UILabel()
+    fileprivate var mentionTapRecognizer: UITapGestureRecognizer?
+    /// A tap on a member the text names (styleMentions), with the member's key in the group.
+    var onMentionTap: ((String) -> Void)?
     var onReactionsTap: (() -> Void)?
     // KHANDAQ (#100): keep the quote view's tap handler in sync no matter the assignment order.
     // The cell sets onReplyQuoteTap AFTER calling bindReplyQuote, so without this didSet the quote's
@@ -197,6 +204,72 @@ class BubbleView: UIView {
         updateTextConstraints(hasMap: mapImageView?.isHidden == false)
     }
 
+    /// The note over a private message of a group, or nil for any other message.
+    func bindPrivateNote(_ note: String?) {
+        privateNoteLabel.text = note
+        privateNoteRow.isHidden = note == nil
+        updateTextConstraints(hasMap: mapImageView?.isHidden == false)
+    }
+
+    /// The key a mention of a member carries in the text it is drawn in.
+    static let mentionKeyAttribute = NSAttributedString.Key("KQMentionKey")
+
+    /// Draws the members the text names in `color` and `font`; a tap on one runs onMentionTap. Called after the text,
+    /// its font and its colour are set: setting those again draws the whole text in one font and colour.
+    func styleMentions(_ mentions: [(range: NSRange, key: String)], color: UIColor, font: UIFont) {
+        guard !mentions.isEmpty, let current = textView.attributedText, current.length > 0 else {
+            return
+        }
+        let styled = NSMutableAttributedString(attributedString: current)
+        for mention in mentions where NSMaxRange(mention.range) <= styled.length {
+            styled.addAttributes([
+                .foregroundColor: color,
+                .font: font,
+                BubbleView.mentionKeyAttribute: mention.key,
+            ], range: mention.range)
+        }
+        textView.attributedText = styled
+        if mentionTapRecognizer == nil {
+            let recognizer = UITapGestureRecognizer(target: self, action: #selector(handleMentionTap(_:)))
+            recognizer.delegate = self
+            textView.addGestureRecognizer(recognizer)
+            mentionTapRecognizer = recognizer
+        }
+    }
+
+    /// The key of the mention under `recognizer`'s touch, nil when the touch is on anything else.
+    fileprivate func mentionKey(at recognizer: UIGestureRecognizer) -> String? {
+        guard let text = textView.attributedText, text.length > 0 else {
+            return nil
+        }
+        let point = recognizer.location(in: textView)
+        guard let position = textView.closestPosition(to: point) else {
+            return nil
+        }
+        let offset = textView.offset(from: textView.beginningOfDocument, to: position)
+        // The caret nearest to the touch may stand after the character touched.
+        for index in [offset, offset - 1] where index >= 0 && index < text.length {
+            var range = NSRange(location: 0, length: 0)
+            guard let key = text.attribute(BubbleView.mentionKeyAttribute, at: index, effectiveRange: &range) as? String,
+                  let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
+                  let end = textView.position(from: start, offset: range.length),
+                  let textRange = textView.textRange(from: start, to: end) else {
+                continue
+            }
+            let rects = textView.selectionRects(for: textRange).compactMap { ($0 as? UITextSelectionRect)?.rect }
+            if rects.contains(where: { $0.insetBy(dx: -4, dy: -4).contains(point) }) {
+                return key
+            }
+        }
+        return nil
+    }
+
+    @objc fileprivate func handleMentionTap(_ recognizer: UITapGestureRecognizer) {
+        if let key = mentionKey(at: recognizer) {
+            onMentionTap?(key)
+        }
+    }
+
     // KHANDAQ (#iOS edited-marker): show/hide the «изменено» metadata row (its own bottom sub-row).
     func bindEdited(_ isEdited: Bool) {
         // A hidden label still takes the width of its text in the layout: without text it asks for
@@ -253,8 +326,19 @@ class BubbleView: UIView {
     }
 
     fileprivate func updateTextConstraints(hasMap: Bool) {
-        replyQuoteView.snp.remakeConstraints {
+        privateNoteRow.snp.remakeConstraints {
             $0.top.equalTo(self).offset(verticalInset)
+            $0.leading.equalTo(self).offset(horizontalInset)
+            $0.trailing.lessThanOrEqualTo(self).offset(-horizontalInset)
+        }
+
+        replyQuoteView.snp.remakeConstraints {
+            if privateNoteRow.isHidden {
+                $0.top.equalTo(self).offset(verticalInset)
+            }
+            else {
+                $0.top.equalTo(privateNoteRow.snp.bottom).offset(KQSpace.x4)
+            }
             $0.leading.equalTo(self).offset(horizontalInset)
             $0.trailing.equalTo(self).offset(-horizontalInset)
         }
@@ -265,6 +349,9 @@ class BubbleView: UIView {
             if replyQuoteView.isHidden {
                 if hasMap, let mapImageView = mapImageView {
                     $0.top.equalTo(mapImageView.snp.bottom).offset(gapBelow)
+                }
+                else if !privateNoteRow.isHidden {
+                    $0.top.equalTo(privateNoteRow.snp.bottom).offset(KQSpace.x4)
                 }
                 else {
                     $0.top.equalTo(self).offset(verticalInset)
@@ -370,6 +457,25 @@ class BubbleView: UIView {
         textView.dataDetectorTypes = .all
         textView.font = UIFont.systemFont(ofSize: 16.0)
 
+        privateNoteLabel.font = KQFont.font(.caption)
+        privateNoteLabel.adjustsFontForContentSizeCategory = true
+        privateNoteLabel.textColor = KQColor.private
+        privateNoteLabel.numberOfLines = 0
+        let lock = UIImageView(image: AirIcon.image("lock"))
+        lock.tintColor = KQColor.private
+        lock.contentMode = .scaleAspectFit
+        lock.isAccessibilityElement = false
+        lock.snp.makeConstraints {
+            $0.size.equalTo(KQSize.iconSmall)
+        }
+        privateNoteRow.axis = .horizontal
+        privateNoteRow.alignment = .center
+        privateNoteRow.spacing = KQSpace.x4
+        privateNoteRow.addArrangedSubview(lock)
+        privateNoteRow.addArrangedSubview(privateNoteLabel)
+        privateNoteRow.isHidden = true
+        privateNoteRow.accessibilityIdentifier = "air.entry.privateNote"
+        addSubview(privateNoteRow)
         addSubview(replyQuoteView)
         addSubview(textView)
 
@@ -409,6 +515,20 @@ class BubbleView: UIView {
     }
 }
 
+
+extension BubbleView: UIGestureRecognizerDelegate {
+    /// The tap on a mention starts only on a mention: every other touch of the text stays the text view's.
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === mentionTapRecognizer else {
+            return super.gestureRecognizerShouldBegin(gestureRecognizer)
+        }
+        return onMentionTap != nil && mentionKey(at: gestureRecognizer) != nil
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return gestureRecognizer === mentionTapRecognizer
+    }
+}
 
 // MARK: - KHANDAQ (#192) Telegram-style reaction picker
 

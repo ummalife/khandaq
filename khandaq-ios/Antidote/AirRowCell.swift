@@ -403,6 +403,10 @@ final class AirRequestCell: UITableViewCell {
             configureInvite(group: name, inviter: inviter, inviterOnline: inviterOnline)
             return
         }
+        if case let .member(name, group) = request.kind {
+            configureMember(name: name, group: group)
+            return
+        }
         card.accessibilityIdentifier = "air.request"
         accessibilityIdentifier = card.accessibilityIdentifier
         tagLabel.text = String(localized: "air_request_tag")
@@ -450,6 +454,32 @@ final class AirRequestCell: UITableViewCell {
             NSAttributedStringKey.foregroundColor: KQColor.ink3,
         ])
         let range = (text as NSString).range(of: inviter)
+        if range.location != NSNotFound {
+            styled.addAttribute(NSAttributedStringKey.foregroundColor, value: KQColor.ink2, range: range)
+        }
+        keyLabel.attributedText = styled
+        keyLabel.accessibilityLabel = text
+    }
+
+    /// KHANDAQ (26.11.2026): a member of a group who asks to become a contact: their name in the group, and the
+    /// group it came from instead of a key to compare.
+    private func configureMember(name: String, group: String) {
+        card.accessibilityIdentifier = "air.request.member"
+        accessibilityIdentifier = card.accessibilityIdentifier
+        tagLabel.text = String(localized: "air_request_tag")
+        acceptButton.setTitle(String(localized: "contact_request_accept"))
+        acceptButton.accessibilityIdentifier = "air.request.accept"
+        declineButton.accessibilityIdentifier = "air.request.decline"
+        messageLabel.font = KQFont.font(.body, weight: 600)
+        messageLabel.text = name
+        messageLabel.isHidden = false
+
+        let text = String(localized: "air_request_from_group_format", group)
+        let styled = NSMutableAttributedString(string: text, attributes: [
+            NSAttributedStringKey.font: KQFont.font(.caption),
+            NSAttributedStringKey.foregroundColor: KQColor.ink3,
+        ])
+        let range = (text as NSString).range(of: group)
         if range.location != NSNotFound {
             styled.addAttribute(NSAttributedStringKey.foregroundColor, value: KQColor.ink2, range: range)
         }

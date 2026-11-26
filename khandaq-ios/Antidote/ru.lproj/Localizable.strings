@@ -598,7 +598,6 @@
 "group_member_status_offline" = "Не в сети";
 "group_member_action_private_msg" = "Личное сообщение в группе";
 "group_member_action_open_chat" = "Открыть личку";
-"group_member_action_add_friend" = "Добавить в друзья";
 "group_member_action_add_friend_sent" = "Запрос в друзья отправлен.";
 "group_member_action_copy_id" = "Копировать ID";
 "group_member_action_copy_done" = "ID скопирован";
@@ -824,6 +823,7 @@
 "air_section_messages" = "Сообщения";
 "air_request_tag" = "Входящий запрос";
 "air_request_key_format" = "ключ %@. Имя станет известно, когда вы примете запрос";
+"air_request_from_group_format" = "Из группы «%@»";
 "air_reach_live" = "в сети";
 "air_reach_relay" = "в сети, узел";
 "air_reach_pending" = "ждёт ответа";
@@ -1090,9 +1090,14 @@
 "air_group_leave_message" = "Участники увидят, что вы вышли. Чтобы вернуться, понадобится приглашение или ключ группы.";
 "air_group_write_privately" = "Написать лично";
 "air_group_add_contact" = "Добавить в контакты";
-"air_group_contact_added_format" = "%@ теперь в контактах";
-"air_group_copy_member_key" = "Копировать ключ";
 "air_group_member_key_copied" = "Ключ скопирован";
+"air_group_contact_offline_format" = "%@ не в сети в этой группе: попросите ещё раз, когда вернётся";
+"air_group_contact_request_sent_format" = "Запрос отправлен: %@ появится в контактах, когда примет его";
+"air_group_contact_now_format" = "%@ теперь в ваших контактах";
+"air_group_contact_failed" = "Запрос не ушёл: попробуйте ещё раз";
+"air_group_member_key_title" = "Ключ в этой группе";
+"air_group_member_key_note" = "Этот ключ принадлежит участнику только в этой группе: контакт по нему не добавить. Нажмите «Добавить в контакты».";
+"air_group_contact_accept_message_format" = "Ваш запрос из группы «%@» принят";
 "air_group_member_mute" = "Без звука в этой группе";
 "air_group_member_unmute" = "Со звуком в этой группе";
 "air_group_member_muted_format" = "%@: без звука в этой группе";
@@ -1432,6 +1437,9 @@
 /* Redesign stage 5: group settings, joining by key, private messages in a group */
 "air_group_private_note_format" = "Личная переписка в группе «%1$@»: её видите только вы и %2$@.";
 "air_group_private_hint_away_format" = "%@ не в сети: напишите, когда появится";
+"air_group_private_to_format" = "Лично для %@: остальные участники этого не видят";
+"air_group_private_to_you" = "Лично вам: остальные участники этого не видят";
+"air_group_mention_hint" = "Упоминает участника в сообщении";
 "air_group_settings_self_name" = "Ваше имя в группе";
 "air_group_settings_self_name_note" = "Его видят участники этой группы. Имя профиля остаётся прежним.";
 "air_group_settings_topic" = "Тема";
@@ -1468,6 +1476,8 @@
 "air_join_why_key" = "Сначала ключ группы";
 "air_cmd_join_group" = "Вступить в группу с этим ключом";
 "air_cmd_group_note" = "64 знака: столько в ключе группы";
+"air_cmd_member_format" = "«%1$@» в группе «%2$@»";
+"air_cmd_member_note" = "Отправить запрос в контакты";
 
 /* Stage 5: Password and PIN */
 "air_security_pin_section" = "PIN-код";

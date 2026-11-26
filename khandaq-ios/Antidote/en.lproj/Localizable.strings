@@ -597,7 +597,6 @@
 "group_member_status_offline" = "Offline";
 "group_member_action_private_msg" = "Private group message";
 "group_member_action_open_chat" = "Open direct chat";
-"group_member_action_add_friend" = "Add friend";
 "group_member_action_add_friend_sent" = "Friend request sent.";
 "group_member_action_copy_id" = "Copy ID";
 "group_member_action_copy_done" = "ID copied";
@@ -822,6 +821,7 @@
 "air_section_messages" = "Messages";
 "air_request_tag" = "Incoming request";
 "air_request_key_format" = "key %@. You will see the name once you accept the request";
+"air_request_from_group_format" = "From the group «%@»";
 "air_reach_live" = "online";
 "air_reach_relay" = "online, relay";
 "air_reach_pending" = "waiting for reply";
@@ -1088,9 +1088,14 @@
 "air_group_leave_message" = "The members see that you left. To come back you need an invitation or the group key.";
 "air_group_write_privately" = "Write privately";
 "air_group_add_contact" = "Add to contacts";
-"air_group_contact_added_format" = "%@ added to contacts";
-"air_group_copy_member_key" = "Copy key";
 "air_group_member_key_copied" = "Key copied";
+"air_group_contact_offline_format" = "%@ is offline in this group: ask again when they are back";
+"air_group_contact_request_sent_format" = "Request sent: %@ will be in your contacts once they accept";
+"air_group_contact_now_format" = "%@ is now in your contacts";
+"air_group_contact_failed" = "The request did not go out: try again";
+"air_group_member_key_title" = "Key in this group";
+"air_group_member_key_note" = "This key is theirs only in this group: it does not add them as a contact. Use Add to contacts.";
+"air_group_contact_accept_message_format" = "I accepted your request from the group «%@»";
 "air_group_member_mute" = "Mute in this group";
 "air_group_member_unmute" = "Unmute in this group";
 "air_group_member_muted_format" = "%@ muted in this group";
@@ -1430,6 +1435,9 @@
 /* Redesign stage 5: group settings, joining by key, private messages in a group */
 "air_group_private_note_format" = "Private messages in the group “%1$@”: only you and %2$@ see them.";
 "air_group_private_hint_away_format" = "%@ is offline: write when they are back";
+"air_group_private_to_format" = "Privately to %@: other members don't see this";
+"air_group_private_to_you" = "Privately to you: other members don't see this";
+"air_group_mention_hint" = "Mentions this member in the message";
 "air_group_settings_self_name" = "Your name in the group";
 "air_group_settings_self_name_note" = "Members of this group see it. Your profile name stays as it is.";
 "air_group_settings_topic" = "Topic";
@@ -1466,6 +1474,8 @@
 "air_join_why_key" = "The group key first";
 "air_cmd_join_group" = "Join the group with this key";
 "air_cmd_group_note" = "64 characters, as many as a group key has";
+"air_cmd_member_format" = "«%1$@» in the group «%2$@»";
+"air_cmd_member_note" = "Send a contact request";
 
 /* Stage 5: Password and PIN */
 "air_security_pin_section" = "PIN";

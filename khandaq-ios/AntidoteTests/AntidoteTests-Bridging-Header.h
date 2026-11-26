@@ -7,6 +7,7 @@
 #import <objcTox/OCTDefaultFileStorage.h>
 #import <objcTox/OCTFriend.h>
 #import <objcTox/OCTFriendRequest.h>
+#import <objcTox/OCTGroupContactExchange.h>
 #import <objcTox/OCTManager.h>
 #import <objcTox/OCTManagerFactory.h>
 #import <objcTox/OCTManagerConfiguration.h>
@@ -57,6 +58,61 @@
 // through the queue of the realm manager.
 - (void)updateGroupPrivacyState:(OCTToxGroupPrivacyState)privacyState forChat:(OCTChat *)chat;
 - (void)updateGroupVoiceState:(OCTToxGroupVoiceState)voiceState forChat:(OCTChat *)chat;
+// 26.11.2026 (DESIGN-group-contacts-private-mentions.md): the two queries the group history sync serves from, which
+// must never hand out a private message.
+- (NSArray<OCTMessageAbstract *> *)groupMessagesForHistorySyncInChat:(OCTChat *)chat;
+- (NSArray<NSData *> *)groupHistorySyncPacketsForGroupNumber:(uint32_t)groupNumber
+                                         packetFromMessage:(NSData *(^)(OCTMessageAbstract *message))packetBlock;
+@end
+
+// 26.11.2026 (DESIGN-group-contacts-private-mentions.md): the builder of the group history sync's packets, which
+// refuses a private message as the queries above do. objcTox is unchanged by these declarations.
+@interface OCTNgcGroupHistSync : NSObject
+- (instancetype)initWithSendPrivatePacketBlock:(BOOL (^)(uint32_t groupNumber, uint32_t peerId, NSData *packet, NSError **error))sendPrivatePacketBlock
+                            peerPublicKeyBlock:(NSString *(^)(uint32_t groupNumber, uint32_t peerId))peerPublicKeyBlock
+                        peerNameForPeerIdBlock:(NSString *(^)(uint32_t groupNumber, uint32_t peerId))peerNameForPeerIdBlock
+                          defaultPeerNameBlock:(NSString *(^)(void))defaultPeerNameBlock
+                            selfPublicKeyBlock:(NSString *(^)(uint32_t groupNumber))selfPublicKeyBlock
+                       peerIdForPublicKeyBlock:(uint32_t (^)(uint32_t groupNumber, NSString *publicKeyHex))peerIdForPublicKeyBlock
+                            isPublicGroupBlock:(BOOL (^)(uint32_t groupNumber))isPublicGroupBlock
+                               selfPeerIdBlock:(uint32_t (^)(uint32_t groupNumber))selfPeerIdBlock
+                                  peerIdsBlock:(NSArray<NSNumber *> *(^)(uint32_t groupNumber))peerIdsBlock
+                             chatForGroupBlock:(OCTChat *(^)(uint32_t groupNumber, BOOL createIfNeeded))chatForGroupBlock
+                           messagesToSyncBlock:(NSArray<OCTMessageAbstract *> *(^)(OCTChat *chat))messagesToSyncBlock
+                            messageExistsBlock:(BOOL (^)(OCTChat *chat, uint32_t messageId, uint32_t peerId, NSString *senderPubkeyHex, NSString *peerName, NSString *text, NSTimeInterval dateInterval))messageExistsBlock
+                               fileExistsBlock:(BOOL (^)(OCTChat *chat, NSString *msgIdHashHex))fileExistsBlock
+                      insertSyncedMessageBlock:(OCTMessageAbstract *(^)(OCTChat *chat, NSString *text, OCTToxMessageType type, uint32_t peerId, NSString *peerName, NSString *senderPubkeyHex, uint32_t messageId, NSTimeInterval dateInterval))insertSyncedMessageBlock
+                         insertSyncedFileBlock:(OCTMessageAbstract *(^)(OCTChat *chat, NSString *fileName, NSString *filePath, uint64_t fileSize, NSString *fileUTI, uint32_t peerId, NSString *peerName, NSString *senderPubkeyHex, NSString *msgIdHashHex, NSTimeInterval dateInterval))insertSyncedFileBlock
+                   incomingFilesDirectoryBlock:(NSString *(^)(uint32_t groupNumber))incomingFilesDirectoryBlock
+                                  fileUTIBlock:(NSString *(^)(NSString *fileName))fileUTIBlock
+                            isBlockedPeerBlock:(BOOL (^)(uint32_t groupNumber, uint32_t peerId))isBlockedPeerBlock
+                          deliveryReceiptBlock:(void (^)(OCTChat *chat, uint32_t messageId, uint32_t peerId))deliveryReceiptBlock
+                     fileSyncConfirmationBlock:(void (^)(OCTChat *chat, NSString *msgIdHashHex, uint32_t syncerPeerId))fileSyncConfirmationBlock;
+- (NSData *)buildSyncPacketForMessage:(OCTMessageAbstract *)message groupNumber:(uint32_t)groupNumber
+    NS_SWIFT_NAME(syncPacket(for:groupNumber:));
+@end
+
+// 26.11.2026 (DESIGN-group-contacts-private-mentions.md): the offers of the member-to-contact exchange, which the
+// accept over the group and the contact request with the offer's nonce each take, only one of them. objcTox is
+// unchanged by these declarations.
+@interface OCTGroupContactPendingOffer : NSObject
+@property (nonatomic, copy, readonly) NSString *memberPublicKeyHex;
+@property (nonatomic, copy, readonly) NSString *nonceHex;
+- (instancetype)initWithGroupChatIdHex:(NSString *)groupChatIdHex
+                    memberPublicKeyHex:(NSString *)memberPublicKeyHex
+                            memberName:(NSString *)memberName
+                              nonceHex:(NSString *)nonceHex
+                                sentAt:(NSTimeInterval)sentAt;
+@end
+
+@interface OCTGroupContactStore : NSObject
+- (instancetype)initWithRealmManager:(OCTRealmManager *)realmManager;
+- (void)savePendingOffer:(OCTGroupContactPendingOffer *)offer;
+- (OCTGroupContactPendingOffer *)takePendingOfferToMember:(NSString *)memberPublicKeyHex
+                                                  inGroup:(NSString *)groupChatIdHex
+                                                 nonceHex:(NSString *)nonceHex
+                                                       at:(NSTimeInterval)now;
+- (OCTGroupContactPendingOffer *)takePendingOfferWithNonceHex:(NSString *)nonceHex at:(NSTimeInterval)now;
 @end
 
 // Redesign stage 3, item 10: the receive paths of the KQ packets (1:1 186, 187, 188 and group 0x41,

@@ -540,6 +540,15 @@ enum class Text
     CallAnswerFailedTitle,
     CallAlreadyOn,
     CallNotCalling,
+    // KHANDAQ (calls stage, 26.11): the controls and the link chip of the video call stage.
+    CallMicrophone,
+    CallSound,
+    CallSelfView,
+    CallMessages,
+    CallFullScreen,
+    CallLinkDirect,
+    CallLinkRelay,
+    CallLinkNone,
     YouQr,
     YouQrHint,
     YouCopyId,
@@ -950,6 +959,8 @@ QString presenceText(const Air::Reach& reach, const QString& sinceTime, bool isT
 QString awayText(qint64 seconds);
 /** What a screen reader says for the link mark. */
 QString linkText(Air::LinkState link);
+/** KHANDAQ (calls stage, 26.11): the words of the link chip on the call screen, as the phones say them. */
+QString callLinkText(Air::LinkState link);
 /** The line under the field; name is the person's short name. */
 QString composeHintText(const Air::ComposeHint& hint, const QString& name);
 /** "120 bytes left", or once over: "6 bytes over one message: it goes in parts". */

@@ -481,6 +481,8 @@ set(${PROJECT_NAME}_SOURCES
   src/widget/about/aboutfriendform.h
   src/widget/air/airband.cpp
   src/widget/air/airband.h
+  src/widget/air/aircallparts.cpp
+  src/widget/air/aircallparts.h
   src/widget/air/airchatparts.cpp
   src/widget/air/airchatparts.h
   src/widget/air/aircomposer.cpp

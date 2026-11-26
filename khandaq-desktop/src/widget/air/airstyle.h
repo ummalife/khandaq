@@ -69,6 +69,11 @@ public:
 
     QColor color(AirTokens::Color role) const;
     /**
+     * KHANDAQ (calls stage, 26.11): a colour of the dark palette, whatever the theme. The call
+     * screens are dark in both themes, so the video call stage paints with these.
+     */
+    static QColor darkColor(AirTokens::Color role);
+    /**
      * KHANDAQ (0.2.57): the brand teal of the two checks of a message the person has seen, as the
      * phones draw it (Android @color/khandaq_teal: #029B7D, at night #10B98F). The tokens have no
      * such role yet.

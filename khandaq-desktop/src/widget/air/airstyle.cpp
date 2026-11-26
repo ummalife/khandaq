@@ -149,6 +149,11 @@ QColor AirStyle::color(AirTokens::Color role) const
     return QColor::fromRgba(dark ? AirTokens::darkColors[index] : AirTokens::lightColors[index]);
 }
 
+QColor AirStyle::darkColor(AirTokens::Color role)
+{
+    return QColor::fromRgba(AirTokens::darkColors[static_cast<int>(role)]);
+}
+
 QColor AirStyle::tone(int index) const
 {
     constexpr int count = AirTokens::toneCount;

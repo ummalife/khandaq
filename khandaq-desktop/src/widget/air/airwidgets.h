@@ -41,8 +41,12 @@ class QVariantAnimation;
  */
 namespace AirPaint {
 
-/** The focus ring: 2 px of the focus colour, drawn just inside rect. */
-void focusRing(QPainter& painter, const QRectF& rect, qreal radius);
+/**
+ * The focus ring: 2 px of the focus colour, drawn just inside rect. KHANDAQ (calls stage, 26.11):
+ * color, when valid, takes the place of the theme's focus colour, for the call screen that is dark
+ * in both themes.
+ */
+void focusRing(QPainter& painter, const QRectF& rect, qreal radius, const QColor& color = QColor());
 
 /** A rounded rectangle whose hairline border sits inside rect; an invalid colour draws nothing. */
 void box(QPainter& painter, const QRectF& rect, qreal radius, const QColor& fill, const QColor& border);

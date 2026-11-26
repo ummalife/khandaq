@@ -13,6 +13,9 @@ final class ChatReplyPreviewView: UIView {
     private let previewLabel = UILabel()
     private let cancelButton = UIButton(type: .system)
 
+    /// KHANDAQ (beta 8262): holds the bar at no height while it is hidden.
+    private var collapsedConstraint: Constraint?
+
     override init(frame: CGRect) {
         super.init(frame: frame)
 
@@ -41,7 +44,7 @@ final class ChatReplyPreviewView: UIView {
         accentBar.snp.makeConstraints {
             $0.leading.equalToSuperview().offset(8)
             $0.top.equalToSuperview().offset(8)
-            $0.bottom.equalToSuperview().offset(-8)
+            $0.bottom.equalToSuperview().offset(-8).priority(999)
             $0.width.equalTo(3)
         }
 
@@ -60,9 +63,16 @@ final class ChatReplyPreviewView: UIView {
         previewLabel.snp.makeConstraints {
             $0.leading.trailing.equalTo(headerLabel)
             $0.top.equalTo(headerLabel.snp.bottom).offset(2)
-            $0.bottom.equalToSuperview().offset(-6)
+            $0.bottom.equalToSuperview().offset(-6).priority(999)
         }
 
+        // KHANDAQ (beta 8262): the bar stands between the log and the field, and hidden it still took the
+        // height of its content: 16 pt before any reply and 45 pt after one, sent or cancelled, until the
+        // chat was opened again. The log ended at that blank band, so a message scrolled near the field was
+        // cut off above it. Hidden, the bar now takes no room and the log reaches the field.
+        snp.makeConstraints {
+            collapsedConstraint = $0.height.equalTo(0).constraint
+        }
         isHidden = true
     }
 
@@ -87,11 +97,13 @@ final class ChatReplyPreviewView: UIView {
             ? String(localized: "chat_reply_header_self")
             : String(localized: "chat_reply_header", meta.senderName)
         previewLabel.text = MessageReplyHelper.previewForDisplay(meta.previewText, maxLen: 120)
+        collapsedConstraint?.deactivate()
         isHidden = false
     }
 
     func hidePreview() {
         isHidden = true
+        collapsedConstraint?.activate()
     }
 
     @objc private func cancelTapped() {

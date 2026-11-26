@@ -989,6 +989,10 @@ extension GroupScreenTesting {
 
     /// Lets everything go: the screen and its window before what the screen holds weakly, then the profiles.
     func closeGroupScreen() {
+        // The screen leaves its window first, as it does in the app when it is closed: its field stands on the
+        // keyboard layout guide (beta 8251), and UIKit keeps a window dropped with such a view still in it, and
+        // the screen with it. Its 2-second video poll then ran after the profile had gone.
+        window?.rootViewController = nil
         window?.isHidden = true
         window = nil
         screen = nil

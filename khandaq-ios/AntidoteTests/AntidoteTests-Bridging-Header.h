@@ -85,6 +85,19 @@
                                        groupName:(NSString *)groupName
                                     privacyState:(OCTToxGroupPrivacyState)privacyState;
 - (void)removeMessages:(NSArray<OCTMessageAbstract *> *)messages;
+// Beta 8253 (an edited note of Saved Messages): the Saved chat and a note in it as the app keeps them, and a text
+// to a friend as objcTox stores one it sent.
+- (OCTChat *)getOrCreateSavedMessagesChat;
+- (OCTMessageAbstract *)addSavedTextMessage:(NSString *)text toChat:(OCTChat *)chat;
+- (OCTMessageAbstract *)addMessageWithText:(NSString *)text
+                                      type:(OCTToxMessageType)type
+                                      chat:(OCTChat *)chat
+                                    sender:(OCTFriend *)sender
+                                 messageId:(OCTToxMessageId)messageId
+                              msgv3HashHex:(NSString *)msgv3HashHex
+                                  sentPush:(BOOL)sentPush
+                                    tssent:(UInt32)tssent
+                                    tsrcvd:(UInt32)tsrcvd;
 @end
 
 // Tester 21.11 (8256/8261): the group messages deleted on this device, which the history sync and a resend do not

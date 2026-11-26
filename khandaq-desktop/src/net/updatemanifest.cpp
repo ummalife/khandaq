@@ -39,7 +39,7 @@ constexpr char notesHost[] = "khandaq.org";
  * web/downloads/KHANDAQ-RELEASE-SIGNING.pub. scripts/check-desktop-update-key.py holds this line to
  * that file, so the app can only ever trust the key the releases are signed with.
  */
-constexpr char releaseKeyBlob[] = "AAAAC3NzaC1lZDI1NTE5AAAAIGfMwFHF0zT1NNm2vUsewKvm2qBoefyDOtAGUkzRwNLc";
+constexpr char releaseKeyBlob[] = "AAAAC3NzaC1lZDI1NTE5AAAAIDheQRznnRA4AQiY08DM/G90vhYEIC82Nfdwig4S4aGk";
 
 const QMap<QString, QString>& platformFiles()
 {

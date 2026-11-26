@@ -18,6 +18,7 @@
  <url type="homepage">https://khandaq.org</url>
  <project_group>Khandaq</project_group>
  <releases>
+  <release version="0.2.69" date="2026-11-26"/>
   <release version="0.2.68" date="2026-11-20"/>
   <release version="0.2.66" date="2026-11-20"/>
   <release version="0.2.64" date="2026-11-20"/>

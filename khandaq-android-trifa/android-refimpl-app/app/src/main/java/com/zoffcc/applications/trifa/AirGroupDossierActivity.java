@@ -964,6 +964,9 @@ public final class AirGroupDossierActivity extends AirScreenActivity
     private static void clearHistoryHere(final String groupId)
     {
         final String id = groupId.toLowerCase(Locale.ROOT);
+        // KHANDAQ (tester 21.11, 8256/8261): a cleared history stays cleared: the messages the members could still
+        // serve in a history sync are remembered as deleted.
+        HelperMessageDelete.rememberClearedGroupHistory(id);
         try
         {
             final List<GroupMessage> files = TrifaToxService.orma.selectFromGroupMessage().group_identifierEq(id)

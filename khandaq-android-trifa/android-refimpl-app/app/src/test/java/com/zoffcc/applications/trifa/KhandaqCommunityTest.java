@@ -486,7 +486,8 @@ public class KhandaqCommunityTest
         assertTrue(bare(auto).contains("notification_silent(false).execute();"));
         assertFalse(bare(auto).contains("notification_silent(true)"));
         final String join = method(read(JAVA + "HelperGroup.java"), JOIN_BY_ID);
-        assertTrue(bare(join).contains("get_group_peer_join_name(),password);"));
+        // KHANDAQ (tester 21.11, 8257): the profile name, unless the group's settings gave you a name of its own.
+        assertTrue(bare(join).contains("get_group_peer_join_name(normalized_group_id),password);"));
     }
 
     @Test

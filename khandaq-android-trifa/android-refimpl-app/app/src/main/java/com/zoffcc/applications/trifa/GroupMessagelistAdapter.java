@@ -451,9 +451,11 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
             }
         }
 
-        if (selection && AirTranscript.isEntry(holder.itemView))
+        if ((selection || caption) && AirTranscript.isEntry(holder.itemView))
         {
-            // An entry's ground also says whether it mentions you: the full bind draws both.
+            // An entry's ground also says whether it mentions you: the full bind draws both. KHANDAQ (tester 21.11,
+            // 8255): a neighbour that came or went (the caption payload) moves where a run starts and ends, so a text
+            // entry takes the full bind for its author and its tile too; a file entry puts both in bindGroup below.
             partial = false;
         }
         if (partial)

@@ -169,6 +169,17 @@ final class AirConversationModel
         return entry.dateMs - previous.dateMs > RUN_GAP_SECONDS * 1000L;
     }
 
+    /**
+     * KHANDAQ (tester 21.11, 8255): an entry closes its run, and a group entry of another member shows its author's
+     * tile, unless the entry after it in reading order ({@code next}, null for none) goes on with the run: the last
+     * entry, and one after which a run starts, close their runs. As AirTranscript.endsRun on iOS; the unread mark
+     * starts no run here, so it closes none either.
+     */
+    static boolean endsRun(final RunKey entry, final RunKey next, final TimeZone zone)
+    {
+        return next == null || startsRun(next, entry, zone);
+    }
+
     /** The first word of a name: the author label and the hints say "Amina", not "Amina Safina". */
     static String shortName(final String name)
     {

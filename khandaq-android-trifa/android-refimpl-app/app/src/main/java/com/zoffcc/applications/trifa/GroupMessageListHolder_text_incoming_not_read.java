@@ -90,6 +90,9 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
     ViewGroup layout_message_container;
     /** The author over an entry of the transcript; null in the old bubble layout. */
     TextView entry_author;
+    /** KHANDAQ (tester 21.11, 8255): the member's tile beside the entry and the column of the text after it. */
+    AirTileView entry_tile;
+    View entry_body;
     boolean is_selected = false;
     boolean is_system_message = false;
     ImageView img_corner;
@@ -115,6 +118,8 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
         layout_message_container = (ViewGroup) itemView.findViewById(R.id.layout_message_container);
         img_corner = (ImageView) itemView.findViewById(R.id.img_corner);
         entry_author = (TextView) itemView.findViewById(R.id.air_entry_author);
+        entry_tile = itemView.findViewById(R.id.air_entry_tile);
+        entry_body = itemView.findViewById(R.id.air_entry_body);
 
         // KHANDAQ (redesign, stage 3b): the group conversation's text rows are entries of the transcript.
         if (AirTranscript.isEntry(itemView))
@@ -222,7 +227,8 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
             return;
         }
 
-        // KHANDAQ (redesign, stage 3b): as in a conversation with one person, no bubble and no avatar.
+        // KHANDAQ (redesign, stage 3b): as in a conversation with one person, no bubble; the member's tile stands
+        // beside the last entry of their run (tester 21.11, 8255), not the old avatar.
         if (AirTranscript.isEntry(itemView))
         {
             bindEntry(m);
@@ -576,10 +582,25 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
             return true;
         });
 
+        // KHANDAQ (0.2.58): the name over the entry opens the member's profile, as the old bubble's name did, and
+        // so does the member's tile beside the last entry of the run (tester 21.11, 8255).
+        final String authorKey = peerPubkey;
+        final View.OnClickListener openAuthor = should_open_author_profile(is_system_message, m, authorKey) ? v -> {
+            if (!is_selected)
+            {
+                GroupMessageListActivity.open_group_peer_info_activity(v.getContext(), authorKey,
+                                                                       m.group_identifier);
+            }
+        } : null;
+
         final AirTranscript.GroupEntry entry = new AirTranscript.GroupEntry();
         entry.system = is_system_message;
+        AirTranscript.AuthorTile tile = null;
         if (!is_system_message)
         {
+            final boolean verified = NgcSignedHistory.isAuthorVerified(m);
+            String tileName = null;
+            int tileTone = 0;
             if (should_hide_claimed_author(false, m))
             {
                 entry.author = context.getString(R.string.air_group_author_unconfirmed);
@@ -587,19 +608,23 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
             }
             else
             {
-                final String name = entryAuthorName(m, peerName, peerPubkey);
+                tileName = entryAuthorName(m, peerName, peerPubkey);
+                final String name = tileName != null ? tileName : context.getString(R.string.air_group_author_unknown);
                 final int role = entryAuthorRole(m, peerPubkey);
                 entry.author = (role == AirGroupModel.ROLE_FOUNDER || role == AirGroupModel.ROLE_MODERATOR)
                                ? context.getString(R.string.air_group_author_role_format, name,
                                                    AirGroupPanel.roleName(context, role)) : name;
                 final boolean keyless = (peerPubkey == null) || peerPubkey.isEmpty();
-                entry.authorColor = AirUi.toneColor(context, AirModel.Tone.index(keyless ? name : peerPubkey));
+                tileTone = AirModel.Tone.index(keyless ? name : peerPubkey);
+                entry.authorColor = AirUi.toneColor(context, tileTone);
             }
-            entry.senderUnverified = should_mark_unverified_sender(false, m, NgcSignedHistory.isAuthorVerified(m));
+            entry.senderUnverified = should_mark_unverified_sender(false, m, verified);
             if (m.private_message == 1)
             {
                 entry.privateNote = context.getString(R.string.air_group_private_to_you);
             }
+            tile = new AirTranscript.AuthorTile(m.id, should_show_plain_author_tile(m, verified, tileName != null),
+                                                tileName, tileTone, openAuthor);
         }
 
         textView.setCustomRegex(TOXURL_PATTERN);
@@ -620,20 +645,15 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
         }
         AirTranscript.bindGroupText(itemView, position, m, parsedGroup, locationBound, is_selected, entry);
 
-        // KHANDAQ (0.2.58): the name over the entry opens the member's profile, as the old bubble's name did;
-        // the listener the bubble path sets stays on its views, which an entry never shows.
-        final String authorKey = peerPubkey;
-        AirTranscript.bindAuthorTap(entry_author, layout_message_container,
-                                    should_open_author_profile(is_system_message, m, authorKey) ? v -> {
-                                        if (!is_selected)
-                                        {
-                                            GroupMessageListActivity.open_group_peer_info_activity(
-                                                    v.getContext(), authorKey, m.group_identifier);
-                                        }
-                                    } : null);
+        // The listener the bubble path sets stays on its views, which an entry never shows.
+        AirTranscript.bindAuthorTap(entry_author, layout_message_container, openAuthor);
+        AirTranscript.bindAuthorTile(entry_tile, entry_body, layout_message_container, m, position, tile);
     }
 
-    /** The member's name as the group knows it now, else the one frozen on the message, else "A member". */
+    /**
+     * The member's name as the group knows it now, else the one frozen on the message; null when there is neither
+     * (the entry says "A member" and has the plain tile).
+     */
     private String entryAuthorName(final GroupMessage m, final String frozenName, final String peerPubkey)
     {
         String name = null;
@@ -656,7 +676,7 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
         {
             return frozenName;
         }
-        return context.getString(R.string.air_group_author_unknown);
+        return null;
     }
 
     /** The member's role from toxcore while they are in the peer list, else the one stored on the message. */
@@ -787,6 +807,26 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
         return !is_system_message && m != null && m.direction == 0
                && !should_hide_claimed_author(false, m)
                && HelperGroup.is_valid_group_peer_pubkey(author_pubkey);
+    }
+
+    /**
+     * KHANDAQ (tester 21.11, 8255): whether the tile beside another member's entry is the plain one, with neither
+     * initials nor a tone and no tap, instead of the member's own. Pure, so it can be unit tested; the file holder
+     * asks it too.
+     *
+     * <p>The plain tile stands for no member: the history brought the entry without a signature over it (it says
+     * "sender not verified" under its text, and a file record never has one), the group could not confirm the
+     * author it names (KQ-03), or it names nobody. A member's tile beside such an entry would vouch for an author
+     * the entry itself does not.
+     *
+     * @param author_signature_verified the author's history-signing key verified a signature over this row
+     * @param author_named              the entry names its author: a name the group or the message knows
+     */
+    static boolean should_show_plain_author_tile(final GroupMessage m, final boolean author_signature_verified,
+                                                 final boolean author_named)
+    {
+        return m == null || !author_named || should_hide_claimed_author(false, m)
+               || should_mark_unverified_sender(false, m, author_signature_verified);
     }
 
     /**

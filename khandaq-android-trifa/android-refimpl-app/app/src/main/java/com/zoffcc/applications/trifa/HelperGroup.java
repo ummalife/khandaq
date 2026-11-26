@@ -518,6 +518,13 @@ public class HelperGroup
             HelperGeneric.logI(TAG, "insert_into_group_message_db:skip empty message");
             return -1;
         }
+        // KHANDAQ (tester 21.11, 8256/8261): a message deleted here is not stored again, whichever way it came. The
+        // receive paths ask before their side effects (a notification, a file written); this holds for any other.
+        if (HelperMessageDelete.isDeletedGroupRow(m))
+        {
+            HelperGeneric.logI(TAG, "insert_into_group_message_db:deleted here, not stored again");
+            return -1;
+        }
 
         long row_id = orma.insertIntoGroupMessage(m);
 
@@ -1020,7 +1027,7 @@ public class HelperGroup
             join_chat_id_buffer.rewind();
 
             long new_group_num = MainActivity.tox_group_join(join_chat_id_buffer, TOX_GROUP_CHAT_ID_SIZE,
-                                                             get_group_peer_join_name(), null);
+                                                             get_group_peer_join_name(group_identifier), null);
             HelperGeneric.logI(TAG, "ensure_group_in_tox:join=" + new_group_num + " id=" + group_identifier);
 
             if (new_group_num < 0)
@@ -2699,6 +2706,11 @@ public class HelperGroup
                 {
                     continue;
                 }
+                // KHANDAQ (tester 21.11, 8257): a group whose settings gave you a name of its own keeps it.
+                if (get_group_own_name(tox_group_by_groupnum__wrapper(group_num)) != null)
+                {
+                    continue;
+                }
                 try
                 {
                     tox_group_self_set_name(group_num, sanitized);
@@ -2723,7 +2735,9 @@ public class HelperGroup
         }
         try
         {
-            final String nick = resolve_group_self_raw_name(group_num);
+            // KHANDAQ (tester 21.11, 8257): the group's own name when it has one; the join may have taken another.
+            final String own = get_group_own_name(tox_group_by_groupnum__wrapper(group_num));
+            final String nick = (own != null) ? own : resolve_group_self_raw_name(group_num);
             if (!TextUtils.isEmpty(nick))
             {
                 tox_group_self_set_name(group_num, nick);
@@ -2732,6 +2746,77 @@ public class HelperGroup
         catch (Exception ignored)
         {
         }
+    }
+
+    // KHANDAQ (tester 21.11, 8257): your own name in each group (GroupOwnNames), read once per group and kept here; a
+    // group without one is kept as NO_GROUP_OWN_NAME. Written under the lock. A new tox session reads them again: it
+    // may be another profile's.
+    private static final ConcurrentHashMap<String, String> group_own_names = new ConcurrentHashMap<>();
+    private static final String NO_GROUP_OWN_NAME = "";
+    private static final Object group_own_names_lock = new Object();
+
+    /** The name the group's settings gave you in the group, or null when it goes by the profile name. */
+    @Nullable
+    static String get_group_own_name(@Nullable final String group_identifier)
+    {
+        final String row = GroupOwnNames.rowKey(group_identifier);
+        if (row == null)
+        {
+            return null;
+        }
+        final String known = group_own_names.get(row);
+        if (known != null)
+        {
+            return known.isEmpty() ? null : known;
+        }
+        if (orma == null)
+        {
+            return null;
+        }
+        final String read = GroupOwnNames.decode(HelperGeneric.get_g_opts(row));
+        group_own_names.putIfAbsent(row, (read == null) ? NO_GROUP_OWN_NAME : read);
+        return read;
+    }
+
+    /**
+     * Keeps the name the group's settings set in toxcore as the group's own; the profile name, or none, makes the
+     * group follow the profile name again.
+     */
+    static void set_group_own_name(@Nullable final String group_identifier, @Nullable final String name)
+    {
+        final String row = GroupOwnNames.rowKey(group_identifier);
+        if ((row == null) || (orma == null))
+        {
+            return;
+        }
+        final String keep = GroupOwnNames.nameToKeep(name, get_group_peer_join_name());
+        synchronized (group_own_names_lock)
+        {
+            if (keep == null)
+            {
+                HelperGeneric.del_g_opts(row);
+                group_own_names.put(row, NO_GROUP_OWN_NAME);
+            }
+            else
+            {
+                HelperGeneric.set_g_opts(row, keep);
+                group_own_names.put(row, keep);
+            }
+        }
+        HelperGeneric.logI(TAG, "group own name " + ((keep == null) ? "follows the profile" : "kept") + " id="
+                                + group_identifier_short(group_identifier, false));
+    }
+
+    /** At the start of a tox session: the names are read again, from the database of the profile now open. */
+    static void forget_group_own_names_read()
+    {
+        group_own_names.clear();
+    }
+
+    /** The name a join of this group takes: the group's own name when it has one, else the profile name. */
+    static String get_group_peer_join_name(@Nullable final String group_identifier)
+    {
+        return GroupOwnNames.joinName(get_group_own_name(group_identifier), get_group_peer_join_name());
     }
 
     static int compare_group_members(final boolean self1, final boolean online1, final String name1,
@@ -4884,6 +4969,10 @@ public class HelperGroup
             HelperGeneric.logI(TAG, "delete_group:EE:" + e.getMessage());
         }
         forget_manual_group_invites_for_group(group_identifier); // KHANDAQ (0.2.60)
+        // KHANDAQ (tester 21.11, 8257): deleted for good, the group's own name goes with it.
+        set_group_own_name(group_identifier, null);
+        // KHANDAQ (tester 21.11, 8256/8261): and what was deleted in it.
+        HelperMessageDelete.forgetGroupDeletes(group_identifier);
     }
 
     static void update_group_in_friendlist(final String group_identifier)
@@ -6117,6 +6206,14 @@ public class HelperGroup
             e.printStackTrace();
         }
 
+        // KHANDAQ (tester 21.11, 8256/8261): nor a message deleted here that comes again (GroupMessageTombstones).
+        if (!is_private_message
+            && HelperMessageDelete.isDeletedGroupText(m.group_identifier, m.tox_group_peer_pubkey, m.message_id_tox, m.text))
+        {
+            HelperGeneric.logI(TAG, "group_message_cb: deleted here, not stored again msg_id=" + m.message_id_tox);
+            return;
+        }
+
         // KHANDAQ (#68): drop duplicate incoming group messages BEFORE insert. NGC re-delivers a message
         // (mesh relay + lossless retransmit), firing this LIVE callback many times for the SAME message;
         // only the history-sync path had dedup, so the live path produced ~Nx copies. Match by the stable
@@ -6283,6 +6380,14 @@ public class HelperGroup
         if (!GroupMessageLayoutHelper.hasNonBlankText(message))
         {
             HelperGeneric.logI(TAG, "group_message_add_from_sync: ignoring empty message");
+            return;
+        }
+
+        // KHANDAQ (tester 21.11, 8256/8261): a message deleted here stays deleted when a member serves it again (the
+        // history of the group's members and the relay's both come here).
+        if (HelperMessageDelete.isDeletedGroupText(group_identifier, peer_pubkey, message_id, message))
+        {
+            HelperGeneric.logI(TAG, "group_message_add_from_sync: deleted here, not stored again msg_id=" + message_id);
             return;
         }
 
@@ -8026,6 +8131,12 @@ public class HelperGroup
                                                  final NgcGroupFileTransfer.IncomingAssembly asm)
     {
         final String msgIdHex = bytebuffer_to_hexstring(ByteBuffer.wrap(msgId), true);
+        // KHANDAQ (tester 21.11, 8256/8261): a file deleted here gets no row, and no notification, when it comes again.
+        if (HelperMessageDelete.isDeletedGroupFile(groupId, asm.senderPubkey, msgIdHex))
+        {
+            HelperGeneric.logI(TAG, "handle_incoming_group_file_begin: deleted here, no row");
+            return;
+        }
         set_ngc_file_transfer_progress(groupId, msgIdHex, 0);
         clear_ngc_file_transfer_failed(groupId, msgIdHex);
 
@@ -8131,6 +8242,30 @@ public class HelperGroup
                                 m.sent_timestamp, m.tox_group_peer_pubkey, PushPreviewSeen.forGroupFile(m.msg_id_hash));
     }
 
+    /** The copy of a file put together for a row deleted while it came. */
+    private static void delete_received_group_file_copy(@Nullable final String out_path)
+    {
+        if (TextUtils.isEmpty(out_path))
+        {
+            return;
+        }
+        try
+        {
+            if (HelperFiletransfer.isIocipherVirtualPath(out_path))
+            {
+                new info.guardianproject.iocipher.File(out_path).delete();
+            }
+            else
+            {
+                new java.io.File(out_path).delete();
+            }
+        }
+        catch (Exception e)
+        {
+            HelperGeneric.logI(TAG, "delete_received_group_file_copy:EE:" + e.getMessage());
+        }
+    }
+
     static void handle_incoming_group_file_complete(final long groupNumber, final long peerId,
                                                     final NgcGroupFileTransfer.IncomingAssembly asm)
     {
@@ -8234,6 +8369,13 @@ public class HelperGroup
             final String peer_pubkey = (asm.senderPubkey != null && !asm.senderPubkey.isEmpty())
                     ? asm.senderPubkey
                     : tox_group_peer_get_public_key__wrapper(groupNumber, peerId);
+            // KHANDAQ (tester 21.11, 8256/8261): its row was deleted here while it came: the copy put together goes.
+            if (HelperMessageDelete.isDeletedGroupFile(group_id, peer_pubkey, msgIdHex))
+            {
+                HelperGeneric.logI(TAG, "handle_incoming_group_file_complete: deleted here, copy removed");
+                delete_received_group_file_copy(asm.outPath);
+                return;
+            }
             final GroupMessage m = new GroupMessage();
             m.is_new = true;
             m.tox_group_peer_pubkey = peer_pubkey;
@@ -11183,7 +11325,7 @@ public class HelperGroup
                 }
                 join_chat_id_buffer.rewind();
                 new_group_num = MainActivity.tox_group_join(join_chat_id_buffer, TOX_GROUP_CHAT_ID_SIZE,
-                                                            get_group_peer_join_name(), password);
+                                                            get_group_peer_join_name(normalized_group_id), password);
                 last_join_result = new_group_num;
                 HelperGeneric.logI(TAG, "join_group:attempt=" + attempt + " groupnum=" + new_group_num);
                 if ((new_group_num >= 0) && (new_group_num < UINT32_MAX_JAVA))
@@ -11419,6 +11561,12 @@ public class HelperGroup
             if (group_incoming_file_exists(group_id, m.msg_id_hash))
             {
                 HelperGeneric.logI(TAG, "group_custom_packet_cb:duplicate file msg_id_hash=" + m.msg_id_hash);
+                return;
+            }
+            // KHANDAQ (tester 21.11, 8256/8261): nor a file deleted here, before anything is written.
+            if (HelperMessageDelete.isDeletedGroupFile(group_id, peer_pubkey, m.msg_id_hash))
+            {
+                HelperGeneric.logI(TAG, "group_custom_packet_cb:deleted here, not stored again");
                 return;
             }
 
@@ -12832,6 +12980,13 @@ public class HelperGroup
         GroupDB group_temp = null;
 
         global_last_activity_for_battery_savings_ts = System.currentTimeMillis();
+
+        // KHANDAQ (tester 21.11, 8256/8261): a file deleted here stays deleted when a member serves it again.
+        if (HelperMessageDelete.isDeletedGroupFile(group_identifier, original_sender_peerpubkey, message_id_hash))
+        {
+            HelperGeneric.logI(TAG, "group_file_add_from_sync: deleted here, not stored again");
+            return;
+        }
 
         // KHANDAQ (audit 2026-08-20): this path had NEITHER of the two controls that every
         // neighbouring file path has, and it is the one path where the bytes arrive unsolicited.

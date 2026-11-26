@@ -7,15 +7,15 @@
     "minSdk": 26,
     "namespace": "org.khandaq.messenger",
     "targetSdk": 36,
-    "versionCode": 10590,
-    "versionName": "0.2.69"
+    "versionCode": 10600,
+    "versionName": "0.2.70"
   },
   "desktop": {
     "_comment": "The GitHub release the desktop .zip/.deb URLs are built from. NOT the Android versionName: there is no v0.2.38 tag, and aligning them breaks every download link.",
-    "releaseTag": "v0.2.69"
+    "releaseTag": "v0.2.70"
   },
   "ios": {
-    "buildNumber": "143011",
+    "buildNumber": "143012",
     "bundleId": "org.khandaq.messenger",
     "marketingVersion": "1.4.34"
   },

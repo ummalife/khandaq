@@ -443,6 +443,7 @@ extension ChatGroupController: ChatMovableDateCellDelegate {
                                   currentEmoji: ChatReactionsFormat.ownEmoji(from: message.reactionsJSON),
                                   dark: ThemeAppearance.isDarkMode, actions: actions,
                                   bubbleSnapshot: snapshot,
+                                  showsReactions: !message.groupPrivateMessage,
                                   onPick: { [weak self] emoji in
                                       guard let self = self else { return }
                                       self.submanagerGroups.toggleReaction(onGroupMessage: message, emoji: emoji, in: self.chat)

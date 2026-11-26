@@ -676,8 +676,11 @@ final class ChatReactionPopup: NSObject, UITextFieldDelegate {
     /// KHANDAQ (#G5 reaction-row): full Telegram-style context popup — the reaction bar ABOVE the
     /// bubble and a vertical action menu BELOW it, over one dimmed tap-to-dismiss backdrop. Reuses the
     /// tested bar/backdrop/expand path; the message stays visible under the light dim (no snapshot).
+    /// KHANDAQ (26.11.2026): `showsReactions` false leaves the bar out, for an entry no reaction can reach:
+    /// a private message of a group has no id the other side could match (Android `groupRowAddressable`).
     func presentMenu(in host: UIView, aroundRect rect: CGRect, currentEmoji: String?, dark: Bool,
                      actions: [ChatContextMenuAction], bubbleSnapshot: UIView? = nil,
+                     showsReactions: Bool = true,
                      onPick: @escaping (String) -> Void,
                      onDismiss: (() -> Void)? = nil) {
         dismiss(animated: false)
@@ -700,15 +703,17 @@ final class ChatReactionPopup: NSObject, UITextFieldDelegate {
         }
 
         // --- reaction bar (above) ---
-        let bar = ChatReactionBar(currentEmoji: currentEmoji, dark: dark)
-        bar.onPick = { [weak self] emoji in self?.finish(with: emoji) }
-        bar.onExpand = { [weak self] in self?.showEmojiKeyboard() }
-        bar.layer.shadowColor = UIColor.black.cgColor
-        bar.layer.shadowOpacity = 0.22
-        bar.layer.shadowRadius = 12
-        bar.layer.shadowOffset = CGSize(width: 0, height: 4)
-        bar.layer.masksToBounds = false
-        backdrop.addSubview(bar)
+        let bar: ChatReactionBar? = showsReactions ? ChatReactionBar(currentEmoji: currentEmoji, dark: dark) : nil
+        if let bar = bar {
+            bar.onPick = { [weak self] emoji in self?.finish(with: emoji) }
+            bar.onExpand = { [weak self] in self?.showEmojiKeyboard() }
+            bar.layer.shadowColor = UIColor.black.cgColor
+            bar.layer.shadowOpacity = 0.22
+            bar.layer.shadowRadius = 12
+            bar.layer.shadowOffset = CGSize(width: 0, height: 4)
+            bar.layer.masksToBounds = false
+            backdrop.addSubview(bar)
+        }
         self.bar = bar
 
         // --- action menu card (below) ---
@@ -721,13 +726,14 @@ final class ChatReactionPopup: NSObject, UITextFieldDelegate {
         let topSafe = host.safeAreaInsets.top + 8
         let bottomSafe = host.bounds.height - host.safeAreaInsets.bottom - 8
 
+        // Without a bar the card keeps to the bubble: barY and barH then stand for the bubble's own top.
         let barW = min(ChatReactionBar.barWidth(), hostW - 24)
-        let barH = ChatReactionBar.barHeight
+        let barH: CGFloat = bar == nil ? 0 : ChatReactionBar.barHeight
         var barX = rect.midX - barW / 2
         barX = max(12, min(barX, hostW - barW - 12))
-        var barY = rect.minY - barH - 8
+        var barY = bar == nil ? rect.minY : rect.minY - barH - 8
         if barY < topSafe { barY = topSafe }
-        bar.frame = CGRect(x: barX, y: barY, width: barW, height: barH)
+        bar?.frame = CGRect(x: barX, y: barY, width: barW, height: barH)
 
         let cardW: CGFloat = 250
         let cardH = card.frame.height
@@ -746,15 +752,20 @@ final class ChatReactionPopup: NSObject, UITextFieldDelegate {
         }
         card.frame = CGRect(x: cardX, y: cardY, width: cardW, height: cardH)
 
-        for (v, t) in [(bar as UIView, CGAffineTransform(scaleX: 0.6, y: 0.6)),
-                       (card as UIView, CGAffineTransform(translationX: 0, y: -12))] {
+        var appearing: [(UIView, CGAffineTransform)] = [(card, CGAffineTransform(translationX: 0, y: -12))]
+        if let bar = bar {
+            appearing.insert((bar, CGAffineTransform(scaleX: 0.6, y: 0.6)), at: 0)
+        }
+        for (v, t) in appearing {
             v.alpha = 0
             v.transform = t
         }
         UIView.animate(withDuration: 0.28, delay: 0, usingSpringWithDamping: 0.78,
                        initialSpringVelocity: 0.5, options: [], animations: {
-            bar.alpha = 1; bar.transform = .identity
-            card.alpha = 1; card.transform = .identity
+            for (v, _) in appearing {
+                v.alpha = 1
+                v.transform = .identity
+            }
         }, completion: nil)
     }
 
@@ -910,10 +921,11 @@ final class ChatReactionPopup: NSObject, UITextFieldDelegate {
         backdrop = nil
         bar = nil
         menuCard = nil
-        guard animated, let bar = b else { bd?.removeFromSuperview(); return }
+        // A menu without the bar (a private entry of a group) fades its card out the same way.
+        guard animated, b != nil || card != nil else { bd?.removeFromSuperview(); return }
         UIView.animate(withDuration: 0.18, animations: {
-            bar.alpha = 0
-            bar.transform = CGAffineTransform(scaleX: 0.6, y: 0.6)
+            b?.alpha = 0
+            b?.transform = CGAffineTransform(scaleX: 0.6, y: 0.6)
             card?.alpha = 0
             card?.transform = CGAffineTransform(translationX: 0, y: -12)
         }, completion: { _ in bd?.removeFromSuperview() })

@@ -256,6 +256,7 @@ public class FriendSelectSingleActivity extends ListActivity
                                                                               R.layout.friend_select_single_single_list_item_view_custom,
                                                                               friends_list);
             this.setListAdapter(adapter);
+            ViewUtil.fitRootToSystemBars(this); // KHANDAQ (inbox #3, 27.11): Android 16 draws this screen edge to edge.
             ListView lv = getListView();
 
             lv.setOnItemClickListener(new AdapterView.OnItemClickListener()

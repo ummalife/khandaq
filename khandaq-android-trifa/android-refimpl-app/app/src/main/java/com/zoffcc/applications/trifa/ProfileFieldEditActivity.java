@@ -25,6 +25,7 @@ public class ProfileFieldEditActivity extends AppCompatActivity
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_profile_field_edit);
+        ViewUtil.fitRootToSystemBars(this); // KHANDAQ (inbox #3, 27.11): Android 16 draws this screen edge to edge.
 
         final boolean isName = getIntent().getBooleanExtra(EXTRA_IS_NAME, true);
         final String value = getIntent().getStringExtra(EXTRA_VALUE);

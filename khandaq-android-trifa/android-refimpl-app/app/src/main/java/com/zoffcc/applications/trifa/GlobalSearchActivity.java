@@ -69,6 +69,7 @@ public class GlobalSearchActivity extends AppCompatActivity
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_global_search);
+        ViewUtil.fitRootToSystemBars(this); // KHANDAQ (inbox #3, 27.11): Android 16 draws this screen edge to edge.
 
         input = findViewById(R.id.global_search_input);
         emptyView = findViewById(R.id.global_search_empty);

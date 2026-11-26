@@ -105,6 +105,7 @@ public class IOBrowser extends ListActivity
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_iobrowser);
+        ViewUtil.fitRootToSystemBars(this); // KHANDAQ (inbox #3, 27.11): Android 16 draws this screen edge to edge.
         fileInfo = (TextView) findViewById(R.id.iobrowser_info);
 
         cur_path = root;

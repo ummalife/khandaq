@@ -22,6 +22,16 @@
             android:noHistory="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- KHANDAQ (QA, 27.11): opens one screen of the app straight from adb (AirDebugOpenActivity), to look
+             at it on a device without going through the messenger. It opens only this app's own activities and
+             exists in debug builds only. -->
+        <activity
+            android:name="com.zoffcc.applications.trifa.AirDebugOpenActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <provider
             android:name="com.zoffcc.applications.trifa.AirDemoWorldInstaller"
             android:authorities="${applicationId}.airdemoworld"

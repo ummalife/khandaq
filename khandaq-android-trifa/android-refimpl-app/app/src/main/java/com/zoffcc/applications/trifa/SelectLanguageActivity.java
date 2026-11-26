@@ -66,6 +66,7 @@ public class SelectLanguageActivity extends ListActivity
 
             this.setListAdapter(
                 new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, lang_key_and_names));
+            ViewUtil.fitRootToSystemBars(this); // KHANDAQ (inbox #3, 27.11): Android 16 draws this screen edge to edge.
             ListView lv = getListView();
 
             Log.i(TAG, "onCreate:008");

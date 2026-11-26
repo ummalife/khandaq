@@ -179,6 +179,7 @@ public class MaintenanceActivity extends AppCompatActivity implements StrongBuil
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maintenance);
+        ViewUtil.fitRootToSystemBars(this); // KHANDAQ (inbox #3, 27.11): Android 16 draws this screen edge to edge.
 
         button_clear_glide_cache = (Button) findViewById(R.id.button_clear_glide_cache);
         button_set_app_language = (Button) findViewById(R.id.button_set_app_language);

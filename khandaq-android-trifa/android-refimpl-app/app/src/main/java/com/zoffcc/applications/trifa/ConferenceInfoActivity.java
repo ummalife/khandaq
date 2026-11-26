@@ -50,6 +50,7 @@ public class ConferenceInfoActivity extends AppCompatActivity
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_conferenceinfo);
+        ViewUtil.fitRootToSystemBars(this); // KHANDAQ (inbox #3, 27.11): Android 16 draws this screen edge to edge.
 
         Intent intent = getIntent();
         conf_id = intent.getStringExtra("conf_id");

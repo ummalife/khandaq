@@ -42,6 +42,7 @@ public class ImageviewerActivity_SD extends AppCompatActivity
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_imageviewer);
+        ViewUtil.fitRootToSystemBars(this); // KHANDAQ (inbox #3, 27.11): Android 16 draws this screen edge to edge.
 
         ChatMediaHelper.bindMediaOverlay(this);
 

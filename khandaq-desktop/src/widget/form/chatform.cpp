@@ -399,6 +399,10 @@ void ChatForm::refreshHead()
                             AirStrings::presenceText(reach,
                                                      since.isValid() ? clockText(since) : QString(),
                                                      friendTyping));
+    if (netcam) {
+        // KHANDAQ (calls stage, 26.11): the head of the stage in full screen shows the link too.
+        netcam->setLink(Air::linkState(reach));
+    }
 
     const QDateTime now = QDateTime::currentDateTime();
     const QSet<qint64> hours = airLocal ? airLocal->hours(friendPk) : QSet<qint64>();
@@ -1311,6 +1315,9 @@ void ChatForm::startCounter()
     callDurationTimer->start(1000);
     timeElapsed.start();
     callBand->setSeconds(0);
+    if (netcam) {
+        netcam->setSeconds(0);
+    }
 }
 
 void ChatForm::stopCounter()
@@ -1325,7 +1332,12 @@ void ChatForm::stopCounter()
 
 void ChatForm::onUpdateTime()
 {
-    callBand->setSeconds(timeElapsed.elapsed() / 1000);
+    const qint64 seconds = timeElapsed.elapsed() / 1000;
+    callBand->setSeconds(seconds);
+    if (netcam) {
+        // KHANDAQ (calls stage, 26.11): the time in the head of the stage in full screen.
+        netcam->setSeconds(seconds);
+    }
 }
 
 void ChatForm::setFriendTyping(bool isTyping_)
@@ -1368,7 +1380,9 @@ void ChatForm::retranslateUi()
     updateMuteVolButton();
 
     if (netcam) {
-        netcam->setShowMessages(chatWidget->isVisible());
+        // KHANDAQ (calls stage, 26.11): true while the messages are hidden, as onSplitterMoved
+        // says it; the visibility of the chat said the opposite and flipped the switch.
+        netcam->setShowMessages(bodySplitter->sizes()[1] == 0);
     }
 }
 
@@ -1376,6 +1390,12 @@ void ChatForm::showNetcam()
 {
     if (!netcam) {
         netcam = createNetcam();
+        // KHANDAQ (calls stage, 26.11): the head of the stage in full screen starts with the time
+        // and the link the conversation's head has.
+        if (callDurationTimer) {
+            netcam->setSeconds(timeElapsed.elapsed() / 1000);
+        }
+        refreshHead();
     }
 
     connect(netcam.get(), &NetCamView::showMessageClicked, this,

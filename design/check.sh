@@ -383,6 +383,10 @@ CLIENT_FILES=(
   khandaq-desktop/src/platform/systemappearance_osx.mm
   khandaq-desktop/src/platform/traynotify.cpp
   khandaq-desktop/src/platform/traynotify.h
+  khandaq-desktop/src/video/netcamview.cpp
+  khandaq-desktop/src/video/netcamview.h
+  khandaq-desktop/src/video/videosurface.cpp
+  khandaq-desktop/src/video/videosurface.h
   khandaq-desktop/src/widget/air
   khandaq-desktop/src/widget/chatformheader.cpp
   khandaq-desktop/src/widget/chatformheader.h
@@ -398,6 +402,8 @@ CLIENT_FILES=(
   khandaq-desktop/src/widget/loginscreen.h
   khandaq-desktop/src/widget/tool/chatquotepreview.cpp
   khandaq-desktop/src/widget/tool/chatquotepreview.h
+  khandaq-desktop/src/widget/tool/movablewidget.cpp
+  khandaq-desktop/src/widget/tool/movablewidget.h
   khandaq-desktop/test/chatlog/chatlinecontentproxy_test.cpp
   khandaq-desktop/test/core/networkdiagnostics_test.cpp
   khandaq-desktop/test/model/aircallstage_test.cpp
@@ -428,6 +434,7 @@ CLIENT_FILES=(
   khandaq-desktop/test/widget/airwidgets_test.cpp
   khandaq-desktop/test/widget/airyoupage_test.cpp
   khandaq-desktop/test/widget/chatquotepreview_test.cpp
+  khandaq-desktop/test/widget/netcamview_test.cpp
   khandaq-desktop/themes/dark/palette.ini
   khandaq-desktop/themes/default/palette.ini
   khandaq-desktop/tools/gen-design-tokens.py

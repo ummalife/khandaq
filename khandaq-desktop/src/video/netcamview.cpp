@@ -19,136 +19,51 @@
 
 #include "netcamview.h"
 #include "camerasource.h"
-#include "src/core/core.h"
-#include "src/friendlist.h"
-#include "src/model/friend.h"
-#include "src/nexus.h"
 #include "src/persistence/profile.h"
 #include "src/persistence/settings.h"
 #include "src/video/videosurface.h"
+#include "src/widget/air/aircallparts.h"
+#include "src/widget/air/airstyle.h"
 #include "src/widget/tool/movablewidget.h"
 #include "src/widget/style.h"
 
-#include <QApplication>
-#include <QBoxLayout>
-#include <QScreen>
-#include <QFrame>
-#include <QLabel>
 #include <QCloseEvent>
-#include <QPushButton>
-#include <QDesktopWidget>
+#include <QPainter>
+
+#include <tuple>
 
 namespace
 {
-const auto BTN_STATE_NONE = QVariant("none");
-const auto BTN_STATE_RED = QVariant("red");
-const int BTN_PANEL_HEIGHT = 55;
-const int BTN_PANEL_WIDTH = 250;
-const auto BTN_STYLE_SHEET_PATH = QStringLiteral("chatForm/fullScreenButtons.css");
+/** The stage in the window is at least as tall as the old video surface was. */
+constexpr int minimumStageHeight = 256;
+/** In full screen the head stands this far from the top of the screen, as the row from its bottom. */
+constexpr int headerTop = AirTokens::Space::s24;
+
+/** The same corner on the other side, for the other reading direction. */
+Qt::Corner mirroredCorner(Qt::Corner corner)
+{
+    switch (corner) {
+    case Qt::TopLeftCorner:
+        return Qt::TopRightCorner;
+    case Qt::TopRightCorner:
+        return Qt::TopLeftCorner;
+    case Qt::BottomLeftCorner:
+        return Qt::BottomRightCorner;
+    case Qt::BottomRightCorner:
+        break;
+    }
+    return Qt::BottomLeftCorner;
 }
+} // namespace
 
 NetCamView::NetCamView(ToxPk friendPk_, CameraSource& cameraSource_,
-    Settings& settings_, Style& style_, Profile& profile, QWidget* parent)
-    : QWidget(parent)
-    , selfFrame{nullptr}
-    , friendPk{friendPk_}
-    , e(false)
-    , cameraSource{cameraSource_}
-    , settings{settings_}
-    , style{style_}
+    Settings& settings, Style& style, Profile& profile, QWidget* parent)
+    : NetCamView(friendPk_, cameraSource_, settings.getCamVideoRes().size(), profile.loadAvatar(),
+                 profile.loadAvatar(friendPk_), parent)
 {
-    verLayout = new QVBoxLayout(this);
-    //: Title of the window of a video call
-    setWindowTitle(tr("Video call"));
-
-    buttonLayout = new QHBoxLayout();
-
-    toggleMessagesButton = new QPushButton();
-    enterFullScreenButton = new QPushButton();
-    enterFullScreenButton->setText(tr("Full Screen"));
-
-    buttonLayout->addStretch();
-    buttonLayout->addWidget(toggleMessagesButton);
-    buttonLayout->addWidget(enterFullScreenButton);
-
-    connect(toggleMessagesButton, &QPushButton::clicked, this, &NetCamView::showMessageClicked);
-    connect(enterFullScreenButton, &QPushButton::clicked, this, &NetCamView::toggleFullScreen);
-
-    verLayout->addLayout(buttonLayout);
-    verLayout->setContentsMargins(0, 0, 0, 0);
-
-    setShowMessages(false);
-
-    setStyleSheet("NetCamView { background-color: #c1c1c1; }");
-    buttonPanel = new QFrame(this);
-    buttonPanel->setStyleSheet(style.getStylesheet(BTN_STYLE_SHEET_PATH, settings));
-    buttonPanel->setGeometry(0, 0, BTN_PANEL_WIDTH, BTN_PANEL_HEIGHT);
-
-    QHBoxLayout* buttonPanelLayout = new QHBoxLayout(buttonPanel);
-    buttonPanelLayout->setContentsMargins(20, 0, 20, 0);
-
-    videoPreviewButton = createButton("videoPreviewButton", "none");
-    videoPreviewButton->setToolTip(tr("Toggle video preview"));
-
-    volumeButton = createButton("volButtonFullScreen", "none");
-    volumeButton->setToolTip(tr("Mute audio"));
-
-    microphoneButton = createButton("micButtonFullScreen", "none");
-    microphoneButton->setToolTip(tr("Mute microphone"));
-
-    endVideoButton = createButton("videoButtonFullScreen", "none");
-    endVideoButton->setToolTip(tr("End video call"));
-
-    exitFullScreenButton = createButton("exitFullScreenButton", "none");
-    exitFullScreenButton->setToolTip(tr("Exit full screen"));
-
-    connect(videoPreviewButton, &QPushButton::clicked, this, &NetCamView::toggleVideoPreview);
-    connect(volumeButton, &QPushButton::clicked, this, &NetCamView::volMuteToggle);
-    connect(microphoneButton, &QPushButton::clicked, this, &NetCamView::micMuteToggle);
-    connect(endVideoButton, &QPushButton::clicked, this, &NetCamView::endVideoCall);
-    connect(exitFullScreenButton, &QPushButton::clicked, this, &NetCamView::toggleFullScreen);
-
-    buttonPanelLayout->addStretch();
-    buttonPanelLayout->addWidget(videoPreviewButton);
-    buttonPanelLayout->addWidget(volumeButton);
-    buttonPanelLayout->addWidget(microphoneButton);
-    buttonPanelLayout->addWidget(endVideoButton);
-    buttonPanelLayout->addWidget(exitFullScreenButton);
-    buttonPanelLayout->addStretch();
-
-    videoSurface = new VideoSurface(profile.loadAvatar(friendPk), this);
-    videoSurface->setMinimumHeight(256);
-
-    verLayout->insertWidget(0, videoSurface, 1);
-
-    selfVideoSurface = new VideoSurface(profile.loadAvatar(), this, true);
-    selfVideoSurface->setObjectName(QStringLiteral("CamVideoSurface"));
-    selfVideoSurface->setMouseTracking(true);
-    selfVideoSurface->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-
-    selfFrame = new MovableWidget(videoSurface);
-    selfFrame->show();
-
-    QHBoxLayout* frameLayout = new QHBoxLayout(selfFrame);
-    frameLayout->addWidget(selfVideoSurface);
-    frameLayout->setMargin(0);
-
-    updateRatio();
-    connections +=
-        connect(selfVideoSurface, &VideoSurface::ratioChanged, this, &NetCamView::updateRatio);
-
-    connections += connect(videoSurface, &VideoSurface::boundaryChanged, [this]() {
-        QRect boundingRect = videoSurface->getBoundingRect();
-        updateFrameSize(boundingRect.size());
-        selfFrame->setBoundary(boundingRect);
-    });
-
-    connections += connect(videoSurface, &VideoSurface::ratioChanged, [this]() {
-        selfFrame->setMinimumWidth(selfFrame->minimumHeight() * selfVideoSurface->getRatio());
-        QRect boundingRect = videoSurface->getBoundingRect();
-        updateFrameSize(boundingRect.size());
-        selfFrame->resetBoundary(boundingRect);
-    });
+    // KHANDAQ (calls stage, 26.11): the stage paints with the tokens, dark in both themes, so the
+    // style sheets of the theme are no longer read here.
+    std::ignore = style;
 
     connections += connect(&profile, &Profile::selfAvatarChanged,
                            [this](const QPixmap& pixmap) { selfVideoSurface->setAvatar(pixmap); });
@@ -158,9 +73,65 @@ NetCamView::NetCamView(ToxPk friendPk_, CameraSource& cameraSource_,
                                if (friendPk == friendPkArg)
                                    videoSurface->setAvatar(pixmap);
                            });
+}
 
-    QRect videoSize = settings.getCamVideoRes();
-    qDebug() << "SIZER" << videoSize;
+NetCamView::NetCamView(ToxPk friendPk_, VideoSource& cameraSource_, const QSize& cameraSize_,
+                       const QPixmap& selfAvatar, const QPixmap& friendAvatar, QWidget* parent)
+    : QWidget(parent)
+    , selfFrame{nullptr}
+    , friendPk{friendPk_}
+    , cameraSource{cameraSource_}
+    , cameraSize{cameraSize_}
+{
+    //: Title of the window of a video call
+    setWindowTitle(tr("Video call"));
+    setMinimumHeight(minimumStageHeight);
+    selfCorner = Air::CallStage::defaultCorner(layoutDirection());
+
+    videoSurface = new VideoSurface(friendAvatar, this);
+    videoSurface->setObjectName(QStringLiteral("FriendVideoSurface"));
+
+    selfVideoSurface = new VideoSurface(selfAvatar, this, true);
+    selfVideoSurface->setObjectName(QStringLiteral("CamVideoSurface"));
+    // KHANDAQ (calls stage, 26.11): your camera shows as a mirror shows you, wherever it stands;
+    // what is sent is not mirrored.
+    selfVideoSurface->setMirrored(true);
+
+    selfFrame = new MovableWidget(this);
+    selfFrame->setObjectName(QStringLiteral("SelfFrame"));
+
+    header = new AirCallHeader(this);
+    header->setObjectName(QStringLiteral("CallStageHeader"));
+    header->hide();
+
+    const auto makeControl = [this](AirCallControl::Kind kind, const char* name) {
+        auto* const control = new AirCallControl(kind, this);
+        control->setObjectName(QLatin1String(name));
+        return control;
+    };
+    microphoneButton = makeControl(AirCallControl::Kind::Microphone, "callStageMicrophone");
+    soundButton = makeControl(AirCallControl::Kind::Sound, "callStageSound");
+    selfViewButton = makeControl(AirCallControl::Kind::SelfView, "callStageSelfView");
+    messagesButton = makeControl(AirCallControl::Kind::Messages, "callStageMessages");
+    fullScreenButton = makeControl(AirCallControl::Kind::FullScreen, "callStageFullScreen");
+    endButton = makeControl(AirCallControl::Kind::End, "callStageEnd");
+
+    connect(microphoneButton, &AirCallControl::clicked, this, &NetCamView::micMuteToggle);
+    connect(soundButton, &AirCallControl::clicked, this, &NetCamView::volMuteToggle);
+    connect(selfViewButton, &AirCallControl::clicked, this, &NetCamView::toggleVideoPreview);
+    connect(messagesButton, &AirCallControl::clicked, this, &NetCamView::showMessageClicked);
+    connect(fullScreenButton, &AirCallControl::clicked, this, &NetCamView::toggleFullScreen);
+    connect(endButton, &AirCallControl::clicked, this, &NetCamView::endVideoCall);
+
+    connect(selfFrame, &MovableWidget::clicked, this, &NetCamView::swapVideos);
+    connect(selfFrame, &MovableWidget::dropped, this, &NetCamView::onSelfDropped);
+    // The box takes the shape of our camera's frames as they come.
+    connections +=
+        connect(selfVideoSurface, &VideoSurface::ratioChanged, this, &NetCamView::layoutStage);
+
+    setShowMessages(false);
+    placeVideos();
+    layoutStage();
 }
 
 NetCamView::~NetCamView()
@@ -183,11 +154,8 @@ void NetCamView::hide()
     setSource(nullptr);
     selfVideoSurface->setSource(nullptr);
 
-    if (selfFrame)
-        selfFrame->deleteLater();
-
-    selfFrame = nullptr;
-
+    // KHANDAQ (calls stage, 26.11): the box is no longer deleted here: after a swap it holds the
+    // person's video. It goes with the view.
     QWidget::hide();
 }
 
@@ -199,57 +167,177 @@ void NetCamView::setSource(VideoSource* s)
 void NetCamView::setTitle(const QString& title)
 {
     setWindowTitle(title);
+    header->setName(title);
+}
+
+void NetCamView::setSeconds(qint64 seconds)
+{
+    header->setSeconds(seconds);
+}
+
+void NetCamView::setLink(Air::LinkState link)
+{
+    header->setLink(link);
 }
 
 void NetCamView::showEvent(QShowEvent* event)
 {
     std::ignore = event;
-    selfFrame->resetBoundary(videoSurface->getBoundingRect());
+    layoutStage();
 }
 
-void NetCamView::updateRatio()
+void NetCamView::resizeEvent(QResizeEvent* event)
 {
-    selfFrame->setMinimumWidth(selfFrame->minimumHeight() * selfVideoSurface->getRatio());
-    selfFrame->setRatio(selfVideoSurface->getRatio());
+    QWidget::resizeEvent(event);
+    layoutStage();
 }
 
-void NetCamView::updateFrameSize(QSize size)
+void NetCamView::paintEvent(QPaintEvent* event)
 {
-    selfFrame->setMaximumSize(size.height() / 3, size.width() / 3);
+    std::ignore = event;
+    // The flat lock ground of the call screens, under the big video.
+    QPainter painter(this);
+    painter.fillRect(rect(), AirStyle::darkColor(AirTokens::Color::LockTop));
+}
 
-    if (selfFrame->maximumWidth() > selfFrame->maximumHeight())
-        selfFrame->setMaximumWidth(selfFrame->maximumHeight() * selfVideoSurface->getRatio());
-    else
-        selfFrame->setMaximumHeight(selfFrame->maximumWidth() / selfVideoSurface->getRatio());
+void NetCamView::changeEvent(QEvent* event)
+{
+    QWidget::changeEvent(event);
+    if (event->type() == QEvent::LayoutDirectionChange) {
+        // The box keeps its side of the reading: the trailing corner stays the trailing one.
+        selfCorner = mirroredCorner(selfCorner);
+        layoutStage();
+    }
 }
 
 QSize NetCamView::getSurfaceMinSize()
 {
-    QSize surfaceSize = videoSurface->minimumSize();
-    QSize buttonSize = toggleMessagesButton->size();
-    QSize panelSize(0, 45);
-
-    return surfaceSize + buttonSize + panelSize;
+    // KHANDAQ (calls stage, 26.11): the controls stand on the video now, so the stage needs its
+    // own height and no more; it stands above the conversation, so it adds no width.
+    return QSize(0, minimumHeight());
 }
 
 void NetCamView::setShowMessages(bool show, bool notify)
 {
-    if (!show) {
-        toggleMessagesButton->setText(tr("Hide messages"));
-        toggleMessagesButton->setIcon(QIcon());
+    // show: the messages are hidden, and the switch offers to show them; notify puts the dot of
+    // something new on it, as the old icon did.
+    messagesButton->setEngaged(show);
+    messagesButton->setNotice(show && notify);
+}
+
+void NetCamView::placeVideos()
+{
+    VideoSurface* const big = views.isSwapped() ? selfVideoSurface : videoSurface;
+    VideoSurface* const small = views.isSwapped() ? videoSurface : selfVideoSurface;
+    if (big->parentWidget() != this) {
+        big->setParent(this);
+    }
+    if (small->parentWidget() != selfFrame) {
+        small->setParent(selfFrame);
+    }
+    // The big video takes the stage by its rule (SPEC R1); the small one fills its box (R2, R6).
+    big->setLook(VideoSurface::Look::Stage);
+    big->setScaling(VideoSurface::Scaling::Stage);
+    small->setLook(VideoSurface::Look::Box);
+    small->setScaling(VideoSurface::Scaling::Fill);
+    big->lower();
+    big->show();
+    small->show();
+}
+
+void NetCamView::swapVideos()
+{
+    views.swap();
+    placeVideos();
+    layoutStage();
+}
+
+QVector<AirCallControl*> NetCamView::rowNow() const
+{
+    if (fullScreen) {
+        return {microphoneButton, soundButton, selfViewButton, fullScreenButton, endButton};
+    }
+    // In the window the call band of the conversation's head has the microphone, the sound and End.
+    return {selfViewButton, messagesButton, fullScreenButton};
+}
+
+QSize NetCamView::selfFrameSize() const
+{
+    const QSize frame = selfVideoSurface->getFrameSize();
+    return frame.isEmpty() ? cameraSize : frame;
+}
+
+QRect NetCamView::selfAreaNow() const
+{
+    const QRect stage = rect();
+    const int headerBottom = fullScreen ? headerTop + AirCallHeader::contentHeight() : -1;
+    const QRect row = Air::CallStage::rowRect(stage, rowNow().size(), AirCallControl::controlHeight());
+    return Air::CallStage::selfArea(stage, headerBottom, row.top());
+}
+
+void NetCamView::layoutStage()
+{
+    // Nothing to lay out before the constructor has made the last control.
+    if (!endButton) {
         return;
     }
+    const QRect stage = rect();
+    VideoSurface* const big = views.isSwapped() ? selfVideoSurface : videoSurface;
+    big->setGeometry(stage);
 
-    toggleMessagesButton->setText(tr("Show messages"));
+    const QRect area = selfAreaNow();
+    const QSize size = Air::CallStage::fitInto(
+        Air::CallStage::selfSize(stage.size(), selfFrameSize()), area.size());
+    selfFrame->setVisible(selfShown && !size.isEmpty());
+    selfFrame->resize(size);
+    VideoSurface* const small = views.isSwapped() ? videoSurface : selfVideoSurface;
+    small->setGeometry(QRect(QPoint(), size));
+    selfFrame->resetBoundary(area);
+    selfFrame->slideTo(Air::CallStage::cornerRect(area, size, selfCorner).topLeft(), 0);
+    selfFrame->raise();
 
-    if (notify) {
-        toggleMessagesButton->setIcon(QIcon(style.getImagePath("chatArea/info.svg", settings)));
+    header->setVisible(fullScreen);
+    if (fullScreen) {
+        const int reach = AirShadowedText::reach();
+        header->setGeometry(0, headerTop - reach, stage.width(),
+                            AirCallHeader::contentHeight() + 2 * reach);
+        header->raise();
     }
+
+    const QVector<AirCallControl*> row = rowNow();
+    for (AirCallControl* const control : {microphoneButton, soundButton, selfViewButton,
+                                          messagesButton, fullScreenButton, endButton}) {
+        control->setVisible(row.contains(control));
+    }
+    const int height = AirCallControl::controlHeight();
+    const QRect rowArea = Air::CallStage::rowRect(stage, row.size(), height);
+    const int column = row.isEmpty() ? 0 : rowArea.width() / row.size();
+    const bool rightToLeft = layoutDirection() == Qt::RightToLeft;
+    for (int i = 0; i < row.size(); ++i) {
+        // The row reads from the side the language starts, End last.
+        const int slot = rightToLeft ? row.size() - 1 - i : i;
+        // Each control has the room of its word's shadow under the row.
+        row[i]->setGeometry(rowArea.x() + slot * column, rowArea.y(), column,
+                            height + AirShadowedText::reach());
+        row[i]->raise();
+    }
+}
+
+void NetCamView::onSelfDropped(const QPointF& velocity)
+{
+    // SPEC R6: the box goes to the corner nearest to where the throw would take it, sliding with
+    // the layout motion, or at once when the system asks for less motion.
+    const QRect area = selfAreaNow();
+    selfCorner = Air::CallStage::snapCorner(area, selfFrame->size(), selfFrame->pos(), velocity);
+    const QPoint target = Air::CallStage::cornerRect(area, selfFrame->size(), selfCorner).topLeft();
+    const AirStyle& style = AirStyle::instance();
+    selfFrame->slideTo(target, style.reducedMotion() ? 0 : style.duration(AirTokens::Motion::layout),
+                       style.easeOut());
 }
 
 void NetCamView::toggleFullScreen()
 {
-    if (isFullScreen()) {
+    if (fullScreen) {
         exitFullScreen();
     } else {
         enterFullScreen();
@@ -258,94 +346,62 @@ void NetCamView::toggleFullScreen()
 
 void NetCamView::enterFullScreen()
 {
+    fullScreen = true;
+    fullScreenButton->setEngaged(true);
     setWindowFlags(Qt::Window | Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
     showFullScreen();
-    enterFullScreenButton->hide();
-    toggleMessagesButton->hide();
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 10, 0))
-    const auto screenSize = QGuiApplication::screenAt(pos())->geometry();
-#else
-    const QRect screenSize = QApplication::desktop()->screenGeometry(this);
-#endif
-    buttonPanel->setGeometry((screenSize.width() / 2) - buttonPanel->width() / 2,
-            screenSize.height() - BTN_PANEL_HEIGHT - 25, BTN_PANEL_WIDTH, BTN_PANEL_HEIGHT);
-    buttonPanel->show();
-    buttonPanel->activateWindow();
-    buttonPanel->raise();
+    layoutStage();
+    activateWindow();
+    // Esc reaches the stage through the control in focus.
+    fullScreenButton->setFocus(Qt::OtherFocusReason);
 }
 
 void NetCamView::exitFullScreen()
 {
+    if (!fullScreen) {
+        return;
+    }
+    fullScreen = false;
+    fullScreenButton->setEngaged(false);
     setWindowFlags(Qt::Widget);
     showNormal();
-    buttonPanel->hide();
-    enterFullScreenButton->show();
-    toggleMessagesButton->show();
+    layoutStage();
 }
 
 void NetCamView::endVideoCall()
 {
-    toggleFullScreen();
+    // KHANDAQ (calls stage, 26.11): End leaves the full screen and ends the call. It used to toggle
+    // the full screen, which from the window would have taken it.
+    exitFullScreen();
     emit videoCallEnd();
 }
 
 void NetCamView::toggleVideoPreview()
 {
-    toggleButtonState(videoPreviewButton);
-    if (selfFrame->isHidden()) {
-        selfFrame->show();
-    } else {
-        selfFrame->hide();
+    selfShown = !selfShown;
+    // Hiding your video while it is the big one brings theirs back to the stage first.
+    if (!selfShown && views.isSwapped()) {
+        views.swap();
+        placeVideos();
     }
-}
-
-QPushButton* NetCamView::createButton(const QString& name, const QString& state)
-{
-    QPushButton* btn = new QPushButton();
-    btn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
-    btn->setObjectName(name);
-    btn->setProperty("state", QVariant(state));
-    btn->setStyleSheet(style.getStylesheet(BTN_STYLE_SHEET_PATH, settings));
-
-    return btn;
+    selfViewButton->setEngaged(!selfShown);
+    layoutStage();
 }
 
 void NetCamView::updateMuteVolButton(bool isMuted)
 {
-    updateButtonState(volumeButton, !isMuted);
+    soundButton->setEngaged(isMuted);
 }
 
 void NetCamView::updateMuteMicButton(bool isMuted)
 {
-    updateButtonState(microphoneButton, !isMuted);
-}
-
-void NetCamView::toggleButtonState(QPushButton* btn)
-{
-    if (btn->property("state") == BTN_STATE_RED) {
-        btn->setProperty("state", BTN_STATE_NONE);
-    } else {
-        btn->setProperty("state", BTN_STATE_RED);
-    }
-
-    btn->setStyleSheet(style.getStylesheet(BTN_STYLE_SHEET_PATH, settings));
-}
-
-void NetCamView::updateButtonState(QPushButton* btn, bool active)
-{
-    if (active) {
-        btn->setProperty("state", BTN_STATE_NONE);
-    } else {
-        btn->setProperty("state", BTN_STATE_RED);
-    }
-
-    btn->setStyleSheet(style.getStylesheet(BTN_STYLE_SHEET_PATH, settings));
+    microphoneButton->setEngaged(isMuted);
 }
 
 void NetCamView::keyPressEvent(QKeyEvent *event)
 {
     int key = event->key();
-    if (key == Qt::Key_Escape && isFullScreen()) {
+    if (key == Qt::Key_Escape && fullScreen) {
         exitFullScreen();
     }
 }

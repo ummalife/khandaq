@@ -19,43 +19,62 @@
 
 #pragma once
 
+#include <QEasingCurve>
+#include <QPointer>
+#include <QVector>
 #include <QWidget>
 
+class QPropertyAnimation;
+
+/**
+ * A widget the mouse drags within a boundary. KHANDAQ (calls stage, 26.11): it is the box of the
+ * small video of a call now. A press and a release without a drag is a click (the stage swaps its
+ * two videos); a drag ends with the speed the mouse had, so the stage can throw the box to the
+ * corner it went for and slide it there. The box takes its size from the stage (SPEC R3), so the
+ * resizing by its edges and the half transparency of a double click are gone: the one fought the
+ * size, the other the click.
+ */
 class MovableWidget : public QWidget
 {
+    Q_OBJECT
 public:
     explicit MovableWidget(QWidget* parent);
+    /** Where the widget may be dragged; it moves inside at once if it stands outside. */
     void resetBoundary(QRect newBoundary);
-    void setBoundary(QRect newBoundary);
-    float getRatio() const;
-    void setRatio(float r);
+    /**
+     * Moves the widget's top left to topLeft over duration ms along curve, or at once for 0 or
+     * less. A press or a new move stops a slide under way.
+     */
+    void slideTo(const QPoint& topLeft, int duration, const QEasingCurve& curve = QEasingCurve());
+
+signals:
+    /** A press and a release with no drag between them. */
+    void clicked();
+    /** A drag ended where the widget stands, moving at velocity (px per second) when let go. */
+    void dropped(const QPointF& velocity);
 
 protected:
-    void mousePressEvent(QMouseEvent* event);
-    void mouseMoveEvent(QMouseEvent* event);
-    void mouseReleaseEvent(QMouseEvent* event);
-    void mouseDoubleClickEvent(QMouseEvent* event);
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
 
 private:
-    void checkBoundary(QPoint& point) const;
-    void checkBoundaryLeft(int& x) const;
-
-    typedef uint8_t Modes;
-
-    enum Mode : Modes
+    struct Sample
     {
-        Moving = 0x01,
-        ResizeLeft = 0x02,
-        ResizeRight = 0x04,
-        ResizeUp = 0x08,
-        ResizeDown = 0x10,
-        Resize = ResizeLeft | ResizeRight | ResizeUp | ResizeDown
+        ulong time;
+        QPointF position;
     };
 
-    Modes mode = 0;
+    void checkBoundary(QPoint& point) const;
+    void stopSlide();
+    void sample(ulong time, const QPointF& position);
+    QPointF velocityAt(ulong time) const;
+
+    bool pressed = false;
+    bool dragging = false;
+    QPoint pressPoint;
     QPoint lastPoint;
     QRect boundaryRect;
-    QSizeF actualSize;
-    QPointF actualPos;
-    float ratio;
+    QVector<Sample> samples;
+    QPointer<QPropertyAnimation> slide;
 };

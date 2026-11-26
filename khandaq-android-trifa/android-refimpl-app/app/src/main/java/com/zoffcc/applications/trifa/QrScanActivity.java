@@ -72,6 +72,7 @@ public class QrScanActivity extends AppCompatActivity
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_qr_scan);
+        ViewUtil.fitRootToSystemBars(this); // KHANDAQ (inbox #3, 27.11): Android 16 draws this screen edge to edge.
 
         previewView = findViewById(R.id.preview_view);
         previewView.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);

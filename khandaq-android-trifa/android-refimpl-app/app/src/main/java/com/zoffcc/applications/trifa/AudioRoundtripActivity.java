@@ -139,6 +139,7 @@ public class AudioRoundtripActivity extends AppCompatActivity
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_audioroundtrip);
+        ViewUtil.fitRootToSystemBars(this); // KHANDAQ (inbox #3, 27.11): Android 16 draws this screen edge to edge.
         roundtrip_time_textview = findViewById(R.id.roundtrip_time_textview);
         roundtrip_info_textview = findViewById(R.id.roundtrip_info_textview);
         roundtrip_start_button = findViewById(R.id.roundtrip_start_button);

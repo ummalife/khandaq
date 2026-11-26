@@ -64,6 +64,7 @@ public class CrashActivity extends AppCompatActivity implements Logging.AsyncRes
         Log.i(TAG, "onCreate");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_crash);
+        ViewUtil.fitRootToSystemBars(this); // KHANDAQ (inbox #3, 27.11): Android 16 draws this screen edge to edge.
 
         // --- make sure we reset the audio mode ---
         reset_audio_mode();

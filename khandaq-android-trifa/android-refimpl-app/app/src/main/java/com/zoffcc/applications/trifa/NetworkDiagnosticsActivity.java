@@ -19,6 +19,7 @@ public class NetworkDiagnosticsActivity extends AppCompatActivity
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_network_diagnostics);
+        ViewUtil.fitRootToSystemBars(this); // KHANDAQ (inbox #3, 27.11): Android 16 draws this screen edge to edge.
 
         final Toolbar toolbar = findViewById(R.id.network_diag_toolbar);
         setSupportActionBar(toolbar);

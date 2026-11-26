@@ -134,6 +134,61 @@ public class ViewUtil
     }
 
     /**
+     * KHANDAQ (inbox #3, 27.11): keep a screen that never asked for the insets out from under the
+     * system bars.
+     *
+     * Android 16 lays every window of an app that targets it edge to edge, and
+     * windowOptOutEdgeToEdgeEnforcement no longer counts there. Such a screen has its toolbar under the
+     * status bar: on Network diagnostics the title and the back arrow sat over the clock (reported on
+     * an Android 16 phone with 0.2.69).
+     *
+     * The root view of the screen takes the following as padding on top of its own:
+     * - the status bar and the navigation bar;
+     * - the display cutout (on any side, also in landscape);
+     * - the keyboard at the bottom.
+     *
+     * The root's background then fills the strip under the status bar, so the toolbar's colour runs up
+     * to the top edge in both themes instead of the window's. The insets stop at the root.
+     *
+     * On older Android the decor has already taken the bars, so the padding stays as it was. A screen
+     * whose content root is not built yet (a ListActivity before its adapter) pads the content frame.
+     */
+    public static void fitRootToSystemBars(final android.app.Activity activity)
+    {
+        if (activity == null)
+        {
+            return;
+        }
+        final View content = activity.findViewById(android.R.id.content);
+        if (content == null)
+        {
+            return;
+        }
+        final View root = ((content instanceof ViewGroup) && (((ViewGroup) content).getChildCount() > 0))
+                          ? ((ViewGroup) content).getChildAt(0) : content;
+        final int baseLeft = root.getPaddingLeft();
+        final int baseTop = root.getPaddingTop();
+        final int baseRight = root.getPaddingRight();
+        final int baseBottom = root.getPaddingBottom();
+        try
+        {
+            ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+                final androidx.core.graphics.Insets bars = insets.getInsets(
+                        androidx.core.view.WindowInsetsCompat.Type.systemBars()
+                        | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+                final int ime = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom;
+                v.setPadding(baseLeft + bars.left, baseTop + bars.top, baseRight + bars.right,
+                             baseBottom + Math.max(bars.bottom, ime));
+                return androidx.core.view.WindowInsetsCompat.CONSUMED;
+            });
+            ViewCompat.requestApplyInsets(root);
+        }
+        catch (Throwable ignored)
+        {
+        }
+    }
+
+    /**
      * Keep a form's bottom button bar above the on-screen keyboard.
      *
      * With targetSdk 35+ the window is edge-to-edge and windowSoftInputMode="adjustResize" no longer

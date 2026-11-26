@@ -71,6 +71,7 @@ public class ExportActivity extends AppCompatActivity
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_export);
+        ViewUtil.fitRootToSystemBars(this); // KHANDAQ (inbox #3, 27.11): Android 16 draws this screen edge to edge.
 
         // KHANDAQ (re-audit 2026-08-21, R-06): same rule as the launchers - built in onCreate().
         export_gate = new PlaintextExportGate(this, () -> ExportActivity.this);

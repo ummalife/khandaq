@@ -55,6 +55,7 @@ public class NotificationRingtoneSettingsActivity extends AppCompatActivity
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_notification_ringtone_settings);
+        ViewUtil.fitRootToSystemBars(this); // KHANDAQ (inbox #3, 27.11): Android 16 draws this screen edge to edge.
 
         prefs = PreferenceManager.getDefaultSharedPreferences(this);
 

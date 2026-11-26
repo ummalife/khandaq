@@ -48,6 +48,7 @@ public class MediaViewerActivity extends AppCompatActivity
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_media_viewer);
+        ViewUtil.fitRootToSystemBars(this); // KHANDAQ (inbox #3, 27.11): Android 16 draws this screen edge to edge.
 
         photoView = findViewById(R.id.media_photo_view);
         playerView = findViewById(R.id.media_player_view);

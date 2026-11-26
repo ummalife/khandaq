@@ -111,6 +111,7 @@ public class SettingsActivity extends AppCompatPreferenceActivity
         LinearLayout root = (LinearLayout) findViewById(android.R.id.list).getParent().getParent().getParent();
         settingsToolbar = (Toolbar) LayoutInflater.from(this).inflate(R.layout.settings_toolbar, root, false);
         root.addView(settingsToolbar, 0); // insert at top
+        ViewUtil.fitRootToSystemBars(this); // KHANDAQ (inbox #3, 27.11): Android 16 draws this screen edge to edge.
         settingsToolbar.setNavigationOnClickListener(new View.OnClickListener()
         {
             @Override

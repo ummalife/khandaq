@@ -20,7 +20,7 @@ There is no Khandaq server between two people: messages go end-to-end encrypted 
 
 - [Google Play](https://play.google.com/store/apps/details?id=com.khandaq.messenger): Android
 - [TestFlight](https://testflight.apple.com/join/4ppS8ZN5): iPhone and iPad
-- [GitHub releases](https://github.com/ummalife/khandaq/releases/latest): Windows, macOS and Linux, each file with a signature to check before running it
+- [GitHub releases](https://github.com/ummalife/khandaq/releases/latest): Windows (an installer, or a portable zip), macOS and Linux, each file with a signature to check before running it
 
 ## Source and support
 

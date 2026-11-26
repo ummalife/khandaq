@@ -358,16 +358,17 @@
                 <a class="btn btn-ink" href="https://testflight.apple.com/join/4ppS8ZN5" data-primary>Open TestFlight</a>
               </div>
             </li>
-            <li class="dl-row" id="dl-windows" data-platform="windows" data-cta="Download for Windows" data-note="Windows 10 and 11, x64. The file is not Authenticode-signed yet: check its signature as shown below.">
+            <li class="dl-row" id="dl-windows" data-platform="windows" data-cta="Download for Windows" data-note="Windows 10 and 11, x64. The installer is not Authenticode-signed yet: check its signature as shown below.">
               <div class="dl-info">
                 <p class="dl-yours" hidden>Your device</p>
                 <h3>Windows</h3>
-                <p>A portable build for Windows 10 and 11, x64. Unzip it and run <code>Khandaq.exe</code>; no installer needed.</p>
+                <p>Windows 10 and 11, x64. The installer puts Khandaq in the Start menu, and Settings &gt; Apps removes it. The portable zip installs nothing: unzip it and run <code>Khandaq.exe</code>.</p>
                 <span class="meta">v0.2.68 release on GitHub, GPL-3.0</span>
               </div>
               <div class="dl-actions">
-                <a class="btn btn-ink" href="/downloads/khandaq-windows-x86_64.zip" data-asset="khandaq-windows-x86_64.zip" data-primary>Download .zip</a>
-                <a class="btn-quiet" href="/downloads/khandaq-windows-x86_64.zip">Mirror on khandaq.org</a>
+                <a class="btn btn-ink" href="/downloads/khandaq-windows-installer.exe" data-asset="khandaq-windows-installer.exe" data-primary>Download installer (.exe)</a>
+                <a class="btn btn-plain" href="/downloads/khandaq-windows-x86_64.zip" data-asset="khandaq-windows-x86_64.zip">Portable .zip</a>
+                <a class="btn-quiet" href="/downloads/">Mirror on khandaq.org</a>
               </div>
             </li>
             <li class="dl-row" id="dl-macos" data-platform="macos" data-cta="Download for macOS" data-note="For Macs with Apple Silicon and macOS 11 or later. Not notarized yet: the first launch takes one more step.">
@@ -423,10 +424,11 @@
               </div>
             </details>
             <details class="qa">
-              <summary>Windows: the unknown publisher warning</summary>
+              <summary>Windows: the installer, the portable zip and the unknown publisher warning</summary>
               <div class="qa-body">
                 <ol>
-                  <li>Check the signature as shown above, then unzip the archive and run <code>Khandaq.exe</code>.</li>
+                  <li>Download the installer and its signature, <code>khandaq-windows-installer.exe.sig</code>, and check it as shown above, in Git Bash: <code>ssh-keygen -Y verify -f allowed_signers -I releases@khandaq.org -n khandaq-release -s khandaq-windows-installer.exe.sig &lt; khandaq-windows-installer.exe</code>. Then run it. It asks for administrator rights, installs Khandaq into Program Files and adds it to the Start menu; its last page has a checkbox for a desktop shortcut. To remove Khandaq, use Settings &gt; Apps.</li>
+                  <li>No administrator rights, or rather not install anything? Take the portable zip: check its signature the same way, unzip it and run <code>Khandaq.exe</code>. It opens the same profile as the installed app, unless you turned on <strong>Keep the profile next to the app</strong> in its settings.</li>
                   <li>Windows will warn that the publisher is unknown: the desktop build is <strong>not yet Authenticode-signed</strong>, and we are not going to pretend that is fine. Checking the signature is what tells you the file is genuine; the Windows warning says something true, which is that Windows cannot check that for you.</li>
                   <li>We are not asking you to add antivirus exceptions. If your antivirus objects to a file whose signature checks out, please tell us: that is a false positive worth chasing, not something to switch off.</li>
                 </ol>
@@ -633,8 +635,8 @@
       var gh = 'https://github.com/ummalife/khandaq/releases/download/' + release + '/';
       // The files a release publishes. A link names its file in data-asset, and only a name on this list
       // becomes a GitHub address, so nothing read from the page goes into an href as it is.
-      var files = ['khandaq-windows-x86_64.zip', 'khandaq-macos.zip', 'khandaq-messenger_amd64.deb',
-        'khandaq-linux-x86_64-portable.tar.gz', 'SHA256SUMS.txt'];
+      var files = ['khandaq-windows-installer.exe', 'khandaq-windows-x86_64.zip', 'khandaq-macos.zip',
+        'khandaq-messenger_amd64.deb', 'khandaq-linux-x86_64-portable.tar.gz', 'SHA256SUMS.txt'];
       var links = document.querySelectorAll('[data-asset]');
       for (var i = 0; i < links.length; i++) {
         var wanted = links[i].getAttribute('data-asset');

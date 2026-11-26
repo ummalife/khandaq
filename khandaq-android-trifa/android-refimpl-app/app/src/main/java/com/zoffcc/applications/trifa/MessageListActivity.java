@@ -1868,8 +1868,7 @@ public class MessageListActivity extends AppCompatActivity
 
         // KHANDAQ (#17 + Figma attachments 2031:13703): teal-circle attachment chips (camera / video /
         // gallery) in a bottom sheet, replacing the plain text-list dialog. Same actions, on-brand look.
-        final com.google.android.material.bottomsheet.BottomSheetDialog sheet =
-                new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        final com.google.android.material.bottomsheet.BottomSheetDialog sheet = AttachSheet.create(this);
         final View content = getLayoutInflater().inflate(R.layout.bottomsheet_attach, null);
         ((ImageView) content.findViewById(R.id.attach_chip_camera_icon)).setImageDrawable(
                 new IconicsDrawable(this).icon(GoogleMaterial.Icon.gmd_photo_camera).color(Color.WHITE).sizeDp(26));

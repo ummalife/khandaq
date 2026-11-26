@@ -1,9 +1,12 @@
 package com.zoffcc.applications.trifa;
 
+import android.content.Context;
 import android.widget.FrameLayout;
 
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
+
+import org.khandaq.messenger.R;
 
 /**
  * KHANDAQ (tester 23.11): the attach sheet of a chat or a group opens whole. As a plain BottomSheetDialog it opened at
@@ -14,6 +17,16 @@ final class AttachSheet
 {
     private AttachSheet()
     {
+    }
+
+    /**
+     * KHANDAQ (tester 26.11): the attach sheet takes the theme of the create sheet, whose sheet container is
+     * transparent. On the default bottom sheet theme the container under bottomsheet_attach is square and filled,
+     * and in the dark theme it showed white behind the sheet's rounded top corners.
+     */
+    static BottomSheetDialog create(final Context context)
+    {
+        return new BottomSheetDialog(context, R.style.ThemeOverlay_KQ_Air_Sheet);
     }
 
     static void showWhole(final BottomSheetDialog sheet)

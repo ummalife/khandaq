@@ -804,7 +804,7 @@ final class AirYouField: UIView, UITextFieldDelegate {
     }
 }
 
-/// KHANDAQ (tester 8254): AirYouField for a longer text — the status — that wraps onto as many lines as it
+/// KHANDAQ (tester 8254): AirYouField for a longer text, the status, that wraps onto as many lines as it
 /// takes and grows with them. Return finishes the editing (a status is one paragraph), as in the field.
 final class AirYouTextArea: UIView, UITextViewDelegate {
     let textView = UITextView()

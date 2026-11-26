@@ -40,42 +40,52 @@ public class AirGroupMemberChoicesTest
     @Test
     public void the_sheet_keeps_the_ios_order_with_removing_before_the_roles()
     {
-        assertEquals(Arrays.asList(PRIVATE_MESSAGE, ADD_FRIEND, COPY_ID, MUTE, KICK, MAKE_MODERATOR, MAKE_OBSERVER,
-                                   DETAILS),
-                     AirGroupMemberChoices.sheet(false, false, ROLE_USER, ROLE_FOUNDER, false));
+        assertEquals(Arrays.asList(PRIVATE_MESSAGE, ADD_FRIEND, MUTE, KICK, MAKE_MODERATOR, MAKE_OBSERVER, DETAILS),
+                     AirGroupMemberChoices.sheet(false, false, false, ROLE_USER, ROLE_FOUNDER, false));
         assertEquals(Arrays.asList(PRIVATE_MESSAGE, OPEN_CHAT, COPY_ID, UNMUTE, KICK, MAKE_USER, DETAILS),
-                     AirGroupMemberChoices.sheet(true, true, ROLE_OBSERVER, ROLE_MODERATOR, false));
+                     AirGroupMemberChoices.sheet(true, true, true, ROLE_OBSERVER, ROLE_MODERATOR, false));
     }
 
     @Test
     public void the_sheet_of_a_plain_member_offers_no_role_or_removal()
     {
-        assertEquals(Arrays.asList(PRIVATE_MESSAGE, ADD_FRIEND, COPY_ID, MUTE, DETAILS),
-                     AirGroupMemberChoices.sheet(false, false, ROLE_MODERATOR, ROLE_USER, false));
+        assertEquals(Arrays.asList(PRIVATE_MESSAGE, ADD_FRIEND, MUTE, DETAILS),
+                     AirGroupMemberChoices.sheet(false, false, false, ROLE_MODERATOR, ROLE_USER, false));
         // A moderator over another moderator, or anyone over the founder: nothing to change.
         assertEquals(Arrays.asList(PRIVATE_MESSAGE, OPEN_CHAT, COPY_ID, MUTE, DETAILS),
-                     AirGroupMemberChoices.sheet(true, false, ROLE_MODERATOR, ROLE_MODERATOR, false));
+                     AirGroupMemberChoices.sheet(true, true, false, ROLE_MODERATOR, ROLE_MODERATOR, false));
         assertEquals(Arrays.asList(PRIVATE_MESSAGE, OPEN_CHAT, COPY_ID, MUTE, DETAILS),
-                     AirGroupMemberChoices.sheet(true, false, ROLE_FOUNDER, ROLE_FOUNDER, false));
+                     AirGroupMemberChoices.sheet(true, true, false, ROLE_FOUNDER, ROLE_FOUNDER, false));
     }
 
     @Test
     public void a_role_not_shown_yet_offers_no_role_or_removal_even_to_the_founder()
     {
         // The group is not connected: the rows show no role (AirGroupModel.shownRole), so neither do the choices.
-        assertEquals(Arrays.asList(PRIVATE_MESSAGE, ADD_FRIEND, COPY_ID, MUTE, DETAILS),
-                     AirGroupMemberChoices.sheet(false, false, ROLE_UNKNOWN, ROLE_FOUNDER, false));
+        assertEquals(Arrays.asList(PRIVATE_MESSAGE, ADD_FRIEND, MUTE, DETAILS),
+                     AirGroupMemberChoices.sheet(false, false, false, ROLE_UNKNOWN, ROLE_FOUNDER, false));
         assertEquals(Arrays.asList(ADD_FRIEND, MUTE),
                      AirGroupMemberChoices.screen(false, false, ROLE_UNKNOWN, ROLE_FOUNDER));
     }
 
     @Test
+    public void copy_id_is_offered_only_for_a_member_whose_whole_id_is_known()
+    {
+        // A member's key in a group adds no contact: their sheet has no Copy ID until the two traded IDs.
+        assertFalse(AirGroupMemberChoices.sheet(false, false, false, ROLE_USER, ROLE_USER, false).contains(COPY_ID));
+        // A contact added on another path, whose ID this group never told us: the conversation, no Copy ID.
+        assertEquals(Arrays.asList(PRIVATE_MESSAGE, OPEN_CHAT, MUTE, DETAILS),
+                     AirGroupMemberChoices.sheet(true, false, false, ROLE_USER, ROLE_USER, false));
+        assertTrue(AirGroupMemberChoices.sheet(true, true, false, ROLE_USER, ROLE_USER, false).contains(COPY_ID));
+    }
+
+    @Test
     public void a_test_client_also_says_what_it_is()
     {
-        final List<AirGroupMemberChoices.Choice> choices = AirGroupMemberChoices.sheet(false, false, ROLE_USER, ROLE_USER,
-                                                                                       true);
+        final List<AirGroupMemberChoices.Choice> choices =
+                AirGroupMemberChoices.sheet(false, false, false, ROLE_USER, ROLE_USER, true);
         assertEquals(BOT_INFO, choices.get(choices.size() - 1));
-        assertFalse(AirGroupMemberChoices.sheet(false, false, ROLE_USER, ROLE_USER, false).contains(BOT_INFO));
+        assertFalse(AirGroupMemberChoices.sheet(false, false, false, ROLE_USER, ROLE_USER, false).contains(BOT_INFO));
     }
 
     @Test

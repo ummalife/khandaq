@@ -49,7 +49,6 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.core.view.ViewCompat;
 
-import static com.zoffcc.applications.trifa.HelperFriend.lookup_friendlist_by_pubkey;
 import static com.zoffcc.applications.trifa.HelperGroup.group_notification_silent_peer_get;
 import static com.zoffcc.applications.trifa.HelperGroup.tox_group_by_groupid__wrapper;
 import static com.zoffcc.applications.trifa.HelperGroup.tox_group_peer_get_name__wrapper;
@@ -324,7 +323,9 @@ public class GroupPeerInfoActivity extends AirScreenActivity
         boolean muted = false;
         try
         {
-            friend = lookup_friendlist_by_pubkey(peerKey) != null;
+            // KHANDAQ (26.11.2026): the contact behind the member is the one the two traded IDs for; their key
+            // here is theirs in this group only (GroupContactExchange).
+            friend = GroupContactExchange.contactOfMember(groupId, peerKey) != null;
             muted = group_notification_silent_peer_get(groupId, peerKey);
         }
         catch (Throwable e)
@@ -401,11 +402,13 @@ public class GroupPeerInfoActivity extends AirScreenActivity
         linkSection = AirScreenKit.addSection(column, getString(R.string.air_dossier_link_title), null, linkText);
         linkSection.setVisibility(View.GONE);
 
-        // Their key in this group, in groups of four, with Copy.
+        // Their key in this group, in groups of four, with Copy. KHANDAQ (26.11.2026): named as what it is, the
+        // key of this group only, which adds no contact (toxcore makes a key pair per group).
         final String key = peer_pubkey.toUpperCase(Locale.ROOT);
         final View copy = AirScreenKit.iconButton(this, getString(R.string.air_dossier_copy_key), R.drawable.kq_ic_copy);
         copy.setOnClickListener(v -> copyKey(key));
-        AirScreenKit.addSection(column, getString(R.string.air_dossier_key_title), null,
+        AirScreenKit.addSection(column, getString(R.string.air_group_member_key_title),
+                                getString(R.string.air_group_member_key_note),
                                 AirScreenKit.keyText(this, key), AirScreenKit.leading(copy));
     }
 
@@ -495,13 +498,20 @@ public class GroupPeerInfoActivity extends AirScreenActivity
             final AirGroupModel.MemberAction action = AirGroupMemberChoices.action(choice);
             if (choice == AirGroupMemberChoices.Choice.OPEN_CHAT)
             {
-                row.setOnClickListener(v -> FriendListHolder.show_messagelist_acticvity_for_friend(this, peer_pubkey));
+                row.setOnClickListener(v -> {
+                    final String contact = GroupContactExchange.contactOfMember(group_id, peer_pubkey);
+                    if (contact != null)
+                    {
+                        FriendListHolder.show_messagelist_acticvity_for_friend(this, contact);
+                    }
+                });
             }
             else if (choice == AirGroupMemberChoices.Choice.ADD_FRIEND)
             {
                 row.setOnClickListener(v -> {
                     AirUi.endLine(actionNote);
-                    GroupMemberActions.addFriend(this, peer_pubkey);
+                    GroupMemberActions.addFriend(this, group_id, peer_pubkey, displayName(),
+                                                 (text, failed) -> sayAtActions(text, failed, null));
                 });
             }
             else if (choice == AirGroupMemberChoices.Choice.MUTE)

@@ -37,7 +37,12 @@ final class GroupMentionHelper
     static final String MENTION_BLOCK_PREFIX = "[KQ|m|";
     static final String MENTION_BLOCK_SUFFIX = "][KQ/m]";
 
-    private static final Pattern MENTION_TOKEN = Pattern.compile("@([A-Za-z0-9_]+)");
+    /**
+     * KHANDAQ (26.11.2026): a mention is "@" and a handle in any script, as handles are made from names in
+     * any script (mentionHandleFromName). It was ASCII only, so a Cyrillic or Arabic handle picked from the
+     * list went out without the mention block: no mark and no notification on the other side.
+     */
+    static final Pattern MENTION_TOKEN = Pattern.compile("@([\\p{L}\\p{M}\\p{N}_]+)");
 
     static final class MentionEntry
     {
@@ -131,9 +136,9 @@ final class GroupMentionHelper
 
         // KHANDAQ (ANR, 2026-08-26): the member walk below enumerates every peer in the group,
         // with JNI and SQLCipher behind it, and it ran on the main thread for every outgoing group
-        // message - including the overwhelming majority that mention nobody. MENTION_TOKEN is
-        // "@([A-Za-z0-9_]+)" and so cannot match without a literal '@', which makes this guard
-        // exactly equivalent to running the walk and finding nothing.
+        // message - including the overwhelming majority that mention nobody. MENTION_TOKEN starts
+        // with a literal '@' and so cannot match without one, which makes this guard exactly
+        // equivalent to running the walk and finding nothing.
         if (bodyText.indexOf('@') < 0)
         {
             return result;
@@ -281,6 +286,12 @@ final class GroupMentionHelper
                 sb.append(c);
                 prevUnderscore = false;
             }
+            else if (isCombiningMark(c) && sb.length() > 0 && !prevUnderscore)
+            {
+                // KHANDAQ (26.11.2026): the mark that belongs to the letter before it stays, so an Indic
+                // name keeps its vowel signs and an Arabic one its harakat.
+                sb.append(c);
+            }
             else if ((c == ' ' || c == '-' || c == '.') && !prevUnderscore && sb.length() > 0)
             {
                 sb.append('_');
@@ -293,6 +304,13 @@ final class GroupMentionHelper
             sb.deleteCharAt(sb.length() - 1);
         }
         return sb.toString();
+    }
+
+    private static boolean isCombiningMark(final char c)
+    {
+        final int type = Character.getType(c);
+        return type == Character.NON_SPACING_MARK || type == Character.COMBINING_SPACING_MARK
+               || type == Character.ENCLOSING_MARK;
     }
 
     static String insertMentionToken(final String handle)

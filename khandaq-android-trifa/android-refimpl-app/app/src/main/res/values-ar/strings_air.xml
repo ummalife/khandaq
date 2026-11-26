@@ -515,4 +515,24 @@
     <string name="air_settings_background_notification">إشعار الخلفية</string>
     <string name="air_settings_background_notification_note">يعمل Khandaq في الخلفية لاستقبال الرسائل. يمكنك إخفاء هذا الإشعار، وسيواصل التطبيق العمل.</string>
     <string name="air_settings_background_notification_failed">لم يفتح الهاتف إعدادات الإشعارات. تجدها في إعدادات الهاتف: «التطبيقات» ثم «Khandaq» ثم «الإشعارات».</string>
+    <!-- KHANDAQ (26.11.2026): a member of a group to contacts, private messages in the feed. -->
+    <string name="air_group_private_note_to_format">خاصة إلى %1$s: لا يراها الأعضاء الآخرون</string>
+    <string name="air_group_private_note_to_you">خاصة إليك: لا يراها الأعضاء الآخرون</string>
+    <string name="air_group_contact_sent_format">أُرسل الطلب: سيظهر %1$s في جهات اتصالك بعد قبوله</string>
+    <string name="air_group_contact_offline_format">%1$s غير متصل في هذه المجموعة الآن: أرسل الطلب عندما يعود</string>
+    <string name="air_group_contact_failed">لم يُرسَل الطلب. حاول مرة أخرى.</string>
+    <string name="air_group_contact_added_format">أصبح %1$s في جهات اتصالك</string>
+    <string name="air_group_contact_from_format">من المجموعة %1$s</string>
+    <string name="air_group_contact_from_unnamed">من مجموعة تجمعكما</string>
+    <string name="air_group_contact_band_format">%1$s، من المجموعة %2$s</string>
+    <string name="air_group_contact_band_unnamed_format">%1$s، من مجموعة تجمعكما</string>
+    <string name="air_group_contact_request_words_format">قبلتُ طلبك من المجموعة %1$s</string>
+    <string name="air_group_contact_request_words">قبلتُ طلبك من مجموعتنا</string>
+    <string name="air_group_member_key_title">المفتاح في هذه المجموعة</string>
+    <string name="air_group_member_key_note">هذا المفتاح خاص بهذه المجموعة فقط ولا يضيفه إلى جهات الاتصال. استخدم «إضافة إلى جهات الاتصال».</string>
+    <string name="air_nc_verdict_member_format">هذا مفتاح %1$s في المجموعة %2$s، وليس معرّفًا</string>
+    <string name="air_nc_verdict_member_unnamed_format">هذا مفتاح %1$s في إحدى مجموعاتك، وليس معرّفًا</string>
+    <string name="air_nc_send_member_request">أرسل طلب اتصال عبر المجموعة</string>
+    <string name="air_cmd_member_format">%1$s في المجموعة %2$s</string>
+    <string name="air_cmd_member_note">أرسل طلب اتصال عبر المجموعة</string>
 </resources>

@@ -598,7 +598,7 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
             entry.senderUnverified = should_mark_unverified_sender(false, m, NgcSignedHistory.isAuthorVerified(m));
             if (m.private_message == 1)
             {
-                entry.privateNote = context.getString(R.string.air_group_private_to_you);
+                entry.privateNote = context.getString(R.string.air_group_private_note_to_you);
             }
         }
 

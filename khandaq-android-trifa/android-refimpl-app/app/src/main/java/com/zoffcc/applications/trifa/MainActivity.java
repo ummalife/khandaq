@@ -7087,7 +7087,7 @@ public class MainActivity extends AppCompatActivity
     static void android_tox_callback_friend_request_cb_method(String friend_public_key, String friend_request_message, long length)
     {
         final String friend_public_key__ = friend_public_key.substring(0, TOX_PUBLIC_KEY_SIZE * 2).toUpperCase();
-        final String message = (friend_request_message != null) ? friend_request_message : "";
+        final String raw_message = (friend_request_message != null) ? friend_request_message : "";
 
         // KHANDAQ (redesign, block): a request from a key blocked on this device is dropped as it lands,
         // the way Decline drops one: no card, no count, no notification, and nothing goes back.
@@ -7096,6 +7096,14 @@ public class MainActivity extends AppCompatActivity
             Log.i(TAG, "friend_request: dropped, the key is blocked on this device");
             return;
         }
+
+        // KHANDAQ (26.11.2026): the answer of a member of a group to our offer is added without a card, we asked
+        // first (GroupContactExchange); another request with that marker shows without it.
+        if (GroupContactExchange.onFriendRequest(friend_public_key__, raw_message))
+        {
+            return;
+        }
+        final String message = GroupContactPackets.withoutMarker(raw_message);
 
         // KHANDAQ (redesign, Air): the request waits as a card at the top of the main list until it is
         // accepted or declined. It is kept in the encrypted database, so one that arrives while the main
@@ -10163,6 +10171,14 @@ public class MainActivity extends AppCompatActivity
                 && (data[7] == NgcHistSigParser.PKT_SIGNED_TEXT))
             {
                 NgcSignedHistory.handleIncomingSignedText(group_number, peer_id, data, (int) length);
+                return;
+            }
+
+            // KHANDAQ (26.11.2026): a member offers to become a contact, or accepts our offer
+            // (GroupContactExchange, packets 01 61 and 01 62). Exactly 54 bytes; anything else is dropped there.
+            if (GroupContactPackets.isContactPacket(data, length))
+            {
+                GroupContactExchange.onPacket(group_number, peer_id, data, length);
                 return;
             }
 

@@ -96,6 +96,10 @@ public class AirFragment extends Fragment
     private AirAdapter.CommandIdRow commandIdRow;
     /** KHANDAQ (redesign, E3): "Join the group with this key" for a group key or a group link on the line. */
     private GroupKeyRow groupKeyRow;
+    /** KHANDAQ (26.11.2026): the member of one of our groups whose key there is on the command line. */
+    private GroupKeyRow memberKeyRow;
+    @Nullable
+    private AirNewContactModel.GroupMember memberOnLine;
     /** The group key on the command line now, or null; linked when it came as a group link, never a person's key. */
     @Nullable
     private String groupKey;
@@ -297,6 +301,7 @@ public class AirFragment extends Fragment
         footer = null;
         commandIdRow = null;
         groupKeyRow = null;
+        memberKeyRow = null;
         revealSettling = false;
         pills.clear();
         // New views start blank: the next data must bind everything again, even if it is the same.
@@ -661,6 +666,7 @@ public class AirFragment extends Fragment
         final String linkedKey = ShareActivity.parseKhandaqGroupId(raw.trim());
         if (linkedKey != null)
         {
+            showMemberRow(null);
             showCommandIdRow(null);
             showGroupKeyRow(linkedKey, true);
             setQuery("");
@@ -669,6 +675,7 @@ public class AirFragment extends Fragment
         final AirModel.Command parsed = AirModel.Command.parse(raw);
         if (parsed.type == AirModel.Command.Type.CONTACT_ADDRESS)
         {
+            showMemberRow(null);
             showGroupKeyRow(null, false);
             // A whole ID: it is a new contact, not a search. Leave the line clean behind us.
             final String address = parsed.value;
@@ -689,9 +696,15 @@ public class AirFragment extends Fragment
             return;
         }
         final String hex = parsed.type == AirModel.Command.Type.PARTIAL_ADDRESS ? parsed.value : null;
-        showCommandIdRow(hex);
+        // KHANDAQ (26.11.2026): the key of a member in one of our groups is that member, never 12 characters short
+        // of an ID: the line offers the request through the group instead, and no join by that key.
+        final AirNewContactModel.GroupMember member =
+                hex != null && hex.length() == AirNewContactModel.KEY_LENGTH ? GroupContactExchange.findMember(hex) : null;
+        showMemberRow(member);
+        showCommandIdRow(member == null ? hex : null);
         // 64 characters are the length of a group key too: the line offers that group as well.
-        showGroupKeyRow(hex != null && hex.length() == AirNewContactModel.KEY_LENGTH ? hex : null, false);
+        showGroupKeyRow(member == null && hex != null && hex.length() == AirNewContactModel.KEY_LENGTH ? hex : null,
+                        false);
         setQuery(parsed.type == AirModel.Command.Type.QUERY || parsed.type == AirModel.Command.Type.PARTIAL_ADDRESS
                  ? parsed.value : "");
     }
@@ -804,6 +817,45 @@ public class AirFragment extends Fragment
             }
         }
         groupKeyRow.show(key, title, AirUi.localDigits(requireContext(), note), failed, member);
+    }
+
+    /** The row "Hamza in the group G: send a contact request", or none for null. */
+    private void showMemberRow(@Nullable final AirNewContactModel.GroupMember member)
+    {
+        memberOnLine = member;
+        if (memberKeyRow == null)
+        {
+            return;
+        }
+        if (member == null)
+        {
+            memberKeyRow.show(null, "", "", false, false);
+            return;
+        }
+        final String title = member.groupName.isEmpty()
+                             ? member.name
+                             : getString(R.string.air_cmd_member_format, member.name, member.groupName);
+        memberKeyRow.showPerson(member.memberKey, member.name, title, getString(R.string.air_cmd_member_note));
+    }
+
+    /** The tap on the member row: the offer goes to them over the group, and the toast says how it went. */
+    private void onMemberRow(final String key)
+    {
+        final Context context = getContext();
+        final View root = getView();
+        final AirNewContactModel.GroupMember member = memberOnLine;
+        if (context == null || root == null || member == null || !member.memberKey.equalsIgnoreCase(key))
+        {
+            return;
+        }
+        final boolean sent = GroupContactExchange.offer(context, member.groupId, member.memberKey, member.name,
+                                                        (text, failed) -> AirToast.show(root, text));
+        if (sent && command != null)
+        {
+            command.setText("");
+            command.clearFocus();
+            hideKeyboard();
+        }
     }
 
     /** Our own public key or a contact's: the start of an ID, never a group to join. */
@@ -1178,8 +1230,9 @@ public class AirFragment extends Fragment
         footer = new AirAdapter.EmptyFooter(this);
         commandIdRow = new AirAdapter.CommandIdRow(this);
         groupKeyRow = new GroupKeyRow(this::onGroupKeyRow);
+        memberKeyRow = new GroupKeyRow(this::onMemberRow);
         list.setLayoutManager(new LinearLayoutManager(context));
-        list.setAdapter(new ConcatAdapter(commandIdRow, groupKeyRow, adapter, footer));
+        list.setAdapter(new ConcatAdapter(memberKeyRow, commandIdRow, groupKeyRow, adapter, footer));
         itemAnimator = new DefaultItemAnimator();
         // A changed row rebinds in place: no cross-fade, so nothing blinks.
         itemAnimator.setSupportsChangeAnimations(false);
@@ -1271,9 +1324,11 @@ public class AirFragment extends Fragment
                 revealOnFirstDraw();
             }
         });
-        // While "New contact with this ID" or the group row stands over the list, "nothing found" says nothing new.
+        // While "New contact with this ID", the group row or the member row stands over the list, "nothing found"
+        // says nothing new; under the member row its "check that it is complete: 76 characters" would be wrong.
         final boolean idRow = (commandIdRow != null && commandIdRow.shown())
-                              || (groupKeyRow != null && groupKeyRow.shown());
+                              || (groupKeyRow != null && groupKeyRow.shown())
+                              || (memberKeyRow != null && memberKeyRow.shown());
         footer.setState(idRow && snapshot.emptyState == AirModel.EmptyState.NO_MATCH ? null : snapshot.emptyState);
         bindPills(snapshot.counts, true);
     }
@@ -1599,11 +1654,49 @@ public class AirFragment extends Fragment
             joinInvite(request);
             return;
         }
+        if (request.kind == AirModel.Request.Kind.GROUP_CONTACT)
+        {
+            acceptGroupContact(request);
+            return;
+        }
         // KHANDAQ (QA live, F2): marked first, so the new contact never reads as our own pending request.
         AirRequestStore.markAccepted(request.publicKey);
         HelperFriend.add_friend_to_system(request.publicKey, false, null);
         AirRequestStore.remove(request.publicKey);
         AirRepository.requestRefresh();
+    }
+
+    /**
+     * KHANDAQ (26.11.2026): Accept on an offer from a member of a group sends our contact request to the ID
+     * in the offer, marked with its nonce, so the member adds us without asking again
+     * (GroupContactExchange). What stops it is said as a toast; the card stays then.
+     */
+    private void acceptGroupContact(final AirModel.Request request)
+    {
+        final Context context = getContext();
+        final AirRequestStore.Pending pending = AirRequestStore.find(request.publicKey);
+        if (context == null || pending == null || pending.group == null)
+        {
+            return;
+        }
+        final boolean asked = GroupContactExchange.accept(context, pending, (text, failed) -> sayOnCard(text));
+        if (asked)
+        {
+            AirRequestStore.remove(request.publicKey);
+            AirRepository.requestRefresh();
+        }
+    }
+
+    /** What stopped Accept on a card, as a toast over the list; the card stays. */
+    private boolean sayOnCard(final CharSequence text)
+    {
+        final View root = getView();
+        if (root == null)
+        {
+            return false;
+        }
+        AirToast.show(root, text.toString());
+        return true;
     }
 
     /**
@@ -1783,6 +1876,10 @@ public class AirFragment extends Fragment
         private String note = "";
         private boolean failed;
         private boolean member;
+        /** KHANDAQ (26.11.2026): the row stands for a person, a member of one of our groups, with their tile. */
+        private boolean person;
+        /** The person's name, for the initials of their tile. */
+        private String personName = "";
 
         GroupKeyRow(final Listener listener)
         {
@@ -1793,9 +1890,22 @@ public class AirFragment extends Fragment
         void show(@Nullable final String nextKey, final String nextTitle, final String nextNote, final boolean nextFailed,
                   final boolean nextMember)
         {
+            show(nextKey, nextTitle, nextNote, nextFailed, nextMember, false);
+        }
+
+        /** The row of a member of one of our groups: their tile, who they are and where, and what a tap does. */
+        void showPerson(final String nextKey, final String name, final String nextTitle, final String nextNote)
+        {
+            personName = name == null ? "" : name;
+            show(nextKey, nextTitle, nextNote, false, false, true);
+        }
+
+        private void show(@Nullable final String nextKey, final String nextTitle, final String nextNote,
+                          final boolean nextFailed, final boolean nextMember, final boolean nextPerson)
+        {
             final boolean was = key != null;
             if (was && nextKey != null && nextKey.equals(key) && nextTitle.equals(title) && nextNote.equals(note)
-                && nextFailed == failed && nextMember == member)
+                && nextFailed == failed && nextMember == member && nextPerson == person)
             {
                 return;
             }
@@ -1804,6 +1914,7 @@ public class AirFragment extends Fragment
             note = nextNote;
             failed = nextFailed;
             member = nextMember;
+            person = nextPerson;
             if (was && nextKey == null)
             {
                 notifyItemRemoved(0);
@@ -1846,8 +1957,14 @@ public class AirFragment extends Fragment
             }
             holder.note.setText(note);
             holder.note.setTextColor(AirUi.color(context, failed ? R.color.kq_danger : R.color.kq_ink_3));
-            // A group we are in has its own tile, as in the list; one to join is dashed with the group glyph.
-            if (member && key != null)
+            // A group we are in has its own tile, as in the list; one to join is dashed with the group glyph. A
+            // member of a group has a person's tile, in the tone of their key.
+            if (person && key != null)
+            {
+                holder.tile.bind(AirTileView.Kind.PERSON, personName.isEmpty() ? title : personName,
+                                 AirModel.Tone.index(key));
+            }
+            else if (member && key != null)
             {
                 holder.tile.bind(AirTileView.Kind.GROUP, title, AirModel.Tone.index(key));
                 if (KhandaqCommunity.isCommunity(key))

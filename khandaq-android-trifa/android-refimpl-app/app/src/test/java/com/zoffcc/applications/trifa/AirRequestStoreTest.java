@@ -191,4 +191,65 @@ public class AirRequestStoreTest
         // The cards themselves keep their own cap.
         assertEquals(AirRequestStore.MAX_REQUESTS, AirRequestStore.decode(AirRequestStore.encode(accepted)).size());
     }
+
+    /** A whole ID with a correct check (the one AirNewContactModelTest and the iOS tests use). */
+    private static final String ADDRESS = "56A1ADE4B65B86BCD51CC73E2CD4E542179F47959FE3E0E21B4B0ACDADE51855D34D34D37CB5";
+    private static final String SENDER = ADDRESS.substring(0, 64);
+    private static final String GROUP = key(0x51).toLowerCase(Locale.ROOT);
+
+    private static AirRequestStore.GroupOffer offer(String address, String groupId, String nonce)
+    {
+        return new AirRequestStore.GroupOffer(address, groupId, KEY_B.toLowerCase(Locale.ROOT), nonce, " Isa ", " Friends ");
+    }
+
+    @Test
+    public void anOfferFromAMemberOfAGroupKeepsItsGroupThroughTheStore()
+    {
+        final AirRequestStore.Pending pending = AirRequestStore.Pending.fromGroup(
+                SENDER, offer(ADDRESS.toLowerCase(Locale.ROOT), GROUP.toUpperCase(Locale.ROOT), "01020304050607AB"), 500);
+        assertNotNull(pending);
+        assertEquals(SENDER, pending.publicKey);
+        assertEquals("", pending.message);
+        assertEquals(ADDRESS, pending.group.address);
+        assertEquals(GROUP, pending.group.groupId);
+        assertEquals(KEY_B, pending.group.memberKey);
+        assertEquals("01020304050607ab", pending.group.nonce);
+        assertEquals("Isa", pending.group.memberName);
+        assertEquals("Friends", pending.group.groupName);
+
+        final List<AirRequestStore.Pending> back = AirRequestStore.decode(
+                AirRequestStore.encode(Collections.singletonList(pending)));
+        assertEquals(1, back.size());
+        assertEquals(pending, back.get(0));
+        assertEquals(pending.group, back.get(0).group);
+    }
+
+    @Test
+    public void anOfferThatIsNotWholeOrNotTheSendersIsNoRequest()
+    {
+        assertNull(AirRequestStore.Pending.fromGroup(KEY_A, offer(ADDRESS, GROUP, "01020304050607ab"), 1));
+        assertNull(AirRequestStore.Pending.fromGroup(SENDER, offer(ADDRESS.substring(0, 74), GROUP, "01020304050607ab"), 1));
+        assertNull(AirRequestStore.Pending.fromGroup(SENDER, offer(ADDRESS, "", "01020304050607ab"), 1));
+        assertNull(AirRequestStore.Pending.fromGroup(SENDER, offer(ADDRESS, GROUP, "0102"), 1));
+        assertNull(AirRequestStore.Pending.fromGroup(SENDER, null, 1));
+
+        // A stored offer damaged on disk is dropped rather than shown with an Accept that cannot answer it.
+        final AirRequestStore.Pending pending =
+                AirRequestStore.Pending.fromGroup(SENDER, offer(ADDRESS, GROUP, "01020304050607ab"), 1);
+        assertNotNull(pending);
+        final String json = AirRequestStore.encode(Collections.singletonList(pending));
+        assertTrue(AirRequestStore.decode(json.replace("01020304050607ab", "zz")).isEmpty());
+    }
+
+    @Test
+    public void aPlainRequestFromTheSameSenderKeepsTheOfferOfTheGroup()
+    {
+        final AirRequestStore.Pending fromGroup =
+                AirRequestStore.Pending.fromGroup(SENDER, offer(ADDRESS, GROUP, "01020304050607ab"), 100);
+        assertNotNull(fromGroup);
+        List<AirRequestStore.Pending> list = AirRequestStore.withAdded(EMPTY, fromGroup);
+        list = AirRequestStore.withAdded(list, pending(SENDER, "hello", 200));
+        assertEquals(1, list.size());
+        assertEquals(fromGroup.group, list.get(0).group);
+    }
 }

@@ -29,6 +29,33 @@ final class AirNewContactModel
         boolean test(String publicKey);
     }
 
+    /**
+     * KHANDAQ (26.11.2026): a member of one of our groups whose key there was typed or pasted. That key is
+     * theirs in that group only and never completes to an ID; the screen offers the request through the
+     * group instead of "12 characters missing" (GroupContactExchange).
+     */
+    static final class GroupMember
+    {
+        final String groupId;
+        final String memberKey;
+        final String name;
+        final String groupName;
+
+        GroupMember(final String groupId, final String memberKey, final String name, final String groupName)
+        {
+            this.groupId = groupId;
+            this.memberKey = memberKey;
+            this.name = name == null ? "" : name;
+            this.groupName = groupName == null ? "" : groupName;
+        }
+    }
+
+    /** Finds the member of our groups with this 64-character key, or null. */
+    interface MemberQuery
+    {
+        GroupMember find(String key);
+    }
+
     private AirNewContactModel()
     {
     }
@@ -227,6 +254,8 @@ final class AirNewContactModel
             THEY_ASKED,
             /** The key is on this device's block list: sending the request lifts the block. */
             BLOCKED,
+            /** The key of a member in one of our groups: a request goes through the group, not by this key. */
+            GROUP_MEMBER,
             OK
         }
 
@@ -237,13 +266,22 @@ final class AirNewContactModel
         final String publicKey;
         /** For BLOCKED and OK: the whole ID "Send request" sends to. */
         final String address;
+        /** For GROUP_MEMBER: who has the key, and in which group. */
+        final GroupMember member;
 
         private Verdict(final Kind kind, final int left, final String publicKey, final String address)
+        {
+            this(kind, left, publicKey, address, null);
+        }
+
+        private Verdict(final Kind kind, final int left, final String publicKey, final String address,
+                        final GroupMember member)
         {
             this.kind = kind;
             this.left = left;
             this.publicKey = publicKey;
             this.address = address;
+            this.member = member;
         }
 
         /** The ID "Send request" sends to, or null while it may not go. */
@@ -259,6 +297,7 @@ final class AirNewContactModel
             {
                 case EMPTY:
                 case PARTIAL:
+                case GROUP_MEMBER:
                     return RulerState.FILLING;
                 case BAD_CHECK:
                     return RulerState.BAD;
@@ -270,9 +309,24 @@ final class AirNewContactModel
         static Verdict of(final String hex, final String ownAddress, final KeyQuery isContact,
                           final KeyQuery hasRequest, final KeyQuery isBlocked)
         {
+            return of(hex, ownAddress, isContact, hasRequest, isBlocked, key -> null);
+        }
+
+        /** As above; 64 characters that are the key of a member of one of our groups are that member. */
+        static Verdict of(final String hex, final String ownAddress, final KeyQuery isContact,
+                          final KeyQuery hasRequest, final KeyQuery isBlocked, final MemberQuery memberOf)
+        {
             if (hex == null || hex.isEmpty())
             {
                 return new Verdict(Kind.EMPTY, 0, null, null);
+            }
+            if (hex.length() == KEY_LENGTH)
+            {
+                final GroupMember member = memberOf.find(hex);
+                if (member != null)
+                {
+                    return new Verdict(Kind.GROUP_MEMBER, LENGTH - hex.length(), null, null, member);
+                }
             }
             if (hex.length() < LENGTH)
             {

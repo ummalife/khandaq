@@ -226,7 +226,7 @@
     <string name="group_member_action_private_msg_sent">Личное сообщение отправлено</string>
     <string name="group_member_action_private_msg_failed">Не удалось отправить</string>
     <string name="group_member_action_open_chat">Открыть личку</string>
-    <string name="group_member_action_add_friend">Добавить в друзья</string>
+    <string name="group_member_action_add_friend">Добавить в контакты</string>
     <string name="group_member_action_copy_id">Копировать ID</string>
     <string name="group_member_action_copy_done">ID скопирован</string>
     <string name="group_member_action_mute">Выключить уведомления</string>

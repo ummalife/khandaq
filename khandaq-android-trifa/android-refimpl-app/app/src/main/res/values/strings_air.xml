@@ -466,4 +466,24 @@
     <string name="air_settings_background_notification">Background notification</string>
     <string name="air_settings_background_notification_note">Khandaq keeps running in the background to receive messages. You can hide this notification, and the app keeps working.</string>
     <string name="air_settings_background_notification_failed">The phone did not open its notification settings. They are in the phone\'s Settings: Apps, Khandaq, Notifications.</string>
+    <!-- KHANDAQ (26.11.2026): a member of a group to contacts, private messages in the feed. -->
+    <string name="air_group_private_note_to_format">Privately to %1$s: other members don\'t see this</string>
+    <string name="air_group_private_note_to_you">Privately to you: other members don\'t see this</string>
+    <string name="air_group_contact_sent_format">Request sent: %1$s will be in your contacts once they accept it</string>
+    <string name="air_group_contact_offline_format">%1$s is offline in this group: ask again when they are back</string>
+    <string name="air_group_contact_failed">The request did not leave. Try again.</string>
+    <string name="air_group_contact_added_format">%1$s is now in your contacts</string>
+    <string name="air_group_contact_from_format">From the group %1$s</string>
+    <string name="air_group_contact_from_unnamed">From a group you are both in</string>
+    <string name="air_group_contact_band_format">%1$s, from the group %2$s</string>
+    <string name="air_group_contact_band_unnamed_format">%1$s, from a group you are both in</string>
+    <string name="air_group_contact_request_words_format">I accepted your request from the group %1$s</string>
+    <string name="air_group_contact_request_words">I accepted your request from our group</string>
+    <string name="air_group_member_key_title">Key in this group</string>
+    <string name="air_group_member_key_note">This key is theirs in this group only and does not add them as a contact. Use Add to contacts.</string>
+    <string name="air_nc_verdict_member_format">This is the key of %1$s in the group %2$s, not an ID</string>
+    <string name="air_nc_verdict_member_unnamed_format">This is the key of %1$s in one of your groups, not an ID</string>
+    <string name="air_nc_send_member_request">Send a contact request through the group</string>
+    <string name="air_cmd_member_format">%1$s in the group %2$s</string>
+    <string name="air_cmd_member_note">Send a contact request through the group</string>
 </resources>

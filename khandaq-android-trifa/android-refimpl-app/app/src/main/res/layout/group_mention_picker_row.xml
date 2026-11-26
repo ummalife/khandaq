@@ -1,28 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (26.11.2026): one member "@" offers: the member's tile, the name, and the @handle the choice puts
+     in the text. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="?attr/selectableItemBackground"
     android:gravity="center_vertical"
-    android:minHeight="48dp"
+    android:minHeight="@dimen/group_mention_row_height"
     android:orientation="horizontal"
-    android:paddingStart="12dp"
-    android:paddingTop="8dp"
-    android:paddingEnd="12dp"
-    android:paddingBottom="8dp">
+    android:paddingStart="@dimen/kq_space_12"
+    android:paddingTop="@dimen/kq_space_6"
+    android:paddingEnd="@dimen/kq_space_12"
+    android:paddingBottom="@dimen/kq_space_6">
 
-    <de.hdodenhof.circleimageview.CircleImageView
-        android:id="@+id/group_mention_avatar"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:src="@drawable/circle_green"
-        app:civ_border_width="0dp" />
+    <com.zoffcc.applications.trifa.AirTileView
+        android:id="@+id/group_mention_tile"
+        android:layout_width="@dimen/kq_size_tile_desk"
+        android:layout_height="@dimen/kq_size_tile_desk"
+        android:importantForAccessibility="no" />
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
+        android:layout_marginStart="@dimen/kq_space_12"
         android:layout_weight="1"
         android:orientation="vertical">
 
@@ -31,10 +31,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ellipsize="end"
-            android:fontFamily="sans-serif-medium"
             android:maxLines="1"
-            android:textColor="@color/tg_chat_title"
-            android:textSize="15sp" />
+            android:textAlignment="viewStart"
+            android:textAppearance="@style/TextAppearance.KQ.Air.BodyStrong"
+            android:textColor="@color/kq_ink" />
 
         <TextView
             android:id="@+id/group_mention_handle"
@@ -42,8 +42,9 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textColor="@color/tg_chat_preview"
-            android:textSize="13sp" />
+            android:textAlignment="viewStart"
+            android:textAppearance="@style/TextAppearance.KQ.Caption"
+            android:textColor="@color/kq_ink_3" />
 
     </LinearLayout>
 

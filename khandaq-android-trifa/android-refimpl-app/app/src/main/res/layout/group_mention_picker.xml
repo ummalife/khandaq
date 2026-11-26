@@ -1,19 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<!-- KHANDAQ (26.11.2026): the members "@" offers, as Telegram does (DESIGN.md, "@ in a group"): Air's raised
+     plate a little in from the edges, as high as its rows up to four and a half. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    app:cardBackgroundColor="@color/tg_chat_bg"
-    app:cardCornerRadius="12dp"
-    app:cardElevation="8dp">
+    android:paddingStart="@dimen/kq_space_8"
+    android:paddingEnd="@dimen/kq_space_8"
+    android:paddingBottom="@dimen/kq_space_4">
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/group_mention_list"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="@drawable/air_bg_mention_list"
         android:clipToPadding="false"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp"
+        android:overScrollMode="never"
+        android:paddingTop="@dimen/kq_space_4"
+        android:paddingBottom="@dimen/kq_space_4"
         android:scrollbars="vertical" />
 
-</androidx.cardview.widget.CardView>
+</FrameLayout>

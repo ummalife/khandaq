@@ -541,9 +541,11 @@ final class AirRepository
         final List<AirModel.Request> requests = new ArrayList<>();
         for (final AirRequestStore.Pending pending : AirRequestStore.snapshot())
         {
-            requests.add(new AirModel.Request(pending.publicKey, pending.message,
-                                              ChatListUiHelper.format_chat_list_time(context, pending.receivedMs),
-                                              pending.receivedMs));
+            final String time = ChatListUiHelper.format_chat_list_time(context, pending.receivedMs);
+            requests.add(pending.group != null
+                         ? AirModel.Request.groupContact(pending.publicKey, pending.group.memberName,
+                                                         pending.group.groupName, time, pending.receivedMs)
+                         : new AirModel.Request(pending.publicKey, pending.message, time, pending.receivedMs));
         }
         // E12: invitations to groups wait beside the requests; Join goes through the contact who invites.
         // One to a group we are in by now (joined from another card or by ID) is answered.

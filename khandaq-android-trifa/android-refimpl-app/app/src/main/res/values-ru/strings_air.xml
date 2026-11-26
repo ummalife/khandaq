@@ -489,4 +489,24 @@
     <string name="air_settings_background_notification">Фоновое уведомление</string>
     <string name="air_settings_background_notification_note">Khandaq работает в фоне, чтобы получать сообщения. Это уведомление можно скрыть, приложение продолжит работать.</string>
     <string name="air_settings_background_notification_failed">Телефон не открыл настройки уведомлений. Они есть в настройках телефона: «Приложения», «Khandaq», «Уведомления».</string>
+    <!-- KHANDAQ (26.11.2026): a member of a group to contacts, private messages in the feed. -->
+    <string name="air_group_private_note_to_format">Лично для %1$s: другие участники этого не видят</string>
+    <string name="air_group_private_note_to_you">Лично вам: другие участники этого не видят</string>
+    <string name="air_group_contact_sent_format">Запрос отправлен: %1$s появится в контактах, когда примет его</string>
+    <string name="air_group_contact_offline_format">%1$s сейчас не в сети в этой группе: отправьте запрос, когда появится</string>
+    <string name="air_group_contact_failed">Запрос не ушёл. Попробуйте ещё раз.</string>
+    <string name="air_group_contact_added_format">%1$s теперь в ваших контактах</string>
+    <string name="air_group_contact_from_format">Из группы «%1$s»</string>
+    <string name="air_group_contact_from_unnamed">Из вашей общей группы</string>
+    <string name="air_group_contact_band_format">%1$s, из группы «%2$s»</string>
+    <string name="air_group_contact_band_unnamed_format">%1$s, из вашей общей группы</string>
+    <string name="air_group_contact_request_words_format">Принимаю ваш запрос из группы «%1$s»</string>
+    <string name="air_group_contact_request_words">Принимаю ваш запрос из нашей группы</string>
+    <string name="air_group_member_key_title">Ключ в этой группе</string>
+    <string name="air_group_member_key_note">Этот ключ действует только в этой группе, по нему в контакты не добавить. Нажмите «Добавить в контакты».</string>
+    <string name="air_nc_verdict_member_format">Это ключ %1$s в группе «%2$s», а не ID</string>
+    <string name="air_nc_verdict_member_unnamed_format">Это ключ %1$s в одной из ваших групп, а не ID</string>
+    <string name="air_nc_send_member_request">Отправить запрос через группу</string>
+    <string name="air_cmd_member_format">%1$s в группе «%2$s»</string>
+    <string name="air_cmd_member_note">Отправить запрос в контакты через группу</string>
 </resources>

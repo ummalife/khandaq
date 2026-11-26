@@ -829,10 +829,14 @@ final class AirTranscript
             views.author.setTextColor(entry.authorColor);
             views.author.setVisibility(shownAuthor != null ? View.VISIBLE : View.GONE);
         }
+        // KHANDAQ (26.11.2026): a private message stands out from the messages to the group: its note says who
+        // sees it, in the private colour behind a lock, and the entry stands on the private ground.
+        final boolean privateEntry = !TextUtils.isEmpty(entry.privateNote);
         if (views.note != null)
         {
             views.note.setText(entry.privateNote);
-            views.note.setVisibility(TextUtils.isEmpty(entry.privateNote) ? View.GONE : View.VISIBLE);
+            views.note.setVisibility(privateEntry ? View.VISIBLE : View.GONE);
+            bindPrivateNote(views.note, privateEntry);
         }
         if (views.unverified != null)
         {
@@ -862,10 +866,15 @@ final class AirTranscript
 
         if (views.container != null)
         {
-            // Chosen for the message actions, or naming you: the selected ground, as on iOS.
-            if (selected || (entry.mentionsYou && m.direction != 1))
+            // Chosen for the message actions, or naming you: the selected ground, as on iOS. A private message has
+            // its own ground, which a mention in it does not change: it is yours anyway.
+            if (selected || (entry.mentionsYou && m.direction != 1 && !privateEntry))
             {
                 views.container.setBackgroundResource(selectionPlate(views.container));
+            }
+            else if (privateEntry)
+            {
+                views.container.setBackgroundResource(R.drawable.air_bg_entry_private);
             }
             else
             {
@@ -893,6 +902,33 @@ final class AirTranscript
                               && ((Spanned) shown).getSpans(0, shown.length(), ClickableSpan.class).length > 0;
         views.text.setImportantForAccessibility(links ? View.IMPORTANT_FOR_ACCESSIBILITY_YES
                                                       : View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+    }
+
+    /**
+     * The note of a private message: the private colour and the lock before it, at the caption's size; any
+     * other entry the row is recycled for gets the note's plain look back.
+     */
+    private static void bindPrivateNote(final TextView note, final boolean privateEntry)
+    {
+        final Context context = note.getContext();
+        if (!privateEntry)
+        {
+            note.setTextColor(AirUi.color(context, R.color.kq_ink_2));
+            note.setCompoundDrawablesRelative(null, null, null, null);
+            return;
+        }
+        final int ink = AirUi.color(context, R.color.kq_private);
+        note.setTextColor(ink);
+        final Drawable lock = AppCompatResources.getDrawable(context, R.drawable.kq_ic_lock);
+        if (lock != null)
+        {
+            final Drawable tinted = DrawableCompat.wrap(lock.mutate());
+            DrawableCompat.setTint(tinted, ink);
+            final int size = Math.round(note.getTextSize());
+            tinted.setBounds(0, 0, size, size);
+            note.setCompoundDrawablesRelative(tinted, null, null, null);
+            note.setCompoundDrawablePadding(context.getResources().getDimensionPixelSize(R.dimen.kq_space_4));
+        }
     }
 
     private static AirConversationModel.EntryStatus outgoingStatus(final GroupMessage m, final GroupEntry entry)

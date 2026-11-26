@@ -1667,16 +1667,27 @@ public class HelperFriend
      */
     static void add_friend_real(String friend_tox_id, @Nullable final AirComposerNotice.Field refusals)
     {
+        add_friend_real(friend_tox_id, null, refusals);
+    }
+
+    /**
+     * KHANDAQ (26.11.2026): as above with the request's own message, null for the greeting of New contact
+     * (the answer to an offer from a member of a group carries its marker, GroupContactExchange). True when
+     * the request went and the contact is kept.
+     */
+    static boolean add_friend_real(String friend_tox_id, @Nullable final String message,
+                                   @Nullable final AirComposerNotice.Field refusals)
+    {
         if (friend_tox_id == null)
         {
             Log.i(TAG, "add_friend_real:add friend ID = NULL");
-            return;
+            return false;
         }
 
         if (!is_tox_profile_ready())
         {
             refuse_friend_add(context_s.getString(R.string.add_friend_failed_not_ready), false, refusals);
-            return;
+            return false;
         }
 
         friend_tox_id = HelperGeneric.normalize_tox_address(friend_tox_id);
@@ -1684,7 +1695,7 @@ public class HelperFriend
         {
             Log.i(TAG, "add_friend_real:invalid friend ID");
             refuse_friend_add(context_s.getString(R.string.add_friend_failed_invalid_id), false, refusals);
-            return;
+            return false;
         }
 
         final String friend_public_key = friend_tox_id.substring(0, (TOX_PUBLIC_KEY_SIZE * 2));
@@ -1693,24 +1704,25 @@ public class HelperFriend
         {
             refuse_friend_add(context_s.getString(R.string.add_self_disabled_use_favorites), false, refusals);
             FavoritesChatHelper.openChat(context_s);
-            return;
+            return false;
         }
 
         if (lookup_friendlist_by_pubkey(friend_public_key) != null)
         {
             refuse_friend_add(context_s.getString(R.string.add_friend_already_in_contacts), false, refusals);
-            return;
+            return false;
         }
 
         if (sync_tox_friend_to_contacts(friend_public_key))
         {
             refuse_friend_add(context_s.getString(R.string.add_friend_already_in_contacts), false, refusals);
-            return;
+            return false;
         }
 
         Log.i(TAG, "add_friend_real:add friend ID len:" + friend_tox_id.length());
         // KHANDAQ (redesign, E11): the greeting of New contact instead of the fork's "Hi".
-        long friendnum = MainActivity.tox_friend_add(friend_tox_id, context_s.getString(R.string.air_nc_greeting));
+        final String request_message = message != null ? message : context_s.getString(R.string.air_nc_greeting);
+        long friendnum = MainActivity.tox_friend_add(friend_tox_id, request_message);
         Log.i(TAG, "add_friend_real:add friend #:" + friendnum);
 
         if (friendnum >= 0)
@@ -1725,12 +1737,10 @@ public class HelperFriend
             if (persist_new_friend_contact(friend_public_key, friendnum))
             {
                 display_toast(context_s.getString(R.string.add_friend_success), false, 300);
+                return true;
             }
-            else
-            {
-                refuse_friend_add(context_s.getString(R.string.air_contact_add_failed), true, refusals);
-            }
-            return;
+            refuse_friend_add(context_s.getString(R.string.air_contact_add_failed), true, refusals);
+            return false;
         }
 
         // toxcore refused it: the words, and the code iOS gives for the same refusal under Details.
@@ -1745,10 +1755,11 @@ public class HelperFriend
             {
                 refuse_friend_add(friend_add_error_text(friendnum), true, refusals, code);
             }
-            return;
+            return false;
         }
 
         refuse_friend_add(friend_add_error_text(friendnum), true, refusals, code);
+        return false;
     }
 
     /** What stopped add_friend_real, at the caller's place for it, or as the toast it was before. */

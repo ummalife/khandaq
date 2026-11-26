@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- KHANDAQ (26.11.2026): an entry of a group that only its two members see, a private message: the private
+     ground, rounded as the selected plate. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/kq_private_soft" />
+    <corners android:radius="@dimen/kq_radius_small" />
+</shape>

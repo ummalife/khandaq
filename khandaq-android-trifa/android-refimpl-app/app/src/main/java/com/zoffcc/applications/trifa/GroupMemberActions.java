@@ -35,8 +35,6 @@ import androidx.core.widget.NestedScrollView;
 import androidx.core.widget.TextViewCompat;
 
 import static com.zoffcc.applications.trifa.FriendListHolder.show_messagelist_acticvity_for_friend;
-import static com.zoffcc.applications.trifa.HelperFriend.add_friend_real;
-import static com.zoffcc.applications.trifa.HelperFriend.lookup_friendlist_by_pubkey;
 import static com.zoffcc.applications.trifa.HelperGeneric.display_toast;
 import static com.zoffcc.applications.trifa.HelperGroup.get_group_peernum_from_peer_pubkey;
 import static com.zoffcc.applications.trifa.HelperGroup.group_notification_silent_peer_get;
@@ -115,7 +113,10 @@ final class GroupMemberActions
             return;
         }
 
-        final boolean is_friend = lookup_friendlist_by_pubkey(peer_pubkey) != null;
+        // KHANDAQ (26.11.2026): the member's key here is theirs in this group only, never a contact's; the
+        // contact behind them is the one the two of them traded IDs for (GroupContactExchange).
+        final boolean is_friend = GroupContactExchange.contactOfMember(group_id, peer_pubkey) != null;
+        final boolean copyable = GroupContactExchange.addressOfMember(group_id, peer_pubkey) != null;
         final int self_role = tox_group_self_get_role(group_num);
         // KHANDAQ (redesign, E14): toxcore's role while the member is in the peer list, else the one stored
         // here; an unknown role offers no role or removal action at all.
@@ -129,8 +130,9 @@ final class GroupMemberActions
             return;
         }
         final LinearLayout plate = AirScreenKit.plate(sheet.context);
-        for (final AirGroupMemberChoices.Choice choice : AirGroupMemberChoices.sheet(is_friend, muted, peer_role,
-                                                                                    self_role, probable_bot))
+        for (final AirGroupMemberChoices.Choice choice : AirGroupMemberChoices.sheet(is_friend, copyable, muted,
+                                                                                    peer_role, self_role,
+                                                                                    probable_bot))
         {
             final AirSettingRow row = new AirSettingRow(sheet.context, context.getString(choiceLabel(choice)), false);
             if (choice == AirGroupMemberChoices.Choice.KICK)
@@ -200,14 +202,27 @@ final class GroupMemberActions
                     showPrivateMessageDialog(context, group_id, peer_pubkey, display_name);
                     break;
                 case OPEN_CHAT:
-                    show_messagelist_acticvity_for_friend(context, peer_pubkey);
+                {
+                    final String contact = GroupContactExchange.contactOfMember(group_id, peer_pubkey);
+                    if (contact != null)
+                    {
+                        show_messagelist_acticvity_for_friend(context, contact);
+                    }
                     break;
+                }
                 case ADD_FRIEND:
-                    addFriend(context, peer_pubkey);
+                    addFriend(context, group_id, peer_pubkey, display_name,
+                              (text, failed) -> sayRefusal(context, text, failed, OLDER_PLACES, null));
                     break;
                 case COPY_ID:
-                    copyToClipboard(context, peer_pubkey);
+                {
+                    final String address = GroupContactExchange.addressOfMember(group_id, peer_pubkey);
+                    if (address != null)
+                    {
+                        copyToClipboard(context, address);
+                    }
                     break;
+                }
                 case MUTE:
                 case UNMUTE:
                 {
@@ -241,23 +256,15 @@ final class GroupMemberActions
         }
     }
 
-    /** Adds the member as a contact by their key; what stops it is said where the member was chosen. */
-    static void addFriend(final Context context, final String peer_pubkey)
+    /**
+     * KHANDAQ (26.11.2026): asks the member to become a contact. Their key in the group adds nobody (toxcore
+     * makes a key pair per group), so the offer with our ID goes to them over the group and they accept it
+     * as a contact request (GroupContactExchange); {@code say} tells where the member was chosen what happened.
+     */
+    static void addFriend(final Context context, final String group_id, final String peer_pubkey,
+                          final String display_name, final GroupContactExchange.Say say)
     {
-        add_friend_real(peer_pubkey.toUpperCase(), new AirComposerNotice.Field()
-        {
-            @Override
-            public boolean say(final CharSequence text, final boolean failed)
-            {
-                return sayRefusal(context, text, failed, OLDER_PLACES, null);
-            }
-
-            @Override
-            public boolean say(final CharSequence text, final boolean failed, @Nullable final String code)
-            {
-                return sayRefusal(context, text, failed, OLDER_PLACES, code);
-            }
-        });
+        GroupContactExchange.offer(context, group_id, peer_pubkey, display_name, say);
     }
 
     /** The member's messages in this group come with or without a notification on this device. */

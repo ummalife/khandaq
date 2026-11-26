@@ -32,4 +32,6 @@
     <!-- Testers' ideas (0.2.67): an emoji of the reaction bar over a held message, in its 48dp target; a glyph,
          so it keeps its size while the text grows. -->
     <dimen name="air_reaction_bar_emoji">24dp</dimen>
+    <!-- KHANDAQ (26.11.2026): a row of the members "@" offers over the composer of a group, a 48dp target. -->
+    <dimen name="group_mention_row_height">52dp</dimen>
 </resources>

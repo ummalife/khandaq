@@ -240,6 +240,11 @@ final class ChatReplyPreviewController
         {
             return;
         }
+        if (message.private_message != 0)
+        {
+            answerPrivately(context, message);
+            return;
+        }
         final String previewText = previewTextForGroupMessage(context, message);
         if (previewText == null || previewText.trim().isEmpty())
         {
@@ -296,6 +301,23 @@ final class ChatReplyPreviewController
         }
         meta.previewText = previewText;
         show(context, meta);
+    }
+
+    /**
+     * KHANDAQ (26.11.2026): Reply on a private message of a group. A reply into the group would quote the
+     * private words to every member (DESIGN-group-contacts-private-mentions.md), so the answer goes
+     * privately to the other one of the two: the author of a message we got, the recipient of ours.
+     */
+    private static void answerPrivately(final Context context, final GroupMessage message)
+    {
+        final String member = message.direction == 1 ? message.sent_privately_to_tox_group_peer_pubkey
+                                                     : message.tox_group_peer_pubkey;
+        if (member == null || member.length() != 64 || message.group_identifier == null)
+        {
+            return;
+        }
+        GroupMemberActions.showPrivateMessageDialog(context, message.group_identifier, member,
+                                                    GroupContactExchange.memberName(message.group_identifier, member));
     }
 
     static void startReplyToPlainText(final Context context, final String quoteText)

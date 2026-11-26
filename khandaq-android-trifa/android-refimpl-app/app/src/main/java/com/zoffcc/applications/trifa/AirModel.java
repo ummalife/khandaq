@@ -482,7 +482,12 @@ final class AirModel
         {
             CONTACT,
             /** An invitation to a group: it names the group and the contact who invites. */
-            GROUP_INVITE
+            GROUP_INVITE,
+            /**
+             * KHANDAQ (26.11.2026): a member of a group asks to become a contact (GroupContactExchange): it
+             * names the member and the group; Accept sends our request to their ID.
+             */
+            GROUP_CONTACT
         }
 
         /** A request: the public key, upper case, one card per person however often they ask. An invitation: its ID. */
@@ -494,7 +499,10 @@ final class AirModel
         final String timeText;
         /** When it arrived, in milliseconds. */
         final long date;
-        /** For an invitation: the group's name (may be empty), who invites and whether they are online now. */
+        /**
+         * For an invitation: the group's name (may be empty), who invites and whether they are online now. For
+         * an offer from a member of a group: the group's name and the member's name there.
+         */
         final String groupName;
         final String inviterName;
         final boolean inviterOnline;
@@ -517,6 +525,13 @@ final class AirModel
             this.groupName = groupName == null ? "" : groupName.trim();
             this.inviterName = inviterName == null ? "" : inviterName.trim();
             this.inviterOnline = inviterOnline;
+        }
+
+        /** An offer from a member of a group: one card per person, as a request is. */
+        static Request groupContact(final String publicKey, final String memberName, final String groupName,
+                                    final String timeText, final long date)
+        {
+            return new Request(Kind.GROUP_CONTACT, null, publicKey, "", timeText, date, groupName, memberName, false);
         }
 
         static Request invite(final String id, final String inviterKey, final String groupName, final String inviterName,

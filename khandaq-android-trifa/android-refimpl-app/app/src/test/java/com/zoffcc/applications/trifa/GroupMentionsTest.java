@@ -4,13 +4,14 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
+import java.util.Map;
 import java.util.regex.Matcher;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -99,14 +100,84 @@ public class GroupMentionsTest
     }
 
     @Test
-    public void a_name_with_nothing_to_keep_takes_its_key_and_a_twin_the_start_of_its_own()
+    public void twins_all_take_the_start_of_their_key_whatever_the_order_of_the_list()
     {
-        final Set<String> used = new HashSet<>();
-        assertEquals("u" + KEY_A.substring(0, 8), GroupMentionHelper.uniqueHandle("...", KEY_A, used, true));
-        assertEquals("Иса", GroupMentionHelper.uniqueHandle("Иса", KEY_B, used, true));
-        assertEquals("Иса_" + KEY_C.substring(0, 4), GroupMentionHelper.uniqueHandle("Иса", KEY_C, used, true));
-        // Case makes no other handle: the name in lower case is taken by the same name capitalised.
-        assertEquals("иса_" + KEY_D.substring(0, 4), GroupMentionHelper.uniqueHandle("иса", KEY_D, used, true));
+        final List<HelperGroup.GroupMemberDisplay> members = Arrays.asList(
+                member(KEY_A, "...", true, false),
+                member(KEY_B, "Иса", true, false),
+                member(KEY_C, "Иса", false, false),
+                member(KEY_D, "иса", false, false));
+        final Map<String, String> handles = GroupMentionHelper.mentionHandles(members);
+        assertEquals("u" + KEY_A.substring(0, 8), handles.get(KEY_A));
+        // As on iOS and desktop: case makes no other handle, and none of the three keeps the bare one.
+        assertEquals("Иса_" + KEY_B.substring(0, 4), handles.get(KEY_B));
+        assertEquals("Иса_" + KEY_C.substring(0, 4), handles.get(KEY_C));
+        assertEquals("иса_" + KEY_D.substring(0, 4), handles.get(KEY_D));
+        final List<HelperGroup.GroupMemberDisplay> reversed = new ArrayList<>(members);
+        Collections.reverse(reversed);
+        assertEquals(handles, GroupMentionHelper.mentionHandles(reversed));
+    }
+
+    @Test
+    public void twins_whose_keys_start_alike_take_eight_characters()
+    {
+        final String first = "ABCD1111" + String.format(Locale.ROOT, "%056d", 0);
+        final String second = "ABCD2222" + String.format(Locale.ROOT, "%056d", 0);
+        final Map<String, String> handles = GroupMentionHelper.mentionHandles(Arrays.asList(
+                member(first, "Ali", true, false), member(second, "Ali", true, false)));
+        assertEquals("Ali_ABCD1111", handles.get(first));
+        assertEquals("Ali_ABCD2222", handles.get(second));
+    }
+
+    @Test
+    public void a_token_names_the_member_of_its_handle_and_a_twin_bare_handle_names_nobody()
+    {
+        final Map<String, String> handles = GroupMentionHelper.mentionHandles(Arrays.asList(
+                member(KEY_A, "Ali", true, false),
+                member(KEY_B, "Иса", true, false),
+                member(KEY_C, "Иса", false, false)));
+        assertEquals(KEY_A, GroupMentionHelper.keyOfHandle(handles, "ali"));
+        assertEquals(KEY_C, GroupMentionHelper.keyOfHandle(handles,
+                                                           ("Иса_" + KEY_C.substring(0, 4)).toLowerCase(Locale.ROOT)));
+        assertNull(GroupMentionHelper.keyOfHandle(handles, "Иса"));
+        assertNull(GroupMentionHelper.keyOfHandle(handles, null));
+        // A member's key is upper case in the map whatever case it came in.
+        final Map<String, String> lower = GroupMentionHelper.mentionHandles(
+                Collections.singletonList(member(KEY_A.toLowerCase(Locale.ROOT), "Ali", true, false)));
+        assertEquals("Ali", lower.get(KEY_A));
+    }
+
+    @Test
+    public void the_list_after_at_matches_a_twin_by_the_start_of_its_key()
+    {
+        final List<HelperGroup.GroupMemberDisplay> all = Arrays.asList(
+                member(KEY_B, "Иса", true, false),
+                member(KEY_C, "Иса", false, false));
+        assertEquals(Arrays.asList("Иса"), names(GroupMentionInputController.matchingMembers(
+                all, ("Иса_" + KEY_C.substring(0, 3)).toLowerCase(Locale.ROOT))));
+        assertEquals(2, GroupMentionInputController.matchingMembers(all, "иса").size());
+    }
+
+    @Test
+    public void a_text_mentions_you_by_a_whole_token_that_no_block_gave_to_someone_else()
+    {
+        final GroupMentionHelper.ParsedGroupText plain = new GroupMentionHelper.ParsedGroupText();
+        plain.bodyText = "@Alina, @Мурад_Тест: look";
+        assertTrue(GroupMentionHelper.mentionsSelfByText(plain, "Мурад_Тест", "Мурад_Тест"));
+        // "@Ali" used to be found inside "@Alina".
+        assertFalse(GroupMentionHelper.mentionsSelfByText(plain, "Ali", "Ali"));
+
+        // A twin's bare handle: ours by name when no block says whose it is...
+        final GroupMentionHelper.ParsedGroupText bare = new GroupMentionHelper.ParsedGroupText();
+        bare.bodyText = "@Иса hi";
+        assertTrue(GroupMentionHelper.mentionsSelfByText(bare, "Иса_" + KEY_C.substring(0, 4), "Иса"));
+        // ...and not ours when the block gave it to the other twin.
+        final GroupMentionHelper.MentionEntry other = new GroupMentionHelper.MentionEntry();
+        other.pubkey = KEY_B;
+        other.handle = "Иса";
+        bare.mentions.add(other);
+        assertFalse(GroupMentionHelper.mentionsSelfByText(bare, "Иса_" + KEY_C.substring(0, 4), "Иса"));
+        assertFalse(GroupMentionHelper.mentionsSelfByText(bare, "", "Иса"));
     }
 
     @Test

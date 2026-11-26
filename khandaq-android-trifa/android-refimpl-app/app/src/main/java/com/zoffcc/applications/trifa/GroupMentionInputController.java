@@ -17,10 +17,10 @@ import java.text.Collator;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
+import java.util.Map;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -159,22 +159,26 @@ final class GroupMentionInputController
             return;
         }
 
-        final List<HelperGroup.GroupMemberDisplay> filtered = filterMembers(groupId, query);
+        // The handles are made from every member of the group, so a twin's handle does not depend on who the
+        // query leaves in the list; the list, the row and the inserted text all take theirs from this map.
+        final List<HelperGroup.GroupMemberDisplay> all =
+                dedupe_group_members_for_display(collect_group_members_for_display(groupId));
+        final Map<String, String> handles = GroupMentionHelper.mentionHandles(all);
+        final List<HelperGroup.GroupMemberDisplay> filtered = matchingMembers(all, handles, query);
         if (filtered.isEmpty())
         {
             dismiss();
             return;
         }
 
-        adapter.setMembers(filtered);
+        adapter.setMembers(filtered, handles);
         showPopup();
     }
 
-    private List<HelperGroup.GroupMemberDisplay> filterMembers(final String groupId, final String query)
+    static List<HelperGroup.GroupMemberDisplay> matchingMembers(final List<HelperGroup.GroupMemberDisplay> all,
+                                                                final String query)
     {
-        final List<HelperGroup.GroupMemberDisplay> all =
-                dedupe_group_members_for_display(collect_group_members_for_display(groupId));
-        return matchingMembers(all, query);
+        return matchingMembers(all, GroupMentionHelper.mentionHandles(all), query);
     }
 
     /**
@@ -183,12 +187,11 @@ final class GroupMentionInputController
      * accents; online first, then by name.
      */
     static List<HelperGroup.GroupMemberDisplay> matchingMembers(final List<HelperGroup.GroupMemberDisplay> all,
+                                                                final Map<String, String> handles,
                                                                 final String query)
     {
         final List<HelperGroup.GroupMemberDisplay> result = new ArrayList<>();
         final String q = fold(query);
-        final Set<String> usedHandles = new HashSet<>();
-
         for (int i = 0; i < all.size(); i++)
         {
             final HelperGroup.GroupMemberDisplay member = all.get(i);
@@ -197,7 +200,7 @@ final class GroupMentionInputController
                 continue;
             }
 
-            final String handle = GroupMentionHelper.mentionHandleForMember(member, usedHandles, true);
+            final String handle = GroupMentionHelper.handleOf(handles, member);
             if (q.isEmpty() || fold(handle).startsWith(q) || fold(member.name).contains(q))
             {
                 result.add(member);
@@ -282,8 +285,7 @@ final class GroupMentionInputController
         }
 
         final int cursor = Math.max(mentionStart, inputField.getSelectionStart());
-        final Set<String> used = new HashSet<>();
-        final String handle = GroupMentionHelper.mentionHandleForMember(member, used, false);
+        final String handle = adapter.handleOf(member);
         final String token = GroupMentionHelper.insertMentionToken(handle);
 
         suppressWatcher = true;
@@ -303,15 +305,22 @@ final class GroupMentionInputController
     private final class MentionAdapter extends RecyclerView.Adapter<MentionAdapter.Holder>
     {
         private final List<HelperGroup.GroupMemberDisplay> members = new ArrayList<>();
+        private Map<String, String> handles = new HashMap<>();
 
-        void setMembers(final List<HelperGroup.GroupMemberDisplay> items)
+        void setMembers(final List<HelperGroup.GroupMemberDisplay> items, final Map<String, String> byKey)
         {
             members.clear();
             if (items != null)
             {
                 members.addAll(items);
             }
+            handles = byKey == null ? new HashMap<>() : byKey;
             notifyDataSetChanged();
+        }
+
+        String handleOf(final HelperGroup.GroupMemberDisplay member)
+        {
+            return GroupMentionHelper.handleOf(handles, member);
         }
 
         @NonNull
@@ -327,8 +336,7 @@ final class GroupMentionInputController
         public void onBindViewHolder(@NonNull final Holder holder, final int position)
         {
             final HelperGroup.GroupMemberDisplay member = members.get(position);
-            final Set<String> used = new HashSet<>();
-            final String handle = GroupMentionHelper.mentionHandleForMember(member, used, false);
+            final String handle = handleOf(member);
 
             String displayName = member.name == null ? handle : member.name;
             final int paren = displayName.indexOf(" (");

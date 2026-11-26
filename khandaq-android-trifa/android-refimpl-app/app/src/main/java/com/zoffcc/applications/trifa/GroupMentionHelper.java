@@ -18,10 +18,14 @@ import com.luseen.autolinklibrary.EmojiTextViewLinks;
 import org.khandaq.messenger.R;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -146,6 +150,7 @@ final class GroupMentionHelper
 
         final List<HelperGroup.GroupMemberDisplay> members =
                 dedupe_group_members_for_display(collect_group_members_for_display(groupIdentifier));
+        final Map<String, String> handles = mentionHandles(members);
         final Matcher matcher = MENTION_TOKEN.matcher(bodyText);
         final Set<String> seenPubkeys = new HashSet<>();
 
@@ -157,13 +162,11 @@ final class GroupMentionHelper
                 continue;
             }
 
-            final HelperGroup.GroupMemberDisplay matched = findMemberForMentionToken(members, token);
-            if (matched == null || matched.pubkey == null)
+            final String pubkeyKey = keyOfHandle(handles, token);
+            if (pubkeyKey == null)
             {
                 continue;
             }
-
-            final String pubkeyKey = matched.pubkey.toUpperCase(Locale.ENGLISH);
             if (seenPubkeys.contains(pubkeyKey))
             {
                 continue;
@@ -179,87 +182,104 @@ final class GroupMentionHelper
         return result;
     }
 
-    private static HelperGroup.GroupMemberDisplay findMemberForMentionToken(
-            final List<HelperGroup.GroupMemberDisplay> members, final String token)
+    /** Key characters a handle two members would share gets: 4, and 8 when that still leaves two alike. */
+    private static final int SHORT_KEY_DIGITS = 4;
+    private static final int LONG_KEY_DIGITS = 8;
+
+    /**
+     * KHANDAQ (26.11.2026): the handle of every member, by the member's key in upper case, made as iOS and
+     * desktop make them (DESIGN-group-contacts-private-mentions.md): the handle of the name, else "u" and the
+     * first 8 characters of the key. A handle two members would share, in any case of its letters, gets "_" and
+     * the first 4 characters of the key for each of them, and 8 when that still leaves two alike.
+     *
+     * The first member used to keep the bare handle and the next one got the suffix, so the handle followed
+     * the order of the list. And the list, the inserted text and the mention block each made their own: the
+     * list offered "@Ali" for both twins, the second one picked went out as "@Ali", and the block named the first.
+     * One map, in no order, names everyone alike on every client and in every place here.
+     */
+    static Map<String, String> mentionHandles(@Nullable final List<HelperGroup.GroupMemberDisplay> members)
     {
-        if (members == null || token == null)
+        final Map<String, String> base = new LinkedHashMap<>();
+        if (members != null)
+        {
+            for (final HelperGroup.GroupMemberDisplay member : members)
+            {
+                final String key = keyOf(member);
+                if (key == null || base.containsKey(key))
+                {
+                    continue;
+                }
+                final String handle = mentionHandleFromName(member.name);
+                base.put(key, handle.isEmpty() ? "u" + head(key, LONG_KEY_DIGITS) : handle);
+            }
+        }
+        final Map<String, String> handles = new LinkedHashMap<>(base);
+        for (final int digits : new int[]{SHORT_KEY_DIGITS, LONG_KEY_DIGITS})
+        {
+            final Map<String, Integer> uses = new HashMap<>();
+            for (final String handle : handles.values())
+            {
+                final String folded = handle.toLowerCase(Locale.ROOT);
+                final Integer seen = uses.get(folded);
+                uses.put(folded, seen == null ? 1 : seen + 1);
+            }
+            for (final Map.Entry<String, String> entry : handles.entrySet())
+            {
+                final Integer seen = uses.get(entry.getValue().toLowerCase(Locale.ROOT));
+                if (seen != null && seen > 1)
+                {
+                    entry.setValue(base.get(entry.getKey()) + "_" + head(entry.getKey(), digits));
+                }
+            }
+        }
+        return handles;
+    }
+
+    /** The handle of this member in that map, or the handle of their name when the map does not have them. */
+    static String handleOf(final Map<String, String> handles, final HelperGroup.GroupMemberDisplay member)
+    {
+        final String key = keyOf(member);
+        final String handle = key == null ? null : handles.get(key);
+        if (handle != null)
+        {
+            return handle;
+        }
+        final String fromName = member == null ? "" : mentionHandleFromName(member.name);
+        return fromName.isEmpty() ? "user" : fromName;
+    }
+
+    /** The key whose handle the token is, without regard to case; of two alike, the lower key, as on iOS. */
+    @Nullable
+    static String keyOfHandle(final Map<String, String> handles, @Nullable final String token)
+    {
+        if (token == null || token.isEmpty())
         {
             return null;
         }
-
-        for (int i = 0; i < members.size(); i++)
+        for (final Map.Entry<String, String> entry : new TreeMap<>(handles).entrySet())
         {
-            final HelperGroup.GroupMemberDisplay member = members.get(i);
-            if (member == null)
+            if (entry.getValue().equalsIgnoreCase(token))
             {
-                continue;
-            }
-            final String baseHandle = mentionHandleFromName(member.name);
-            if (!baseHandle.isEmpty() && token.equalsIgnoreCase(baseHandle))
-            {
-                return member;
+                return entry.getKey();
             }
         }
-
-        for (int i = 0; i < members.size(); i++)
-        {
-            final HelperGroup.GroupMemberDisplay member = members.get(i);
-            if (member == null || member.pubkey == null)
-            {
-                continue;
-            }
-            final Set<String> used = new HashSet<>();
-            final String unique = uniqueHandle(member.name, member.pubkey, used, false);
-            if (token.equalsIgnoreCase(unique))
-            {
-                return member;
-            }
-        }
-
         return null;
     }
 
-    static String mentionHandleForMember(final HelperGroup.GroupMemberDisplay member,
-                                         final Set<String> usedHandles,
-                                         final boolean reserveHandle)
+    @Nullable
+    private static String keyOf(@Nullable final HelperGroup.GroupMemberDisplay member)
     {
-        if (member == null)
+        if (member == null || member.pubkey == null)
         {
-            return "user";
+            return null;
         }
-        return uniqueHandle(member.name, member.pubkey, usedHandles, reserveHandle);
+        final String key = member.pubkey.trim().toUpperCase(Locale.ROOT);
+        return key.isEmpty() ? null : key;
     }
 
-    static String uniqueHandle(@Nullable final String displayName,
-                               @Nullable final String pubkey,
-                               final Set<String> usedHandles,
-                               final boolean reserve)
+    private static String head(final String key, final int digits)
     {
-        String base = mentionHandleFromName(displayName);
-        if (base.isEmpty() && pubkey != null && pubkey.length() >= 8)
-        {
-            base = "u" + pubkey.substring(0, 8);
-        }
-        if (base.isEmpty())
-        {
-            base = "user";
-        }
-
-        String candidate = base;
-        int suffix = 2;
-        while (usedHandles.contains(candidate.toLowerCase(Locale.ENGLISH)))
-        {
-            final String tail = (pubkey != null && pubkey.length() >= 4)
-                    ? pubkey.substring(0, 4) : String.valueOf(suffix);
-            candidate = base + "_" + tail;
-            suffix++;
-        }
-
-        if (reserve)
-        {
-            usedHandles.add(candidate.toLowerCase(Locale.ENGLISH));
-        }
-        return candidate;
+        return key.length() <= digits ? key : key.substring(0, digits);
     }
 
     static String mentionHandleFromName(@Nullable final String displayName)
@@ -318,6 +338,44 @@ final class GroupMentionHelper
         return "@" + handle + " ";
     }
 
+    /**
+     * KHANDAQ (26.11.2026): a text whose block does not name us mentions us by a whole @token that is our handle,
+     * or the handle of our name: a sender that made handles in the order of its list wrote a twin's bare handle,
+     * and an older one sent a Cyrillic mention with no block at all. A token the block already gave to someone
+     * else is theirs, and "@Ali" is not found inside "@Alina" any more.
+     */
+    static boolean mentionsSelfByText(final ParsedGroupText parsed, final String selfHandle,
+                                      @Nullable final String selfNameHandle)
+    {
+        if (parsed == null || parsed.bodyText == null || selfHandle == null || selfHandle.isEmpty())
+        {
+            return false;
+        }
+        final Set<String> taken = new HashSet<>();
+        for (final MentionEntry entry : parsed.mentions)
+        {
+            if (entry.handle != null)
+            {
+                taken.add(entry.handle.toLowerCase(Locale.ROOT));
+            }
+        }
+        final Matcher tokens = MENTION_TOKEN.matcher(parsed.bodyText);
+        while (tokens.find())
+        {
+            final String token = tokens.group(1);
+            if (taken.contains(token.toLowerCase(Locale.ROOT)))
+            {
+                continue;
+            }
+            if (token.equalsIgnoreCase(selfHandle)
+                    || (selfNameHandle != null && !selfNameHandle.isEmpty() && token.equalsIgnoreCase(selfNameHandle)))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static boolean isSelfMentioned(final String rawText, final String groupIdentifier)
     {
         if (TextUtils.isEmpty(rawText) || TextUtils.isEmpty(groupIdentifier))
@@ -360,10 +418,8 @@ final class GroupMentionHelper
                 return false;
             }
 
-            final Set<String> used = new HashSet<>();
-            final String selfHandle = mentionHandleForMember(selfMember, used, false);
-            return parsed.bodyText != null
-                    && parsed.bodyText.toLowerCase(Locale.ENGLISH).contains("@" + selfHandle.toLowerCase(Locale.ENGLISH));
+            return mentionsSelfByText(parsed, handleOf(mentionHandles(members), selfMember),
+                                      mentionHandleFromName(selfMember.name));
         }
         catch (Exception ignored)
         {
@@ -433,10 +489,18 @@ final class GroupMentionHelper
 
         final List<HelperGroup.GroupMemberDisplay> members =
                 dedupe_group_members_for_display(collect_group_members_for_display(groupIdentifier));
-        final HelperGroup.GroupMemberDisplay matched = findMemberForMentionToken(members, handle);
-        if (matched != null && matched.pubkey != null)
+        final String key = keyOfHandle(mentionHandles(members), handle);
+        if (key == null)
         {
-            GroupMessageListActivity.open_group_peer_info_activity(context, matched.pubkey, groupIdentifier);
+            return;
+        }
+        for (final HelperGroup.GroupMemberDisplay member : members)
+        {
+            if (key.equals(keyOf(member)))
+            {
+                GroupMessageListActivity.open_group_peer_info_activity(context, member.pubkey, groupIdentifier);
+                return;
+            }
         }
     }
 

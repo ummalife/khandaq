@@ -296,14 +296,14 @@ void TestAirGroup::everyoneOnlineNobodyOnlineAloneAndNotConnected()
     // to members who come online (the phones do): with nobody to get it, Send waits and says so,
     // and no amber dot claims something is on its way.
     const Air::GroupReach nobody = Air::GroupReach::make(9, 9, 0, true);
-    QCOMPARE(AirStrings::groupHeaderText(nobody), QStringLiteral("9 members, nobody online now"));
+    QCOMPARE(AirStrings::groupHeaderText(nobody), QStringLiteral("9 members, only you online now"));
     QCOMPARE(Air::GroupHint::make(nobody).dot, Air::ComposeHint::Dot::None);
     QVERIFY(Air::GroupHint::make(nobody).sendWaits());
     QCOMPARE(AirStrings::groupHintText(Air::GroupHint::make(nobody), nobody),
              QStringLiteral("Nobody else is online: you can send once someone comes online"));
 
     const Air::GroupReach alone = Air::GroupReach::make(1, 1, 0, true);
-    QCOMPARE(AirStrings::groupHeaderText(alone), QStringLiteral("1 member, nobody online now"));
+    QCOMPARE(AirStrings::groupHeaderText(alone), QStringLiteral("1 member, only you online now"));
     QCOMPARE(Air::GroupHint::make(alone).dot, Air::ComposeHint::Dot::None);
     QVERIFY(Air::GroupHint::make(alone).sendWaits());
     QCOMPARE(AirStrings::groupHintText(Air::GroupHint::make(alone), alone),

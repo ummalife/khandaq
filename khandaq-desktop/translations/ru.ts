@@ -1722,9 +1722,9 @@
         <translation>%1, %2 в сети сейчас</translation>
     </message>
     <message>
-        <source>%1, nobody online now</source>
+        <source>%1, only you online now</source>
         <comment>group header: %1 is the member count</comment>
-        <translation>%1, сейчас никого в сети</translation>
+        <translation>%1, сейчас в сети только вы</translation>
     </message>
     <message>
         <source>%1, not connected to the group</source>

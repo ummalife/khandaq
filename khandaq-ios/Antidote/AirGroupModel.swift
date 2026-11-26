@@ -204,6 +204,8 @@ struct AirGroupReach: Equatable {
         guard connected else {
             return String(localized: "air_group_header_offline_format", members)
         }
+        // Connected means you are online, and your own row in the member list says so: with none of
+        // the others online the header says only you, not nobody (tester 26.11).
         if online == 0 {
             return String(localized: "air_group_header_none_format", members)
         }

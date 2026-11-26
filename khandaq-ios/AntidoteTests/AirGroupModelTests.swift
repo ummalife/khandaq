@@ -126,12 +126,12 @@ class AirGroupModelTests: XCTestCase {
                        AirComposeHint(text: "The other member is online and gets it now", dot: .live))
 
         let nobody = AirGroupReach(peerCount: 9, knownMembers: 9, online: 0, connected: true)
-        XCTAssertEqual(nobody.headerText, "9 members, nobody online now")
+        XCTAssertEqual(nobody.headerText, "9 members, only you online now")
         XCTAssertEqual(nobody.hint.dot, .transit)
         XCTAssertEqual(nobody.hint.text, "Nobody is online: members get it when they come online")
 
         let alone = AirGroupReach(peerCount: 1, knownMembers: 1, online: 0, connected: true)
-        XCTAssertEqual(alone.headerText, "1 member, nobody online now")
+        XCTAssertEqual(alone.headerText, "1 member, only you online now")
         XCTAssertEqual(alone.hint, AirComposeHint(text: "Only you are in the group so far: invite people from the group dossier", dot: .none))
 
         let offline = AirGroupReach(peerCount: 9, knownMembers: 9, online: 4, connected: false)
@@ -140,6 +140,9 @@ class AirGroupModelTests: XCTestCase {
         XCTAssertEqual(offline.hint.dot, .transit)
 
         use("ru")
+        XCTAssertEqual(alone.headerText, "1 участник, сейчас в сети только вы",
+                       "you are online in a group you are alone in, so the header must not say nobody is")
+        XCTAssertEqual(nobody.headerText, "9 участников, сейчас в сети только вы")
         XCTAssertEqual(AirGroupReach(peerCount: 22, knownMembers: 22, online: 21, connected: true).hint.text,
                        "Сразу получат все 21: все в сети", "21 is a plural form of one in Russian, not one other member")
         XCTAssertEqual(AirGroupReach(peerCount: 2, knownMembers: 2, online: 1, connected: true).hint.text,

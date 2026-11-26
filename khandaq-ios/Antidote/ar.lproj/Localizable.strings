@@ -1031,7 +1031,7 @@
 "air_group_you_observer" = "أنت مراقب: تقرأ المجموعة لكن لا يمكنك الكتابة. يمكن لمشرف أن يمنحك حق الكتابة.";
 "air_group_members_count" = "%d عضو";
 "air_group_header_format" = "%1$@، %2$d متصلون الآن";
-"air_group_header_none_format" = "%@، لا أحد متصل الآن";
+"air_group_header_none_format" = "%@، لا أحد غيرك متصل الآن";
 "air_group_header_offline_format" = "%@، لا اتصال بالمجموعة";
 "air_group_hint_offline" = "لا اتصال بالمجموعة: تنتظر الرسائل على هذا الجهاز وتُرسل عند الاتصال";
 "air_group_hint_alone" = "أنت وحدك في المجموعة حتى الآن: ادعُ آخرين من ملف المجموعة";

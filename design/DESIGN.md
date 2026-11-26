@@ -401,9 +401,10 @@ The protocol is NGC as it is: the client asks toxcore before acting, these rules
 shows.
 
 - **The header** names the group and says under it how many are in it and how many are online now:
-  "9 members, 4 online now", or "nobody online now", or "not connected to the group". The count is
-  toxcore's peer count, which includes you, or the members listed when that is larger; online counts
-  the others.
+  "9 members, 4 online now", or "only you online now", or "not connected to the group". The count
+  is toxcore's peer count, which includes you, or the members listed when that is larger; online
+  counts the others. With none of them online the header says "only you", not "nobody": your own
+  row in the member list says you are online (tester 26.11).
 - **Get it now** is a strip of the members online besides you, under that line, while you may write.
   A member coming online fades in (appears, with reduced motion). The strip opens the dossier.
 - **The hint under the field** counts the others: "4 of 8 get it now, the rest when they come online"

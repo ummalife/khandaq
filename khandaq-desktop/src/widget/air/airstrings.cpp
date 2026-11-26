@@ -365,7 +365,7 @@ const Source sources[] = {
     {Text::GroupYouMember, QT_TRANSLATE_NOOP3("Air", "You are a member. You write in the group; the founder and the moderators manage it.", "group dossier: Your role")},
     {Text::GroupYouObserver, QT_TRANSLATE_NOOP3("Air", "You are an observer. You read the group but cannot write; a moderator can give you the right to write.", "group dossier: Your role")},
     {Text::GroupHeader, QT_TRANSLATE_NOOP3("Air", "%1, %2 online now", "group header: %1 is the member count, %2 how many of the others are online")},
-    {Text::GroupHeaderNone, QT_TRANSLATE_NOOP3("Air", "%1, nobody online now", "group header: %1 is the member count")},
+    {Text::GroupHeaderNone, QT_TRANSLATE_NOOP3("Air", "%1, only you online now", "group header: %1 is the member count")},
     {Text::GroupHeaderOffline, QT_TRANSLATE_NOOP3("Air", "%1, not connected to the group", "group header: %1 is the member count")},
     {Text::GroupHintOffline, QT_TRANSLATE_NOOP3("Air", "No connection to the group: you can send once it connects", "line under the field of a group: Send waits, the desktop keeps no group message for later")},
     {Text::GroupHintSelfConnecting, QT_TRANSLATE_NOOP3("Air", "No connection to the group: the app is connecting. You can send once it connects", "line under the field of a group while our own node looks for the network: Send waits")},

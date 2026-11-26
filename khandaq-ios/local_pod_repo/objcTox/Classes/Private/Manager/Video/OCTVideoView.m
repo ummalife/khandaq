@@ -13,6 +13,11 @@
 
 @property (strong, nonatomic) CIContext *coreImageContext;
 
+#if TARGET_OS_IPHONE
+// KHANDAQ (calls stage, 26.11): the size of the last frame shown, in pixels; zero before the first one.
+@property (assign, nonatomic) CGSize lastFrameSize;
+#endif
+
 @end
 
 @implementation OCTVideoView
@@ -57,6 +62,17 @@
     // Nothing extra needed — the display layer is configured in initWithFrame:.
 }
 
+// KHANDAQ (calls stage, 26.11): the natural size of the feed is the size of its frame, so the call
+// screen can give the video a rect of the frame's own shape (cover or fit) and never stretch it. The
+// display layer keeps its aspect-fit gravity for any other holder; no frame yet, no intrinsic size.
+- (CGSize)intrinsicContentSize
+{
+    if (self.lastFrameSize.width <= 0 || self.lastFrameSize.height <= 0) {
+        return CGSizeMake(UIViewNoIntrinsicMetric, UIViewNoIntrinsicMetric);
+    }
+    return self.lastFrameSize;
+}
+
 - (void)dealloc
 {
     OCTLogVerbose(@"dealloc");
@@ -66,6 +82,15 @@
 {
     if (! pixelBuffer) {
         return;
+    }
+
+    // KHANDAQ (calls stage, 26.11): a frame of another size (the peer turned the phone, or the first
+    // frame) tells the view that holds the feed, so it places the video by its own shape again.
+    CGSize size = CGSizeMake(CVPixelBufferGetWidth(pixelBuffer), CVPixelBufferGetHeight(pixelBuffer));
+    if (! CGSizeEqualToSize(size, self.lastFrameSize)) {
+        self.lastFrameSize = size;
+        [self invalidateIntrinsicContentSize];
+        [self.superview setNeedsLayout];
     }
 
     CMVideoFormatDescriptionRef formatDescription = NULL;

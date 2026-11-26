@@ -1627,6 +1627,29 @@ public class HelperGroup
     static long send_group_text_message_resilient(@NonNull final String group_identifier, final long group_number,
                                                 @NonNull final String message)
     {
+        return send_group_text_message_resilient(group_identifier, group_number, message, true);
+    }
+
+    /**
+     * KHANDAQ (0.2.69, group message wakes): {@code wakes} is false for a text that waited on this device and goes
+     * now (flush_pending_group_messages_pass): it woke the members away when it began to wait, and wakes nobody again.
+     * A text sent now wakes them when it goes, or at once when it has to wait (PushPreviewSender).
+     */
+    static long send_group_text_message_resilient(@NonNull final String group_identifier, final long group_number,
+                                                @NonNull final String message, final boolean wakes)
+    {
+        final long message_id = send_group_text_message_tries(group_identifier, group_number, message, wakes);
+        if (wakes && (message_id == GROUP_SEND_QUEUE_WHEN_UNCONNECTED))
+        {
+            PushPreviewSender.wakeForWaitingGroupText(group_identifier, message);
+        }
+        return message_id;
+    }
+
+    private static long send_group_text_message_tries(@NonNull final String group_identifier,
+                                                      final long group_number, @NonNull final String message,
+                                                      final boolean wakes)
+    {
         long group_num = group_number;
         for (int attempt = 0; attempt < GROUP_SEND_MAX_ATTEMPTS; attempt++)
         {
@@ -1691,6 +1714,12 @@ public class HelperGroup
                         + " peers=" + tox_group_peer_count(group_num) + " attempt=" + attempt
                         + " conn=" + tox_group_is_connected(group_num) + " msg_id=" + message_id);
                 schedule_group_message_resync(group_num);
+                // KHANDAQ (0.2.69, group message wakes): the text went, now that toxcore gave it its id: the members
+                // away who are our contacts wake. Not for a text that waited: it woke them when it began to wait.
+                if (wakes)
+                {
+                    PushPreviewSender.wakeForGroupText(group_num, group_identifier, message, message_id);
+                }
                 return message_id;
             }
 
@@ -4262,6 +4291,10 @@ public class HelperGroup
         {
             Log.w(TAG, "leave_group_with_notice:EE:" + e.getMessage());
         }
+        // KHANDAQ (0.2.69, group message wakes): the friends online learn a little later that we left (190/02 and
+        // 190/03 without the group), or their messages there would still wake us. The group is gone for the app from
+        // here on, also while toxcore keeps it for the leave notice (GroupPendingLeaves).
+        PushPreviewPeers.groupsChanged();
         // KHANDAQ (0.2.59): with no notice to wait for (no other member, or its send failed) the group is left on the
         // tox thread too, at its next pass, not here. toxcore deletes a group only in a tox_iterate and saves it with
         // the profile until then, and this thread cannot tell which iterate follows its tox_group_leave: left here,
@@ -6166,8 +6199,15 @@ public class HelperGroup
             {
                 notificationText = context_s.getString(R.string.group_mention_notification_prefix) + notificationText;
             }
+            // KHANDAQ (0.2.69, group message wakes): the event key a wake for this text carried, or what it says for
+            // a text that had to wait, so that the alert a push preview already gave is not given again. A private
+            // message wakes nobody.
+            final PushPreviewSeen.Event event = is_private_message ? null
+                                                : PushPreviewSeen.forGroupText(message_id, peer_pubkey,
+                                                                               PushPreviewSender.previewText(m.text),
+                                                                               m.text);
             change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, notificationText,
-                                    m.sent_timestamp, peer_pubkey);
+                                    m.sent_timestamp, peer_pubkey, event);
         }
     }
 
@@ -6501,8 +6541,12 @@ public class HelperGroup
 
         if (do_notification)
         {
+            // KHANDAQ (0.2.69, group message wakes): a contact a wake brought online often gets the text by history
+            // sync while it is still fresh enough to notify (above): the push preview already alerted for it.
             change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname, m.text,
-                                    m.sent_timestamp, m.tox_group_peer_pubkey);
+                                    m.sent_timestamp, m.tox_group_peer_pubkey,
+                                    PushPreviewSeen.forGroupText(m.message_id_tox, m.tox_group_peer_pubkey,
+                                                                 PushPreviewSender.previewText(m.text), m.text));
         }
     }
 
@@ -6696,6 +6740,9 @@ public class HelperGroup
             return;
         }
         NgcGroupFileTransfer.spendPace(data_length, members.length, overRelay);
+        // KHANDAQ (0.2.69, group message wakes): the file's first offer went (here the whole file): the members away
+        // who are our contacts wake, once per file.
+        PushPreviewSender.wakeForGroupFile(g, groupNum);
 
         notify_group_file_send_progress_bytes(g.group_identifier, g.msg_id_hash, length_sum, length_sum);
         NgcGroupFileTransfer.outgoingSent(g);
@@ -8077,10 +8124,11 @@ public class HelperGroup
             return;
         }
         // KHANDAQ (0.2.64): the file's kind in words, as for a file of one person (MainActivity).
+        // KHANDAQ (0.2.69, group message wakes): with the event key a wake for the file carried (gf:).
         change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier,
                                 (groupDb != null) ? groupDb.name : null,
                                 HelperMsgNotification.media_label_for_filename(context_s, displayName),
-                                m.sent_timestamp, m.tox_group_peer_pubkey);
+                                m.sent_timestamp, m.tox_group_peer_pubkey, PushPreviewSeen.forGroupFile(m.msg_id_hash));
     }
 
     static void handle_incoming_group_file_complete(final long groupNumber, final long peerId,
@@ -8283,9 +8331,11 @@ public class HelperGroup
                 {
                 }
                 // KHANDAQ (0.2.64): the file's kind in words, as for a file of one person (MainActivity).
+                // KHANDAQ (0.2.69, group message wakes): with the event key a wake for the file carried (gf:).
                 change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname,
                                         HelperMsgNotification.media_label_for_filename(context_s, displayName),
-                                        m.sent_timestamp, m.tox_group_peer_pubkey);
+                                        m.sent_timestamp, m.tox_group_peer_pubkey,
+                                        PushPreviewSeen.forGroupFile(m.msg_id_hash));
             }
 
             HelperFriend.refresh_chat_list_group_row_wrapper(group_id);
@@ -9210,7 +9260,8 @@ public class HelperGroup
                 {
                     continue;
                 }
-                final long message_id = send_group_text_message_resilient(group_identifier, group_num, pending_msg.text);
+                final long message_id = send_group_text_message_resilient(group_identifier, group_num, pending_msg.text,
+                                                                          false);
                 if (HelperFriend.is_group_text_send_success(message_id))
                 {
                     orma.updateGroupMessage().idEq(pending_msg.id).
@@ -11419,9 +11470,11 @@ public class HelperGroup
             if (do_notification)
             {
                 // KHANDAQ (0.2.64): the file's kind in words, as for a file of one person (MainActivity).
+                // KHANDAQ (0.2.69, group message wakes): with the event key a wake for the file carried (gf:).
                 change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname,
                                         HelperMsgNotification.media_label_for_filename(context_s, filename_corrected),
-                                        m.sent_timestamp, m.tox_group_peer_pubkey);
+                                        m.sent_timestamp, m.tox_group_peer_pubkey,
+                                        PushPreviewSeen.forGroupFile(m.msg_id_hash));
             }
         }
         catch (Exception e)
@@ -12983,9 +13036,12 @@ public class HelperGroup
             {
                 // KHANDAQ (QA live, F8): the file's kind in words, as for a file of one person
                 // (MainActivity), not its stored text "[name]\n[N] bytes".
+                // KHANDAQ (0.2.69, group message wakes): with the event key a wake for the file carried (gf:), as for a
+                // synced text.
                 change_msg_notification(NOTIFICATION_EDIT_ACTION_ADD.value, m.group_identifier, groupname,
                                         HelperMsgNotification.media_label_for_filename(context_s, filename_corrected),
-                                        m.sent_timestamp, m.tox_group_peer_pubkey);
+                                        m.sent_timestamp, m.tox_group_peer_pubkey,
+                                        PushPreviewSeen.forGroupFile(m.msg_id_hash));
             }
         }
         catch (Exception e)

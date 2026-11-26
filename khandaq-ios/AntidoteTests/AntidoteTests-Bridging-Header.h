@@ -57,6 +57,27 @@
 // through the queue of the realm manager.
 - (void)updateGroupPrivacyState:(OCTToxGroupPrivacyState)privacyState forChat:(OCTChat *)chat;
 - (void)updateGroupVoiceState:(OCTToxGroupVoiceState)voiceState forChat:(OCTChat *)chat;
+// KHANDAQ (notification parity, 2026-11-20): the rows the history sync stores, the unread count and the badges read
+// as they are stored, the author's key included.
+- (OCTMessageAbstract *)addGroupSyncedMessageWithText:(NSString *)text
+                                                 type:(OCTToxMessageType)type
+                                                 chat:(OCTChat *)chat
+                                               peerId:(uint32_t)peerId
+                                             peerName:(NSString *)peerName
+                                      senderPubkeyHex:(NSString *)senderPubkeyHex
+                                            messageId:(OCTToxMessageId)messageId
+                                         dateInterval:(NSTimeInterval)dateInterval;
+- (OCTMessageAbstract *)addGroupSyncedMessageWithFileName:(NSString *)fileName
+                                                 fileSize:(uint64_t)fileSize
+                                                 filePath:(NSString *)filePath
+                                                 fileType:(OCTMessageFileType)fileType
+                                                     chat:(OCTChat *)chat
+                                                   peerId:(uint32_t)peerId
+                                                 peerName:(NSString *)peerName
+                                          senderPubkeyHex:(NSString *)senderPubkeyHex
+                                                  fileUTI:(NSString *)fileUTI
+                                       groupMsgIdHashHex:(NSString *)groupMsgIdHashHex
+                                             dateInterval:(NSTimeInterval)dateInterval;
 // Tester 21.11 (8256/8257/8261): the chat of a group made on a Tox of the test's own, and the plain removal of rows
 // that the app used for the group messages deleted on this device.
 - (OCTChat *)getOrCreateGroupChatWithGroupNumber:(uint32_t)groupNumber

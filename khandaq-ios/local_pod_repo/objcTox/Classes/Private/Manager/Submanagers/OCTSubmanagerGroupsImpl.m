@@ -16,6 +16,7 @@
 #import "OCTSubmanagerDataSource.h"
 #import "OCTSubmanagerChatsImpl.h"
 #import "OCTPushPreview.h"
+#import "OCTPushUrlValidator.h"
 #import "OCTFileStorageProtocol.h"
 #import "OCTFileTools.h"
 #import "OCTNgcGroupFileTransfer.h"
@@ -39,6 +40,10 @@ static const uint64_t kOCTNgcMaxFileTransferBytes = 200ULL * 1024ULL * 1024ULL;
 static const uint8_t kOCTLosslessPktGroupInviteRequest = 184;
 static const uint8_t kOCTGroupInviteRequestVersion = 1;
 static const NSTimeInterval kOCTGroupFriendFallbackAfterSec = 10.0;
+/// KHANDAQ (0.2.69, group message wakes): how long after a mute or a leave our 190/03 sets go out, so that a run of
+/// changes sends them once; and how long after a message of ours an away contact is checked again before its wake.
+static const NSTimeInterval kOCTGroupWakeBroadcastDelaySec = 5.0;
+static const NSTimeInterval kOCTGroupMessageWakeRecheckSec = 3.0;
 static const NSTimeInterval kOCTGroupInviteRequestResendSec = 30.0;
 static const NSTimeInterval kOCTGroupInviteReplyMinIntervalSec = 60.0;
 static const NSTimeInterval kOCTGroupInviteRequestTTLSec = 600.0;
@@ -141,6 +146,11 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 /// KHANDAQ (0.2.64): the latest scheduled broadcast of our group presence; an earlier one that fires late
 /// sees a newer number and stands down.
 @property (nonatomic, assign) NSUInteger groupPresenceBroadcastGeneration;
+/// KHANDAQ (0.2.69, group message wakes): the same for the 190/03 sets after a mute or a leave. Main queue.
+@property (nonatomic, assign) NSUInteger groupWakeBroadcastGeneration;
+/// KHANDAQ (0.2.69, group message wakes): the event keys of the files of ours whose first offer to the group has gone
+/// out and woken the away contacts: a file whose sending starts again offers itself again. Main queue.
+@property (nonatomic, strong, readonly) NSMutableSet<NSString *> *groupFileWakesSent;
 // KHANDAQ (review 0.2.56): the transfer ids of the queued group files a flush is sending now, so that the
 // flushes that come meanwhile (peer joins, connection changes, maintenance) do not send them again. Main queue.
 @property (nonatomic, strong, readonly) NSMutableSet<NSString *> *groupFileSendsInFlight;
@@ -203,6 +213,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     _pendingGroupLeaveDrains = [NSCountedSet set];
     _groupFileSendsInFlight = [NSMutableSet set];
     _groupsAwaitingFirstSave = [NSMutableSet set];
+    _groupFileWakesSent = [NSMutableSet set];
 #if TARGET_OS_IPHONE
     _pendingGroupLeaveBackgroundTask = UIBackgroundTaskInvalid;
 #endif
@@ -578,6 +589,11 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
         // KHANDAQ: persist immediately so a left/deleted group does not reappear after a crash or
         // relaunch (toxcore otherwise keeps it in the in-memory save until the next periodic write).
         [self.dataSource managerSaveTox];
+    }
+
+    if (result) {
+        // KHANDAQ (0.2.69, group message wakes): a group left wakes us no more; its chat goes right after this.
+        [self scheduleGroupWakeBroadcast];
     }
 
     if (error) {
@@ -1168,6 +1184,9 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                                                                          type:type
                                                                                          chat:chat];
             OCTLogInfo(@"NGC group message queued until the group is connected chat=%@", chat.uniqueIdentifier);
+            // KHANDAQ (0.2.69, group message wakes): the usual case of a small group whose members are away. Its wake
+            // goes as it begins to wait, not when it finally goes (-flushPendingGroupTextMessage:...).
+            [self wakeAwayContactsForWaitingGroupText:text groupNumber:groupNumber];
 
             if (successBlock) {
                 successBlock(pendingMessage);
@@ -1191,6 +1210,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                                               messageId:messageId];
 
     [self scheduleHistSyncBroadcastForGroupNumber:groupNumber];
+    [self wakeAwayContactsForGroupTextWithMessageId:messageId text:text groupNumber:groupNumber];
 
     if (successBlock) {
         successBlock(message);
@@ -1288,6 +1308,15 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
             abstract.groupPendingSend = YES;
         }];
         OCTLogInfo(@"NGC group file queued — group not ready, will retry chat=%@", chat.uniqueIdentifier);
+        // KHANDAQ (0.2.69, group message wakes): that is how a photo or a voice message to a small group whose members
+        // are away goes, so the away contacts wake now, as for a text that waits. A file wakes once in a run
+        // (groupFileWakesSent): its first offer after the flush (offerSentBlock) wakes nobody again.
+        __weak typeof(self) weakSelfForWake = self;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [weakSelfForWake wakeAwayContactsForGroupFileWithMsgIdHex:msgIdHex
+                                                             fileName:fileName
+                                                          groupNumber:groupNumber];
+        });
         if (successBlock) {
             successBlock(message);
         }
@@ -1374,6 +1403,13 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
                                        file.groupTransferProgress = 0.0f;
                                    }];
                                    OCTLogInfo(@"NGC group file queued (not ready) chat=%@", chat.uniqueIdentifier);
+                                   // KHANDAQ (0.2.69, group message wakes): it waits now, and the away contacts wake,
+                                   // unless its first offer woke them already (groupFileWakesSent).
+                                   dispatch_async(dispatch_get_main_queue(), ^{
+                                       [weakSelf wakeAwayContactsForGroupFileWithMsgIdHex:msgIdHex
+                                                                                 fileName:fileName
+                                                                              groupNumber:groupNumber];
+                                   });
 
                                    if (successBlock) {
                                        successBlock(message);
@@ -1713,6 +1749,8 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     NSAssert(chat.isGroup, @"Chat must be a group chat.");
 
     [[self.dataSource managerGetRealmManager] setGroupNotificationsSilent:silent forChat:chat];
+    // KHANDAQ (0.2.69, group message wakes): a muted group wakes us for nobody's message, and our 190/03 sets say so.
+    [self scheduleGroupWakeBroadcast];
 }
 
 - (void)setPeerNotificationsSilent:(BOOL)silent peerId:(uint32_t)peerId forChat:(OCTChat *)chat
@@ -1721,6 +1759,8 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     NSAssert(chat.isGroup, @"Chat must be a group chat.");
 
     [[self.dataSource managerGetRealmManager] setGroupPeerNotificationsSilent:silent peerId:peerId chat:chat];
+    // KHANDAQ (0.2.69, group message wakes): a muted member wakes us no more, when it is one of our contacts.
+    [self scheduleGroupWakeBroadcast];
 }
 
 - (void)setPrivateLastReadDateInterval:(NSTimeInterval)interval peerId:(uint32_t)peerId forChat:(OCTChat *)chat
@@ -3504,6 +3544,274 @@ static NSString *kqGroupReactionsActorEmoji(NSString *reactionsJSON, NSString *a
     });
 }
 
+#pragma mark - Group message wakes (0.2.69)
+
+/// KHANDAQ (0.2.69, group message wakes): our 190/03 sets go to the friends online a little after a group is muted,
+/// unmuted or left, or a member muted or unmuted; a run of such changes sends them once. Main queue.
+- (void)scheduleGroupWakeBroadcast
+{
+    self.groupWakeBroadcastGeneration += 1;
+    NSUInteger generation = self.groupWakeBroadcastGeneration;
+    __weak OCTSubmanagerGroupsImpl *weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kOCTGroupWakeBroadcastDelaySec * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        OCTSubmanagerGroupsImpl *strongSelf = weakSelf;
+        if (strongSelf == nil || strongSelf.groupWakeBroadcastGeneration != generation) {
+            return;
+        }
+        id<OCTSubmanagerChats> chats = [strongSelf.dataSource managerGetChats];
+        if ([chats isKindOfClass:[OCTSubmanagerChatsImpl class]]) {
+            [(OCTSubmanagerChatsImpl *)chats broadcastGroupWakeToConnectedFriends];
+        }
+    });
+}
+
+/// KHANDAQ (0.2.69, group message wakes): toxcore took a text of ours for the group and gave it this id. Any queue.
+- (void)wakeAwayContactsForGroupTextWithMessageId:(uint32_t)messageId
+                                             text:(NSString *)text
+                                      groupNumber:(OCTToxGroupNumber)groupNumber
+{
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSString *body = [OCTPushPreview previewTextFromMessageText:text];
+        [weakSelf wakeAwayContactsInGroupNumber:groupNumber
+                                           kind:kOCTPushPreviewKindText
+                                           body:(body.length > 0 ? body : nil)
+                                  eventKeyBlock:^NSString *(NSString *ownKey) {
+            return [OCTPushPreview groupTextEventKeyWithMessageId:messageId senderPeerKeyHex:ownKey];
+        }];
+    });
+}
+
+/// KHANDAQ (0.2.69, group message wakes): a text of ours has to wait for the group, because nobody else is connected
+/// in it, it is not connected, or older texts wait before it. It wakes the away contacts now: toxcore gives a text its
+/// id only when it goes, so the preview has no event key and carries our key in the group (`gp`). When it goes later,
+/// nobody is woken for it again. Any queue.
+- (void)wakeAwayContactsForWaitingGroupText:(NSString *)text groupNumber:(OCTToxGroupNumber)groupNumber
+{
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSString *body = [OCTPushPreview previewTextFromMessageText:text];
+        [weakSelf wakeAwayContactsInGroupNumber:groupNumber
+                                           kind:kOCTPushPreviewKindText
+                                           body:(body.length > 0 ? body : nil)
+                                  eventKeyBlock:nil];
+    });
+}
+
+/// KHANDAQ (0.2.69, group message wakes): the first offer of a file of ours went to the group, or the file began to
+/// wait for it (-sendFileAtPath:toChat:...). Once per file in a run: a file whose sending starts again, or that
+/// waited, wakes nobody again. Main queue.
+- (void)wakeAwayContactsForGroupFileWithMsgIdHex:(NSString *)msgIdHex
+                                        fileName:(NSString *)fileName
+                                     groupNumber:(OCTToxGroupNumber)groupNumber
+{
+    NSString *eventKey = [OCTPushPreview groupFileEventKeyWithMsgIdHex:msgIdHex];
+    if (eventKey == nil || [self.groupFileWakesSent containsObject:eventKey]) {
+        return;
+    }
+    [self.groupFileWakesSent addObject:eventKey];
+
+    NSString *kind = [OCTPushPreview kindForFileName:fileName];
+    NSString *body = [kind isEqualToString:kOCTPushPreviewKindFile] && fileName.length > 0 ? fileName : nil;
+    [self wakeAwayContactsInGroupNumber:groupNumber
+                                   kind:kind
+                                   body:body
+                          eventKeyBlock:^NSString *(NSString *ownKey) {
+        return eventKey;
+    }];
+}
+
+/**
+ * KHANDAQ (0.2.69, group message wakes): a text or a file of ours went to the group, or a text of ours began to wait
+ * for it (docs/PUSH_PREVIEWS.md, "Group message wakes"). A member of it, there now or saved and not gone, that is not
+ * connected wakes the one contact whose 190/03 set claims it, when that contact is offline and we have its K and push
+ * address; three seconds later, if the member is still not connected and the contact still offline, one wake goes with
+ * the preview. No retries: the contact's app brings the message by the group's history sync when it connects.
+ * `eventKeyBlock` gives the event key from our own key in the group; it is nil for a text that waits, whose preview
+ * carries that key as `gp` instead. Main queue.
+ */
+- (void)wakeAwayContactsInGroupNumber:(OCTToxGroupNumber)groupNumber
+                                 kind:(NSString *)kind
+                                 body:(nullable NSString *)body
+                        eventKeyBlock:(nullable NSString *_Nullable (^)(NSString *ownKey))eventKeyBlock
+{
+    OCTRealmManager *realmManager = [self.dataSource managerGetRealmManager];
+    if (! [[self.dataSource managerGetChats] isKindOfClass:[OCTSubmanagerChatsImpl class]]
+            || [self isGroupNumberBeingLeft:groupNumber]) {
+        return;
+    }
+
+    // Only a contact that sent a 190/03 set can be woken; while none did, toxcore is not asked anything.
+    NSMutableDictionary<NSString *, NSArray<NSString *> *> *wakeSets = [NSMutableDictionary dictionary];
+    for (OCTFriend *friend in [realmManager objectsWithClass:[OCTFriend class] predicate:nil]) {
+        NSArray<NSString *> *hashes = [OCTPushPreview groupWakeHashesForFriendPublicKey:friend.publicKey];
+        if (hashes.count > 0) {
+            wakeSets[friend.publicKey] = hashes;
+        }
+    }
+    OCTChat *chat = wakeSets.count > 0 ? [realmManager chatWithGroupNumber:groupNumber] : nil;
+    if (chat == nil) {
+        return;
+    }
+
+    NSMutableArray<NSString *> *members = [NSMutableArray array];
+    NSMutableArray<NSString *> *connected = [NSMutableArray array];
+    NSMutableArray<NSString *> *left = [NSMutableArray array];
+    NSString *chatIdHex = nil;
+    NSString *ownKey = [self groupWakeMembersOfChat:chat
+                                        groupNumber:groupNumber
+                                          chatIdHex:&chatIdHex
+                                            members:members
+                                          connected:connected
+                                               left:left];
+    NSString *eventKey = (ownKey != nil && eventKeyBlock != nil) ? eventKeyBlock(ownKey) : nil;
+    if (chatIdHex == nil || ownKey == nil || (eventKeyBlock != nil && eventKey == nil)) {
+        return;
+    }
+
+    NSDictionary<NSString *, NSString *> *claims = [OCTPushPreview groupWakeMembersForChatIdHex:chatIdHex
+                                                                                     memberKeys:members
+                                                                                  connectedKeys:connected
+                                                                                         ownKey:ownKey
+                                                                                       leftKeys:left
+                                                                                contactWakeSets:wakeSets];
+    NSMutableDictionary<NSString *, NSString *> *targets = [NSMutableDictionary dictionary];
+    for (NSString *contactKey in claims) {
+        OCTFriend *friend = [realmManager friendWithPublicKey:contactKey];
+        if (friend != nil && ! friend.isConnected && [OCTPushUrlValidator isAllowedPushURL:friend.pushToken]
+                && [OCTPushPreview peerKeyForFriendPublicKey:contactKey] != nil) {
+            targets[contactKey] = claims[contactKey];
+        }
+    }
+    if (targets.count == 0) {
+        return;
+    }
+
+    NSDictionary<NSString *, id> *fields =
+        [OCTPushPreview groupWakeFieldsWithFields:[(OCTSubmanagerChatsImpl *)[self.dataSource managerGetChats] pushPreviewFieldsWithKind:kind]
+                                             body:body
+                                        groupName:chat.groupName
+                                        chatIdHex:chatIdHex
+                                         eventKey:eventKey
+                                 senderPeerKeyHex:ownKey];
+    if (fields == nil) {
+        return;
+    }
+
+    NSString *chatUniqueIdentifier = chat.uniqueIdentifier;
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kOCTGroupMessageWakeRecheckSec * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        id<OCTSubmanagerChats> chats = [self.dataSource managerGetChats];
+        OCTRealmManager *realm = [self.dataSource managerGetRealmManager];
+        OCTChat *current = [realm objectWithUniqueIdentifier:chatUniqueIdentifier class:[OCTChat class]];
+        if (! [chats isKindOfClass:[OCTSubmanagerChatsImpl class]] || current == nil || current.isInvalidated
+                || current.groupNumber < 0 || [self isGroupNumberBeingLeft:(OCTToxGroupNumber)current.groupNumber]) {
+            return;
+        }
+
+        NSMutableArray<NSString *> *connectedNow = [NSMutableArray array];
+        [self groupWakeMembersOfChat:current
+                         groupNumber:(OCTToxGroupNumber)current.groupNumber
+                           chatIdHex:NULL
+                             members:nil
+                           connected:connectedNow
+                                left:nil];
+        for (NSString *contactKey in targets) {
+            OCTFriend *friend = [realm friendWithPublicKey:contactKey];
+            if (friend == nil || friend.isConnected || [connectedNow containsObject:targets[contactKey]]) {
+                continue;
+            }
+            [(OCTSubmanagerChatsImpl *)chats sendPreviewWakeToFriend:friend fields:fields];
+        }
+    });
+}
+
+/**
+ * KHANDAQ (0.2.69, group message wakes): the members of the group as a wake sees them, keys in lower case. `connected`
+ * gets the members toxcore lists now and has a connection to; `left`, those that said they are leaving, which are out
+ * of the group already. Unless `members` is nil, it gets every member key this device knows there: the members listed
+ * now and the saved ones. toxcore keeps a member saved after it leaves, so a saved member no longer on the record of
+ * joins (a leave takes it off) goes to `left` as well. Returns our own key there, nil when toxcore has no such group.
+ * Main queue.
+ */
+- (nullable NSString *)groupWakeMembersOfChat:(OCTChat *)chat
+                                  groupNumber:(OCTToxGroupNumber)groupNumber
+                                    chatIdHex:(NSString *_Nullable *_Nullable)chatIdHex
+                                      members:(nullable NSMutableArray<NSString *> *)members
+                                    connected:(NSMutableArray<NSString *> *)connected
+                                         left:(nullable NSMutableArray<NSString *> *)left
+{
+    __block NSString *ownKey = nil;
+    __block NSString *toxChatIdHex = nil;
+    __block NSArray<NSString *> *savedKeys = @[];
+    NSMutableArray<NSArray *> *listed = [NSMutableArray array];
+    // The chat is a Realm object of this thread: the block on the tox queue gets plain values.
+    NSString *storedChatIdHex = chat.groupChatIdHex;
+    const BOOL needsToxChatIdHex = chatIdHex != NULL && storedChatIdHex.length != 64;
+
+    [self performSyncOnToxQueue:^(OCTTox *tox) {
+        ownKey = [tox groupSelfPublicKeyHexForGroupNumber:groupNumber error:nil].lowercaseString;
+        if (needsToxChatIdHex) {
+            toxChatIdHex = [tox groupChatIdHexForGroupNumber:groupNumber error:nil];
+        }
+
+        NSError *selfError = nil;
+        const uint32_t selfPeerId = [tox groupSelfPeerIdForGroupNumber:groupNumber error:&selfError];
+        for (NSDictionary *peer in [tox groupPeersForGroupNumber:groupNumber error:nil]) {
+            const uint32_t peerId = [peer[@"peerId"] unsignedIntValue];
+            if (selfError == nil && peerId == selfPeerId) {
+                continue;
+            }
+            NSString *key = [tox groupPeerPublicKeyHexForGroupNumber:groupNumber peerId:peerId error:nil].lowercaseString;
+            if (key.length != 64) {
+                continue;
+            }
+            const BOOL isConnected = [tox groupPeerConnectionStatusForGroupNumber:groupNumber peerId:peerId error:nil]
+                != OCTToxConnectionStatusNone;
+            [listed addObject:@[@(peerId), key, @(isConnected)]];
+        }
+
+        if (members != nil) {
+            savedKeys = [tox groupSavedPeerPublicKeyHexesForGroupNumber:groupNumber error:nil];
+        }
+    }];
+
+    if (chatIdHex != NULL) {
+        *chatIdHex = storedChatIdHex.length == 64 ? storedChatIdHex : (toxChatIdHex.length == 64 ? toxChatIdHex : nil);
+    }
+
+    NSString *chatKey = chat.uniqueIdentifier;
+    const BOOL anyLeaving = [self hasGroupLeaveNoticesForChatKey:chatKey];
+    const NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    for (NSArray *peer in listed) {
+        NSString *key = peer[1];
+        if ([key isEqualToString:ownKey]) {
+            continue;
+        }
+        [members addObject:key];
+        if (anyLeaving && [self isGroupPeerLeavingForChatKey:chatKey peerId:[peer[0] unsignedIntValue] publicKeyHex:key at:now]) {
+            [left addObject:key];
+        }
+        else if ([peer[2] boolValue]) {
+            [connected addObject:key];
+        }
+    }
+
+    for (NSString *saved in savedKeys) {
+        NSString *key = saved.lowercaseString;
+        if ([key isEqualToString:ownKey] || [members containsObject:key]) {
+            continue;
+        }
+        [members addObject:key];
+        if (! [self hasPersistentlyAnnouncedJoinForChat:chat pubkeyLower:key]) {
+            [left addObject:key];
+        }
+    }
+
+    return ownKey.length == 64 ? ownKey : nil;
+}
+
 - (NSData *)kqGroupReactionPacketForMessageId:(int32_t)messageId
                                     authorHex:(NSString *)authorHex
                                         emoji:(NSString *)emoji
@@ -4837,6 +5145,13 @@ groupNumber:(OCTToxGroupNumber)groupNumber
         __strong typeof(weakSelf) self = weakSelf;
 
         return self ? [self groupFileNamesInUseForGroupNumber:groupNumber] : [NSSet set];
+    };
+    // KHANDAQ (0.2.69, group message wakes): a file of ours wakes the away contacts who are members when its first
+    // offer goes out, not when it is queued.
+    self.fileTransfer.offerSentBlock = ^(uint32_t groupNumber, NSString *msgIdHex, NSString *fileName) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [weakSelf wakeAwayContactsForGroupFileWithMsgIdHex:msgIdHex fileName:fileName groupNumber:groupNumber];
+        });
     };
 }
 
@@ -6243,6 +6558,8 @@ static id OCTGroupRegularFileIdentifier(NSString *path)
 
     [realmManager markGroupPendingMessageSent:pendingMessage messageId:messageId];
     [self scheduleHistSyncBroadcastForGroupNumber:groupNumber];
+    // KHANDAQ (0.2.69, group message wakes): nobody is woken now. The text woke the away contacts when it began to
+    // wait (-sendMessageToChat:...), and one queued before 0.2.69 wakes nobody.
     return YES;
 }
 
@@ -7514,6 +7831,8 @@ static id OCTGroupRegularFileIdentifier(NSString *path)
     [self.dataSource managerSaveTox];
     [self removePendingGroupLeaves:entries];
     [self pendingGroupLeavesDidChange];
+    // KHANDAQ (0.2.69, group message wakes): toxcore has these groups no more, whether or not their chats are kept.
+    [self scheduleGroupWakeBroadcast];
 }
 
 /// On the tox queue, right before a join of this chat id (by the ID or a link, an invite, a stuck instance). toxcore

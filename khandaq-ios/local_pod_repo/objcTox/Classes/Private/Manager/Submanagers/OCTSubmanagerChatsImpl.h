@@ -33,6 +33,18 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)broadcastGroupPresenceToConnectedFriends;
 
 /**
+ * KHANDAQ (0.2.69, group message wakes): to every connected friend its own 190/03 set (docs/PUSH_PREVIEWS.md, "Group
+ * message wakes"), after a group was muted, unmuted or left, or a member muted or unmuted. Main thread.
+ */
+- (void)broadcastGroupWakeToConnectedFriends;
+
+/**
+ * KHANDAQ (0.2.69, group message wakes): to the friend, when connected, its own 190/03 set: it came online, or the
+ * 190/02 set it sent, which that set depends on, was just stored. Main thread, outside a write to the Realm.
+ */
+- (void)sendGroupWakeToFriendWithPublicKey:(NSString *)publicKey;
+
+/**
  * Posts kOCTMessageReactionNotification for a reaction someone added to one of our own messages.
  */
 - (void)postReactionOnOwnMessage:(OCTMessageAbstract *)message

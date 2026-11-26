@@ -824,6 +824,13 @@ public final class NgcGroupFileTransfer
             endUnsent(g, ownSend, beginRes, "BEGIN");
             return;
         }
+        if (ownSend && (startChunk == 0))
+        {
+            // KHANDAQ (0.2.69, group message wakes): the file's first offer went: the members away who are our
+            // contacts wake. A resume offered the file before (its resume point says so, across restarts too), and a
+            // member's request is no offer of ours.
+            PushPreviewSender.wakeForGroupFile(g, groupNum);
+        }
 
         if (startChunk > 0)
         {
@@ -3185,6 +3192,15 @@ public final class NgcGroupFileTransfer
         HelperGroup.clear_ngc_file_transfer_progress(g.group_identifier, g.msg_id_hash);
         WAITS.add(g.group_identifier, g.msg_id_hash);
         HelperGroup.refresh_group_file_row(g.group_identifier, g.msg_id_hash);
+        // KHANDAQ (0.2.69, group message wakes): that is how a photo or a voice message to a small group whose members
+        // are away goes, so the away contacts wake now, as for a text that waits. A file wakes once in a run
+        // (PushPreviewSender.OFFERED_FILES): its first offer, when a member is there, wakes nobody again. The files of
+        // an earlier run come back by loadPendingSends, not here.
+        final long groupNumber = tox_group_by_groupid__wrapper(g.group_identifier);
+        if (groupNumber >= 0)
+        {
+            PushPreviewSender.wakeForGroupFile(g, groupNumber);
+        }
     }
 
     /** KHANDAQ (0.2.56): our file went whole: no longer pending, and nothing brings it back. */

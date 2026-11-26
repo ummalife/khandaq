@@ -129,6 +129,8 @@
 "theme_toggle_accessibility" = "Переключить тёмную тему";
 "voice_recording_cancel" = "Отмена";
 "voice_recording_send" = "Отправить голосовое сообщение";
+"voice_recording_pause" = "Приостановить запись";
+"voice_recording_resume" = "Продолжить запись";
 "voice_recording_slide_to_cancel" = "‹ сдвиньте для отмены";
 "voice_recording_slide_hint" = "‹ отмена   ⌃ закрепить";
 "voice_recording_release_to_cancel" = "Отпустите для отмены";

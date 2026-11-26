@@ -288,6 +288,8 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
                     CommunityAutoJoin.noteSoundChoice(this.group.group_identifier, true);
                     // KHANDAQ (0.2.64): and the copy of it the push preview handler reads.
                     PushPreviewPeers.refreshMutedChats();
+                    // KHANDAQ (0.2.69, group message wakes): and our 190/03 sets, which leave a muted group out.
+                    PushPreviewPeers.wakeSetsChanged();
 
                     final Drawable d_notification = new IconicsDrawable(context).
                             icon(GoogleMaterial.Icon.gmd_notifications_off).
@@ -306,6 +308,8 @@ public class GroupListHolder extends RecyclerView.ViewHolder implements View.OnC
                     CommunityAutoJoin.noteSoundChoice(this.group.group_identifier, false);
                     // KHANDAQ (0.2.64): and the copy of it the push preview handler reads.
                     PushPreviewPeers.refreshMutedChats();
+                    // KHANDAQ (0.2.69, group message wakes): and our 190/03 sets, which leave a muted group out.
+                    PushPreviewPeers.wakeSetsChanged();
 
                     final Drawable d_notification = new IconicsDrawable(context).
                             icon(GoogleMaterial.Icon.gmd_notifications_active).

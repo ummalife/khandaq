@@ -500,6 +500,8 @@ final class CommunityAutoJoin
                         notification_silent(false).execute();
                 // KHANDAQ (0.2.64): and the copy of it the push preview handler reads.
                 PushPreviewPeers.refreshMutedChats();
+                // KHANDAQ (0.2.69, group message wakes): and our 190/03 sets, which leave a muted group out.
+                PushPreviewPeers.wakeSetsChanged();
                 AirRepository.requestRefresh();
             }
         };

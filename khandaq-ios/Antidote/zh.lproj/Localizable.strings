@@ -479,6 +479,8 @@
 "theme_toggle_accessibility" = "切换深色模式";
 "voice_recording_cancel" = "取消";
 "voice_recording_send" = "发送语音消息";
+"voice_recording_pause" = "暂停录音";
+"voice_recording_resume" = "继续录音";
 "voice_recording_slide_to_cancel" = "‹ 滑动取消";
 "voice_recording_slide_hint" = "‹ 取消   ⌃ 锁定";
 "voice_recording_release_to_cancel" = "松开取消";

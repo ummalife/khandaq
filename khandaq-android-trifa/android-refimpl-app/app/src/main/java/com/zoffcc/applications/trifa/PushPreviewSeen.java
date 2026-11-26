@@ -19,8 +19,9 @@ import java.util.Map;
  *
  * <p>An event is known by marks. Its event key h ("t:", "f:" or "r:") gives the exact mark, an event mark. A text or a
  * file that went without one (a text written to a friend who was offline gets its msgV3 hash only when it leaves) is
- * known by what it says instead: its sender and its first 140 characters, or its kind and name. A preview with an
- * event key is known by that alone, so that two messages saying the same ("ok", two photos) are two events. Event
+ * known by what it says instead: its sender and its first 140 characters, or its kind and name. So is a group text
+ * that had to wait (toxcore gives it its id only when it goes), its sender being its key in the group. A preview with
+ * an event key is known by that alone, so that two messages saying the same ("ok", two photos) are two events. Event
  * marks are kept here for 30 minutes and on disk, as hashes, since the push handler may run in a process that is
  * gone before Tox brings the message. The marks of what a text says stay off the disk: the push handler puts them on
  * the notification it shows (HelperMsgNotification) and keeps them in memory for 30 minutes, for when that
@@ -115,6 +116,12 @@ final class PushPreviewSeen
                 add(list, fileMark(senderKey, p.kind, p.body));
             }
         }
+        // KHANDAQ (0.2.69, group message wakes): a group text that had to wait went without one too. It is known by
+        // its sender's key in the group (gp) and what it says, as forGroupText knows it when it comes.
+        else if (list.isEmpty() && PushPreviewPayload.KIND_TEXT.equals(p.kind) && (p.groupPeerKey != null))
+        {
+            add(list, textMark(p.groupPeerKey, p.body));
+        }
         return new Event(list, PushPreviewPayload.KIND_REACTION.equals(p.kind));
     }
 
@@ -140,6 +147,56 @@ final class PushPreviewSeen
         final List<String> list = new ArrayList<>(2);
         add(list, eventMark(PushPreviewPayload.fileEventKey(fileIdHex)));
         add(list, fileMark(senderKey, kind, fileName));
+        return new Event(list, false);
+    }
+
+    /**
+     * KHANDAQ (0.2.69, group message wakes): a group text that came over Tox, by toxcore's message id and its sender's
+     * key in the group, as a group preview with an event key is known (forPreview).
+     */
+    static Event forGroupText(final long messageId, final String senderPeerKey)
+    {
+        return forGroupText(messageId, senderPeerKey, null, null);
+    }
+
+    /**
+     * As above, and by what it says from that key: a text that had to wait went to the push without an event key,
+     * known by its sender's key in the group and its first 140 characters (forPreview). Those of the text as the chat
+     * shows it and as it came, since a sender may have put either into its preview.
+     */
+    static Event forGroupText(final long messageId, final String senderPeerKey, final String shownText,
+                              final String rawText)
+    {
+        final List<String> list = new ArrayList<>(3);
+        add(list, eventMark(PushPreviewPayload.groupTextEventKey(messageId, senderPeerKey)));
+        add(list, textMark(senderPeerKey,
+                           PushPreviewPayload.firstCharacters(shownText, PushPreviewPayload.TEXT_CHARACTERS)));
+        add(list, textMark(senderPeerKey,
+                           PushPreviewPayload.firstCharacters(rawText, PushPreviewPayload.TEXT_CHARACTERS)));
+        return new Event(list, false);
+    }
+
+    /** As above, with the message id as a row keeps it (message_id_tox: 8 hex); no event mark for any other. */
+    static Event forGroupText(final String messageIdHex, final String senderPeerKey)
+    {
+        return forGroupText(messageIdHex, senderPeerKey, null, null);
+    }
+
+    /** As above, and by what it says (forGroupText(long, String, String, String)). */
+    static Event forGroupText(final String messageIdHex, final String senderPeerKey, final String shownText,
+                              final String rawText)
+    {
+        // Checked as 4 bytes of hex first: parseLong takes a sign and any number of digits too.
+        final long messageId = (PushPreviewCrypto.unhex(messageIdHex, 4) == null)
+                               ? -1L : Long.parseLong(messageIdHex, 16);
+        return forGroupText(messageId, senderPeerKey, shownText, rawText);
+    }
+
+    /** KHANDAQ (0.2.69, group message wakes): a group file that came over Tox, by its 32-byte hash. */
+    static Event forGroupFile(final String fileHashHex)
+    {
+        final List<String> list = new ArrayList<>(1);
+        add(list, eventMark(PushPreviewPayload.groupFileEventKey(fileHashHex)));
         return new Event(list, false);
     }
 

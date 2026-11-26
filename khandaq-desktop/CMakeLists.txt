@@ -310,6 +310,8 @@ set(${PROJECT_NAME}_SOURCES
   src/model/air/airconversation.h
   src/model/air/airgroup.cpp
   src/model/air/airgroup.h
+  src/model/air/airgroupcontact.cpp
+  src/model/air/airgroupcontact.h
   src/model/air/airgroupfilequeue.cpp
   src/model/air/airgroupfilequeue.h
   src/model/air/airgroupfilerepair.cpp
@@ -324,6 +326,8 @@ set(${PROJECT_NAME}_SOURCES
   src/model/air/airmessagemarks.h
   src/model/air/airmedia.cpp
   src/model/air/airmedia.h
+  src/model/air/airmention.cpp
+  src/model/air/airmention.h
   src/model/air/airmodel.cpp
   src/model/air/airmodel.h
   src/model/air/airnetwork.cpp

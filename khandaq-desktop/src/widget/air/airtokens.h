@@ -39,6 +39,8 @@ enum class Color : int
     MediaControl,
     MediaShade,
     OnInk,
+    Private,
+    PrivateSoft,
     Raised,
     Scrim,
     Selected,
@@ -57,7 +59,7 @@ enum class Color : int
     TransitTray,
 };
 
-constexpr int colorCount = 40;
+constexpr int colorCount = 42;
 
 constexpr QRgb lightColors[colorCount] = {
     0xfff3f4f6, // bg
@@ -84,6 +86,8 @@ constexpr QRgb lightColors[colorCount] = {
     0x33ffffff, // media-control
     0xeb0f1218, // media-shade
     0xffffffff, // on-ink
+    0xff5a3fb4, // private
+    0xfff0ecfb, // private-soft
     0xffffffff, // raised
     0x420a0c10, // scrim
     0xffe8ebf0, // selected
@@ -127,6 +131,8 @@ constexpr QRgb darkColors[colorCount] = {
     0x33ffffff, // media-control
     0xeb05070a, // media-shade
     0xff12161b, // on-ink
+    0xffb9a6ff, // private
+    0xff211b38, // private-soft
     0xff171c22, // raised
     0x73000000, // scrim
     0xff222a34, // selected
@@ -319,6 +325,7 @@ constexpr const char* iconNames[] = {
     "copy",
     "eye",
     "file",
+    "lock",
     "mic",
     "panel",
     "paperclip",

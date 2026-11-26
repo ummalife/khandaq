@@ -1077,6 +1077,11 @@ void Core::onGroupCustomPrivatePacket(Tox* tox, uint32_t groupId, uint32_t peerI
         core->handleSyncedGroupText(groupId, peerId, data, length);
         return;
     }
+    // KHANDAQ (26.11.2026): a member offers to become contacts, or accepts our offer (01 61, 01 62).
+    if (Air::isGroupContactPacket(data, length)) {
+        core->handleGroupContactPacket(groupId, peerId, data, length);
+        return;
+    }
     core->handleNgcFileTransferPacket(groupId, peerId, data, length, true);
 }
 
@@ -3103,6 +3108,82 @@ void Core::sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t m
         qDebug() << "sendGroupDeliveryReceipt: not sent to peer" << peerId << "of group" << groupId
                  << "error" << static_cast<int>(error);
     }
+}
+
+Core::ContactPacketResult Core::sendGroupContactPacket(int groupId, const ToxPk& member,
+                                                       bool accept, const QByteArray& nonce)
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    if (member.isEmpty() || nonce.size() != static_cast<int>(Air::groupContactNonceSize)) {
+        return ContactPacketResult::Failed;
+    }
+    const auto group = static_cast<uint32_t>(groupId);
+    Tox_Err_Group_Peer_Query queryError;
+    const uint32_t peerId =
+        tox_group_peer_by_public_key(tox.get(), group, member.getData(), &queryError);
+    if (queryError != TOX_ERR_GROUP_PEER_QUERY_OK
+        || !isGroupPeerOnline(groupId, static_cast<int>(peerId))) {
+        return ContactPacketResult::Offline;
+    }
+    uint8_t address[TOX_ADDRESS_SIZE] = {0x00};
+    tox_self_get_address(tox.get(), address);
+    const QByteArray packet = Air::groupContactPacket(
+        accept ? Air::GroupContactPacket::Kind::Accept : Air::GroupContactPacket::Kind::Offer,
+        QByteArray(reinterpret_cast<const char*>(address), TOX_ADDRESS_SIZE), nonce);
+    if (packet.isEmpty()) {
+        return ContactPacketResult::Failed;
+    }
+    Tox_Err_Group_Send_Custom_Private_Packet error;
+    tox_group_send_custom_private_packet(tox.get(), group, peerId, true,
+                                         reinterpret_cast<const uint8_t*>(packet.constData()),
+                                         static_cast<size_t>(packet.size()), &error);
+    if (error != TOX_ERR_GROUP_SEND_CUSTOM_PRIVATE_PACKET_OK) {
+        qDebug() << "sendGroupContactPacket: not sent to peer" << peerId << "of group" << groupId
+                 << "error" << static_cast<int>(error);
+        return error == TOX_ERR_GROUP_SEND_CUSTOM_PRIVATE_PACKET_PEER_NOT_FOUND
+                   ? ContactPacketResult::Offline
+                   : ContactPacketResult::Failed;
+    }
+    return ContactPacketResult::Sent;
+}
+
+void Core::handleGroupContactPacket(uint32_t groupId, uint32_t peerId, const uint8_t* data,
+                                    size_t length)
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    Air::GroupContactPacket packet;
+    if (!Air::readGroupContactPacket(data, length, &packet)) {
+        qDebug() << "Dropped a contact packet of group" << groupId << "of" << length << "bytes";
+        return;
+    }
+    const int group = static_cast<int>(groupId);
+    const int peer = static_cast<int>(peerId);
+    const ToxPk member = getGroupPeerPk(group, peer);
+    // Toxcore names the member; the ID in the packet is only what they say it is, and a member
+    // who only observes, or our own key, is not heard.
+    if (member.isEmpty() || member == getGroupSelfPublicKey(group)
+        || getGroupPeerRole(group, peer) == TOX_GROUP_ROLE_OBSERVER) {
+        return;
+    }
+    uint8_t ownAddress[TOX_ADDRESS_SIZE] = {0x00};
+    tox_self_get_address(tox.get(), ownAddress);
+    if (packet.address.left(TOX_PUBLIC_KEY_SIZE)
+        == QByteArray(reinterpret_cast<const char*>(ownAddress), TOX_PUBLIC_KEY_SIZE)) {
+        return;
+    }
+    const bool accept = packet.kind == Air::GroupContactPacket::Kind::Accept;
+    if (!accept) {
+        const QByteArray chatId = groupChatId(tox.get(), groupId);
+        const QString memberId = QString::fromLatin1(chatId.toHex()) + QLatin1Char(':')
+                                 + member.toString();
+        if (!groupContactOffers.admit(memberId, monotonicMs())) {
+            qDebug() << "Dropped a second offer to contacts of a member of group" << groupId;
+            return;
+        }
+    }
+    emit groupContactPacketReceived(group, member, accept, packet.address, packet.nonce);
 }
 
 void Core::handleSyncedGroupText(uint32_t groupId, uint32_t peerId, const uint8_t* data,

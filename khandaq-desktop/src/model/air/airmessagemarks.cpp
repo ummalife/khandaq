@@ -540,6 +540,16 @@ QString fileEntryKey(const QString& chatKey, const QByteArray& fileId)
                                                   QString::fromLatin1(fileId.toHex().toUpper())));
 }
 
+bool PrivateEntry::isNull() const
+{
+    return peerKey.isEmpty();
+}
+
+bool PrivateEntry::operator==(const PrivateEntry& other) const
+{
+    return peerKey == other.peerKey && peerName == other.peerName && ours == other.ours;
+}
+
 EntryMarksStore::~EntryMarksStore() = default;
 
 } // namespace Air

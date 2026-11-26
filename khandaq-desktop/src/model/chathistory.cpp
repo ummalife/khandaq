@@ -391,6 +391,30 @@ void ChatHistory::onMessageSynced(const ToxPk& sender, const Message& message)
     emit syncedMessageAdded(sender, message);
 }
 
+void ChatHistory::addPrivateEntry(const ToxPk& author, const QString& text, const QDateTime& time,
+                                  const Air::PrivateEntry& entry)
+{
+    if (author.isEmpty() || text.isEmpty() || !time.isValid() || entry.isNull()) {
+        return;
+    }
+    if (entryStore) {
+        entryStore->markPrivateEntry(
+            Air::textEntryKey(chatKey(), author.toString(), time.toMSecsSinceEpoch()), entry);
+    }
+    Message message;
+    message.content = text;
+    message.isAction = handleActionPrefix(message.content);
+    message.timestamp = time;
+    const QString name = author == coreIdHandler.getSelfPublicKey()
+                             ? coreIdHandler.getUsername()
+                             : chat.getDisplayedName(author);
+    if (canUseHistory()) {
+        history->addNewMessage(chat.getPersistentId(), storedText(message), author, time, true,
+                               message.extensionSet, name);
+    }
+    sessionChatLog.onRelayedMessageReceived(author, name, message);
+}
+
 QString ChatHistory::relayedAuthorName(const ToxPk& author) const
 {
     const QString known = chat.getDisplayedName(author);

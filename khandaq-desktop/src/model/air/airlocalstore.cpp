@@ -20,6 +20,8 @@
 #include "airlocalstore.h"
 
 #include "src/model/air/airconversation.h"
+#include "src/model/air/airgroupcontact.h"
+#include "src/model/air/airmodel.h"
 
 #include <QCryptographicHash>
 #include <QJsonArray>
@@ -77,6 +79,26 @@ const QString leftField = QStringLiteral("left");
 const QString soundRestoredField = QStringLiteral("soundRestored");
 // KHANDAQ (0.2.57, review): relayed files, optional too: the hash of each group, then its entries.
 const QString relayedField = QStringLiteral("relayed");
+// KHANDAQ (26.11.2026): a member of a group to contacts and the private messages in the feed of a
+// group (DESIGN-group-contacts-private-mentions.md). Optional: a store without them reads as
+// before, and an older desktop skips them (and the offers of members among its requests).
+const QString addressField = QStringLiteral("address");
+const QString groupKeyField = QStringLiteral("groupKey");
+const QString groupNameField = QStringLiteral("groupName");
+const QString memberKeyField = QStringLiteral("memberKey");
+const QString memberNameField = QStringLiteral("memberName");
+const QString nonceField = QStringLiteral("nonce");
+const QString contactField = QStringLiteral("contact");
+const QString contactOffersField = QStringLiteral("contactOffers");
+const QString memberContactsField = QStringLiteral("memberContacts");
+const QString privateEntriesField = QStringLiteral("privateEntries");
+
+/** A whole Tox ID: 76 hexadecimal characters in upper case whose checksum holds. */
+bool isAddress(const QString& address)
+{
+    return address.size() == toxAddressHexLength && address == address.toUpper()
+           && toxIdCheckMatches(address);
+}
 
 /** An entry key: the hash of a conversation's key, "/", the hash of the entry. */
 bool isEntryKey(const QString& key)
@@ -126,6 +148,9 @@ constexpr int LocalStore::wireLimit;
 constexpr int LocalStore::relayedLimit;
 constexpr qint64 LocalStore::outgoingInviteKeepMs;
 constexpr int LocalStore::outgoingInviteLimit;
+constexpr int LocalStore::contactOfferLimit;
+constexpr int LocalStore::memberContactLimit;
+constexpr int LocalStore::privateEntryLimit;
 
 bool LocalStore::PrivateLine::operator==(const PrivateLine& other) const
 {
@@ -133,9 +158,40 @@ bool LocalStore::PrivateLine::operator==(const PrivateLine& other) const
            && text == other.text && date == other.date;
 }
 
+bool LocalStore::WaitingRequest::fromGroup() const
+{
+    return !address.isEmpty();
+}
+
 bool LocalStore::WaitingRequest::operator==(const WaitingRequest& other) const
 {
-    return publicKey == other.publicKey && message == other.message && date == other.date;
+    return publicKey == other.publicKey && message == other.message && date == other.date
+           && address == other.address && groupKey == other.groupKey
+           && groupName == other.groupName && memberKey == other.memberKey
+           && memberName == other.memberName && nonce == other.nonce;
+}
+
+bool LocalStore::ContactOffer::isNull() const
+{
+    return nonce.isEmpty();
+}
+
+bool LocalStore::ContactOffer::operator==(const ContactOffer& other) const
+{
+    return groupKey == other.groupKey && memberKey == other.memberKey
+           && memberName == other.memberName && nonce == other.nonce && date == other.date;
+}
+
+bool LocalStore::MemberContact::isNull() const
+{
+    return contactKey.isEmpty();
+}
+
+bool LocalStore::MemberContact::operator==(const MemberContact& other) const
+{
+    return groupKey == other.groupKey && memberKey == other.memberKey
+           && contactKey == other.contactKey && address == other.address
+           && memberName == other.memberName;
 }
 
 bool LocalStore::WaitingInvite::isNull() const
@@ -182,6 +238,10 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
     wireOrder.clear();
     relayedKeys.clear();
     relayedOrder.clear();
+    offers.clear();
+    memberContacts.clear();
+    privateEntries.clear();
+    privateEntryOrder.clear();
     communityJoined = false;
     communityGone = false;
     communitySoundOn = false;
@@ -227,9 +287,20 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
     // Through the same doors as when they came: a key that is not one, or is blocked, stays out.
     for (const QJsonValue value : root.value(requestsField).toArray()) {
         const QJsonObject fields = value.toObject();
-        addRequest(fields.value(keyField).toString(), fields.value(messageField).toString(),
-                   QDateTime::fromMSecsSinceEpoch(
-                       static_cast<qint64>(fields.value(dateField).toDouble())));
+        const QDateTime at = QDateTime::fromMSecsSinceEpoch(
+            static_cast<qint64>(fields.value(dateField).toDouble()));
+        if (fields.contains(addressField)) {
+            WaitingRequest offer;
+            offer.address = fields.value(addressField).toString();
+            offer.groupKey = fields.value(groupKeyField).toString();
+            offer.groupName = fields.value(groupNameField).toString();
+            offer.memberKey = fields.value(memberKeyField).toString();
+            offer.memberName = fields.value(memberNameField).toString();
+            offer.nonce = QByteArray::fromHex(fields.value(nonceField).toString().toLatin1());
+            addGroupRequest(offer, at);
+            continue;
+        }
+        addRequest(fields.value(keyField).toString(), fields.value(messageField).toString(), at);
     }
     for (const QJsonValue value : root.value(invitesField).toArray()) {
         const QJsonObject fields = value.toObject();
@@ -287,6 +358,34 @@ void LocalStore::load(const QByteArray& data, const QDateTime& now)
             markRelayed(it.key() + QLatin1Char('/') + entry.toString());
         }
     }
+    for (const QJsonValue value : root.value(contactOffersField).toArray()) {
+        const QJsonObject fields = value.toObject();
+        ContactOffer offer;
+        offer.groupKey = fields.value(groupKeyField).toString();
+        offer.memberKey = fields.value(memberKeyField).toString();
+        offer.memberName = fields.value(memberNameField).toString();
+        offer.nonce = QByteArray::fromHex(fields.value(nonceField).toString().toLatin1());
+        offer.date = static_cast<qint64>(fields.value(dateField).toDouble());
+        keepContactOffer(offer, now);
+    }
+    for (const QJsonValue value : root.value(memberContactsField).toArray()) {
+        const QJsonObject fields = value.toObject();
+        MemberContact member;
+        member.groupKey = fields.value(groupKeyField).toString();
+        member.memberKey = fields.value(memberKeyField).toString();
+        member.contactKey = fields.value(contactField).toString();
+        member.address = fields.value(addressField).toString();
+        member.memberName = fields.value(memberNameField).toString();
+        keepMemberContact(member);
+    }
+    for (const QJsonValue value : root.value(privateEntriesField).toArray()) {
+        const QJsonObject fields = value.toObject();
+        PrivateEntry entry;
+        entry.peerKey = fields.value(peerField).toString();
+        entry.peerName = fields.value(memberNameField).toString();
+        entry.ours = fields.value(oursField).toBool();
+        markPrivateEntry(fields.value(keyField).toString(), entry);
+    }
     pruneHours(now);
 }
 
@@ -335,6 +434,14 @@ QByteArray LocalStore::save() const
             fields.insert(keyField, request.publicKey);
             fields.insert(messageField, request.message);
             fields.insert(dateField, static_cast<double>(request.date));
+            if (request.fromGroup()) {
+                fields.insert(addressField, request.address);
+                fields.insert(groupKeyField, request.groupKey);
+                fields.insert(groupNameField, request.groupName);
+                fields.insert(memberKeyField, request.memberKey);
+                fields.insert(memberNameField, request.memberName);
+                fields.insert(nonceField, QString::fromLatin1(request.nonce.toHex()));
+            }
             requests.append(fields);
         }
         root.insert(requestsField, requests);
@@ -418,6 +525,47 @@ QByteArray LocalStore::save() const
             relayed.insert(it.key(), entryList);
         }
         root.insert(relayedField, relayed);
+    }
+    if (!offers.isEmpty()) {
+        QJsonArray offerList;
+        for (const ContactOffer& offer : offers) {
+            QJsonObject fields;
+            fields.insert(groupKeyField, offer.groupKey);
+            fields.insert(memberKeyField, offer.memberKey);
+            fields.insert(memberNameField, offer.memberName);
+            fields.insert(nonceField, QString::fromLatin1(offer.nonce.toHex()));
+            fields.insert(dateField, static_cast<double>(offer.date));
+            offerList.append(fields);
+        }
+        root.insert(contactOffersField, offerList);
+    }
+    if (!memberContacts.isEmpty()) {
+        QJsonArray memberList;
+        for (const MemberContact& member : memberContacts) {
+            QJsonObject fields;
+            fields.insert(groupKeyField, member.groupKey);
+            fields.insert(memberKeyField, member.memberKey);
+            fields.insert(contactField, member.contactKey);
+            if (!member.address.isEmpty()) {
+                fields.insert(addressField, member.address);
+            }
+            fields.insert(memberNameField, member.memberName);
+            memberList.append(fields);
+        }
+        root.insert(memberContactsField, memberList);
+    }
+    if (!privateEntryOrder.isEmpty()) {
+        QJsonArray entryList;
+        for (const QString& key : privateEntryOrder) {
+            const PrivateEntry entry = privateEntries.value(key);
+            QJsonObject fields;
+            fields.insert(keyField, key);
+            fields.insert(peerField, entry.peerKey);
+            fields.insert(memberNameField, entry.peerName);
+            fields.insert(oursField, entry.ours);
+            entryList.append(fields);
+        }
+        root.insert(privateEntriesField, entryList);
     }
     if (communityJoined || communityGone || communitySoundOn) {
         QJsonObject community;
@@ -547,10 +695,27 @@ bool LocalStore::forget(const QString& publicKey)
                                        }),
                         outgoingQueue.end());
     changed = changed || outgoingQueue.size() != outgoingBefore;
-    // The marks of the conversation go with it; dropPrefix runs for both lists in any case.
+    // Our offers in a group left, and the members a removed contact or a left group stood for.
+    const int offersBefore = offers.size();
+    offers.erase(std::remove_if(offers.begin(), offers.end(),
+                                [&inviter](const ContactOffer& offer) {
+                                    return offer.groupKey == inviter;
+                                }),
+                 offers.end());
+    changed = changed || offers.size() != offersBefore;
+    const int membersBefore = memberContacts.size();
+    memberContacts.erase(std::remove_if(memberContacts.begin(), memberContacts.end(),
+                                        [&inviter](const MemberContact& member) {
+                                            return member.groupKey == inviter
+                                                   || member.contactKey == inviter;
+                                        }),
+                         memberContacts.end());
+    changed = changed || memberContacts.size() != membersBefore;
+    // The marks of the conversation go with it; dropPrefix runs for every list in any case.
     const QString conversation = entryKeyPrefix(publicKey);
     changed = dropPrefix(entries, entryOrder, conversation) || changed;
     changed = dropPrefix(wires, wireOrder, conversation) || changed;
+    changed = dropPrefix(privateEntries, privateEntryOrder, conversation) || changed;
     for (const QString& entryKey : relayedOrder.take(key)) {
         changed = relayedKeys.remove(entryKey) || changed;
     }
@@ -744,6 +909,171 @@ bool LocalStore::addRequest(const QString& publicKey, const QString& message, co
     request.message = message;
     request.date = at.toMSecsSinceEpoch();
     waitingRequests.append(request);
+    return true;
+}
+
+bool LocalStore::addGroupRequest(const WaitingRequest& offer, const QDateTime& at)
+{
+    WaitingRequest request;
+    request.address = normalizedKey(offer.address);
+    request.publicKey = request.address.left(64);
+    request.groupKey = normalizedKey(offer.groupKey);
+    request.groupName = offer.groupName;
+    request.memberKey = normalizedKey(offer.memberKey);
+    request.memberName = offer.memberName;
+    request.nonce = offer.nonce;
+    request.date = at.toMSecsSinceEpoch();
+    if (!isAddress(request.address) || !isPublicKey(request.groupKey)
+        || !isPublicKey(request.memberKey)
+        || request.nonce.size() != static_cast<int>(groupContactNonceSize)
+        || blocked.contains(request.publicKey)) {
+        return false;
+    }
+    const auto same = std::find_if(waitingRequests.begin(), waitingRequests.end(),
+                                   [&request](const WaitingRequest& waiting) {
+                                       return waiting.publicKey == request.publicKey;
+                                   });
+    if (same != waitingRequests.end()) {
+        if (same->fromGroup() && same->nonce == request.nonce
+            && same->groupKey == request.groupKey && same->memberKey == request.memberKey) {
+            return false;
+        }
+        waitingRequests.erase(same);
+    }
+    waitingRequests.append(request);
+    return true;
+}
+
+LocalStore::WaitingRequest LocalStore::request(const QString& publicKey) const
+{
+    const QString key = normalizedKey(publicKey);
+    for (const WaitingRequest& waiting : waitingRequests) {
+        if (waiting.publicKey == key) {
+            return waiting;
+        }
+    }
+    return WaitingRequest();
+}
+
+QVector<LocalStore::ContactOffer> LocalStore::contactOffers() const
+{
+    return offers;
+}
+
+LocalStore::ContactOffer LocalStore::contactOffer(const QByteArray& nonce) const
+{
+    if (nonce.isEmpty()) {
+        return ContactOffer();
+    }
+    for (const ContactOffer& offer : offers) {
+        if (offer.nonce == nonce) {
+            return offer;
+        }
+    }
+    return ContactOffer();
+}
+
+bool LocalStore::keepContactOffer(const ContactOffer& offer, const QDateTime& now)
+{
+    ContactOffer kept = offer;
+    kept.groupKey = normalizedKey(offer.groupKey);
+    kept.memberKey = normalizedKey(offer.memberKey);
+    if (!isPublicKey(kept.groupKey) || !isPublicKey(kept.memberKey)
+        || kept.nonce.size() != static_cast<int>(groupContactNonceSize)
+        || now.toMSecsSinceEpoch() - kept.date > contactOfferKeepMs) {
+        return false;
+    }
+    offers.erase(std::remove_if(offers.begin(), offers.end(),
+                                [&kept](const ContactOffer& earlier) {
+                                    return (earlier.groupKey == kept.groupKey
+                                            && earlier.memberKey == kept.memberKey)
+                                           || earlier.nonce == kept.nonce;
+                                }),
+                 offers.end());
+    offers.append(kept);
+    while (offers.size() > contactOfferLimit) {
+        offers.removeFirst();
+    }
+    return true;
+}
+
+bool LocalStore::dropContactOffer(const QByteArray& nonce)
+{
+    const int before = offers.size();
+    offers.erase(std::remove_if(offers.begin(), offers.end(),
+                                [&nonce](const ContactOffer& offer) { return offer.nonce == nonce; }),
+                 offers.end());
+    return offers.size() != before;
+}
+
+bool LocalStore::pruneContactOffers(const QDateTime& now)
+{
+    const qint64 oldest = now.toMSecsSinceEpoch() - contactOfferKeepMs;
+    const int before = offers.size();
+    offers.erase(std::remove_if(offers.begin(), offers.end(),
+                                [oldest](const ContactOffer& offer) { return offer.date < oldest; }),
+                 offers.end());
+    return offers.size() != before;
+}
+
+LocalStore::MemberContact LocalStore::memberContact(const QString& groupKey,
+                                                    const QString& memberKey) const
+{
+    const QString group = normalizedKey(groupKey);
+    const QString member = normalizedKey(memberKey);
+    for (const MemberContact& kept : memberContacts) {
+        if (kept.groupKey == group && kept.memberKey == member) {
+            return kept;
+        }
+    }
+    return MemberContact();
+}
+
+LocalStore::MemberContact LocalStore::memberOfContact(const QString& contactKey) const
+{
+    const QString key = normalizedKey(contactKey);
+    for (auto it = memberContacts.crbegin(); it != memberContacts.crend(); ++it) {
+        if (it->contactKey == key) {
+            return *it;
+        }
+    }
+    return MemberContact();
+}
+
+bool LocalStore::keepMemberContact(const MemberContact& member)
+{
+    MemberContact kept = member;
+    kept.groupKey = normalizedKey(member.groupKey);
+    kept.memberKey = normalizedKey(member.memberKey);
+    kept.contactKey = normalizedKey(member.contactKey);
+    kept.address = normalizedKey(member.address);
+    if (!isPublicKey(kept.groupKey) || !isPublicKey(kept.memberKey)
+        || !isPublicKey(kept.contactKey)
+        || (!kept.address.isEmpty()
+            && (!isAddress(kept.address) || !kept.address.startsWith(kept.contactKey)))) {
+        return false;
+    }
+    const auto same = std::find_if(memberContacts.begin(), memberContacts.end(),
+                                   [&kept](const MemberContact& earlier) {
+                                       return earlier.groupKey == kept.groupKey
+                                              && earlier.memberKey == kept.memberKey;
+                                   });
+    if (same != memberContacts.end()) {
+        if (kept.address.isEmpty() && same->contactKey == kept.contactKey) {
+            kept.address = same->address;
+        }
+        if (kept.memberName.isEmpty()) {
+            kept.memberName = same->memberName;
+        }
+        if (*same == kept) {
+            return false;
+        }
+        memberContacts.erase(same);
+    }
+    memberContacts.append(kept);
+    while (memberContacts.size() > memberContactLimit) {
+        memberContacts.removeFirst();
+    }
     return true;
 }
 
@@ -996,15 +1326,42 @@ bool LocalStore::markRelayed(const QString& entryKey)
     return true;
 }
 
+PrivateEntry LocalStore::privateEntry(const QString& entryKey) const
+{
+    return privateEntries.value(entryKey);
+}
+
+bool LocalStore::markPrivateEntry(const QString& entryKey, const PrivateEntry& entry)
+{
+    PrivateEntry kept = entry;
+    kept.peerKey = normalizedKey(entry.peerKey);
+    if (!isEntryKey(entryKey) || !isPublicKey(kept.peerKey)) {
+        return false;
+    }
+    if (privateEntries.contains(entryKey) && privateEntries.value(entryKey) == kept) {
+        return false;
+    }
+    privateEntryOrder.removeOne(entryKey);
+    privateEntryOrder.append(entryKey);
+    privateEntries.insert(entryKey, kept);
+    while (privateEntryOrder.size() > privateEntryLimit) {
+        privateEntries.remove(privateEntryOrder.takeFirst());
+    }
+    return true;
+}
+
 bool LocalStore::forgetEntries()
 {
-    const bool changed = !entryOrder.isEmpty() || !wireOrder.isEmpty() || !relayedKeys.isEmpty();
+    const bool changed = !entryOrder.isEmpty() || !wireOrder.isEmpty() || !relayedKeys.isEmpty()
+                         || !privateEntryOrder.isEmpty();
     entries.clear();
     entryOrder.clear();
     wires.clear();
     wireOrder.clear();
     relayedKeys.clear();
     relayedOrder.clear();
+    privateEntries.clear();
+    privateEntryOrder.clear();
     return changed;
 }
 

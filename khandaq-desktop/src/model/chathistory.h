@@ -98,6 +98,15 @@ public:
     /** Whether the person's text with this msgV3 id is here already: it came again. */
     bool hasIncomingText(const ToxPk& sender, const QByteArray& msgV3Id) const;
     /**
+     * KHANDAQ (26.11.2026): a private message with a member of the group, which the feed shows
+     * among the others (DESIGN-group-contacts-private-mentions.md, part 2): ours to them, author
+     * our own key, or theirs to us, author their key. Its mark (Air::PrivateEntry) is kept before
+     * it shows, and it is kept delivered and never handed to the dispatcher: it never goes to the
+     * group, no receipt goes for it, and this client serves no history of a group (Core).
+     */
+    void addPrivateEntry(const ToxPk& author, const QString& text, const QDateTime& time,
+                         const Air::PrivateEntry& entry);
+    /**
      * KHANDAQ (0.2.57): the newest entry loaded of the file with this Tox file id, in this
      * direction (SessionChatLog::findFileEntry): what an offer of it goes on with.
      */

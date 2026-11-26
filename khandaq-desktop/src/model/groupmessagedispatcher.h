@@ -97,6 +97,8 @@ private:
     ICoreGroupMessageSender::SendResult send(Message& message);
     /** Sends the texts that wait, in order, until the group takes no more. */
     void sendWaiting();
+    /** Marks a message whose mention block names the key the group knows us by as a mention. */
+    void markMentionOfUs(Message& message) const;
 
     Group& group;
     MessageProcessor processor;

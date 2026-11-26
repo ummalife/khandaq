@@ -60,4 +60,10 @@ public:
      * author's "delivered" mark and its history-sync retries both wait for one.
      */
     virtual void sendGroupDeliveryReceipt(int groupId, const ToxPk& author, uint32_t messageId) = 0;
+
+    /**
+     * KHANDAQ (26.11.2026): the key the group knows us by, which a mention of us names
+     * (Air::mentionsKey); empty when it is not known. None by default.
+     */
+    virtual ToxPk getGroupSelfPublicKey(int groupId) const;
 };

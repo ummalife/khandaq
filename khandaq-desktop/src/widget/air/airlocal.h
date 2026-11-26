@@ -83,6 +83,13 @@ public:
      * same words again from a key that waits already.
      */
     bool addRequest(const ToxPk& publicKey, const QString& message);
+    /**
+     * Keeps the offer of a member of a group as a request (Air::LocalStore::addGroupRequest);
+     * false when nothing new is kept.
+     */
+    bool addGroupRequest(const Air::LocalStore::WaitingRequest& offer);
+    /** The request waiting from the key; one with an empty key when none waits. */
+    Air::LocalStore::WaitingRequest request(const ToxPk& publicKey) const;
     void removeRequest(const ToxPk& publicKey);
     /**
      * They became a contact while their request waited: it is answered, and the contact keeps the
@@ -108,6 +115,19 @@ public:
                         const QString& text);
     /** The group was left: its mute, its private messages and our invitations to it go. */
     void forgetGroup(const QString& groupKey);
+
+    /**
+     * KHANDAQ (26.11.2026): a member of a group to contacts (airgroupcontact.h). Our offers that
+     * wait for an accept, written at once: a member's accept may come in a later launch.
+     */
+    Air::LocalStore::ContactOffer contactOffer(const QByteArray& nonce) const;
+    void keepContactOffer(const Air::LocalStore::ContactOffer& offer);
+    void dropContactOffer(const QByteArray& nonce);
+    /** Who a member of a group is among the contacts, both sides of the exchange; written at once. */
+    Air::LocalStore::MemberContact memberContact(const QString& groupKey,
+                                                 const QString& memberKey) const;
+    Air::LocalStore::MemberContact memberOfContact(const ToxPk& contactKey) const;
+    void keepMemberContact(const Air::LocalStore::MemberContact& member);
 
     /**
      * KHANDAQ (0.2.60): our invitations to groups for contacts who were offline, written at once:
@@ -144,6 +164,12 @@ public:
      */
     bool isRelayed(const QString& key) const override;
     void markRelayed(const QString& key) override;
+    /**
+     * KHANDAQ (26.11.2026): a private message of a group that its feed shows, under its
+     * textEntryKey; written at once, as the entry it marks is.
+     */
+    Air::PrivateEntry privateEntry(const QString& key) const override;
+    void markPrivateEntry(const QString& key, const Air::PrivateEntry& entry) override;
     /** The history was erased: the marks and the ids of its entries go too. */
     void forgetEntries();
 
@@ -174,6 +200,8 @@ signals:
     void requestsChanged();
     /** A private message was kept in the conversation with that member of that group. */
     void privateLinesChanged(const QString& groupKey, const QString& peerKey);
+    /** A member of a group became a contact, or an offer to one was made or answered. */
+    void memberContactsChanged();
     /** KHANDAQ (0.2.57): the person has seen more of our messages: seenUpTo moved. */
     void seenChanged(const ToxPk& publicKey);
 

@@ -20,6 +20,7 @@
 #include "mock/mockbootstraplistgenerator.h"
 #include "mock/mockcoresettings.h"
 #include "src/core/core.h"
+#include "src/model/air/airgroupcontact.h"
 
 #include <QSignalSpy>
 #include <QtTest/QtTest>
@@ -44,6 +45,8 @@ private slots:
     void aTextTooLongFailsWhetherTheGroupTakesTextsOrNot();
     void aGroupThatIsNotThereTakesNoText();
     void aTextRelayedFromTheHistoryIsToldOnce();
+    void aContactPacketOfNoMemberIsDropped();
+    void aContactPacketGoesOnlyToAMemberOnline();
 
 private:
     ToxCorePtr makeCore(const QByteArray& savedata = QByteArray());
@@ -73,6 +76,25 @@ QByteArray syncText(const QByteArray& author, quint32 time, const QString& words
     packet.append(QByteArray(25, '\0'));
     packet.append(words.toUtf8());
     return packet;
+}
+
+/** A Tox ID whose checksum holds: the key, the nospam, then the XOR of the byte pairs. */
+QByteArray addressOf(const QByteArray& key)
+{
+    QByteArray address = key + QByteArray::fromHex("01020304");
+    char check[2] = {0, 0};
+    for (int i = 0; i < address.size(); ++i) {
+        check[i % 2] = static_cast<char>(check[i % 2] ^ address.at(i));
+    }
+    address.append(check, 2);
+    return address;
+}
+
+void handContact(Core& core, int group, uint32_t peer, const QByteArray& packet)
+{
+    core.handleGroupContactPacket(static_cast<uint32_t>(group), peer,
+                                  reinterpret_cast<const uint8_t*>(packet.constData()),
+                                  static_cast<size_t>(packet.size()));
 }
 
 void handText(Core& core, int group, const QByteArray& packet)
@@ -230,6 +252,61 @@ void TestCoreGroupText::aTextRelayedFromTheHistoryIsToldOnce()
     handText(*core, group, syncText(profileSelf, now, QStringLiteral("Ours too")));
     handText(*core, group + 1, syncText(maryam, now, QStringLiteral("Nowhere")));
     QCOMPARE(told.size(), size_t{2});
+}
+
+/**
+ * KHANDAQ (26.11.2026): an offer or an accept of a member to contacts is told only when toxcore
+ * names a member who sent it. Ours, one of a member who is not there, of a group that is not
+ * there, or one not of 54 bytes is dropped. (A member who sends one needs a second node: the
+ * cores here are never started.)
+ */
+void TestCoreGroupText::aContactPacketOfNoMemberIsDropped()
+{
+    ToxCorePtr core = makeCore();
+    QVERIFY(core);
+    const int group = core->createGroup(QStringLiteral("Contacts"), TOX_GROUP_PRIVACY_STATE_PRIVATE);
+    QVERIFY(group >= 0);
+    QSignalSpy told(core.get(), &Core::groupContactPacketReceived);
+
+    const QByteArray nonce = QByteArray::fromHex("0102030405060708");
+    const QByteArray offer = Air::groupContactPacket(Air::GroupContactPacket::Kind::Offer,
+                                                     addressOf(QByteArray(ToxPk::size, 'm')), nonce);
+    const QByteArray accept = Air::groupContactPacket(
+        Air::GroupContactPacket::Kind::Accept, addressOf(QByteArray(ToxPk::size, 'm')), nonce);
+    QCOMPARE(offer.size(), 54);
+
+    // Our own number in the group: a packet of ours is never news.
+    const uint32_t self = core->getGroupSelfPeerId(group);
+    handContact(*core, group, self, offer);
+    handContact(*core, group, self, accept);
+    // Nobody has these numbers, and no group that one.
+    handContact(*core, group, 4242, offer);
+    handContact(*core, group, 4242, accept);
+    handContact(*core, group + 1, self, offer);
+    // Not 54 bytes.
+    handContact(*core, group, self, offer.left(53));
+    handContact(*core, group, self, offer + '\0');
+    QCOMPARE(told.count(), 0);
+}
+
+void TestCoreGroupText::aContactPacketGoesOnlyToAMemberOnline()
+{
+    ToxCorePtr core = makeCore();
+    QVERIFY(core);
+    const int group = core->createGroup(QStringLiteral("Contacts"), TOX_GROUP_PRIVACY_STATE_PRIVATE);
+    QVERIFY(group >= 0);
+    const QByteArray nonce = QByteArray::fromHex("0102030405060708");
+    using Result = Core::ContactPacketResult;
+    // A key nobody has in the group: the member is not there, and nothing goes.
+    QCOMPARE(core->sendGroupContactPacket(group, ToxPk(QByteArray(ToxPk::size, 'm')), false, nonce),
+             Result::Offline);
+    QCOMPARE(core->sendGroupContactPacket(group, ToxPk(QByteArray(ToxPk::size, 'm')), true, nonce),
+             Result::Offline);
+    // No key, or a nonce that is not 8 bytes, sends nothing either.
+    QCOMPARE(core->sendGroupContactPacket(group, ToxPk(), false, nonce), Result::Failed);
+    QCOMPARE(core->sendGroupContactPacket(group, core->getGroupSelfPublicKey(group), false,
+                                          nonce.left(4)),
+             Result::Failed);
 }
 
 QTEST_GUILESS_MAIN(TestCoreGroupText)

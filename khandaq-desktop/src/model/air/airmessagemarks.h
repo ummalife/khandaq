@@ -214,6 +214,25 @@ QString fileEntryKey(const QString& chatKey, const QByteArray& fileId);
 QString entryKeyPrefix(const QString& chatKey);
 
 /**
+ * A private message of a group that its feed shows among the others, to its sender and to its
+ * recipient alone (DESIGN-group-contacts-private-mentions.md, part 2): the member it went to or
+ * came from. Kept on this device under the entry's textEntryKey, never in the words, so that no
+ * member can make a message to the group look private.
+ */
+struct PrivateEntry
+{
+    /** The member's key in the group, 64 hexadecimal characters in upper case. */
+    QString peerKey;
+    /** Their name in the group when it was written: the member may have left since. */
+    QString peerName;
+    /** We wrote it to them; otherwise it came from them. */
+    bool ours = false;
+
+    bool isNull() const;
+    bool operator==(const PrivateEntry& other) const;
+};
+
+/**
  * Keeps, between launches, what the history of a conversation has no place for: the marks of its
  * entries and the ids a group gave its messages, both under the keys above.
  */
@@ -236,6 +255,10 @@ public:
     virtual bool isRelayed(const QString& key) const = 0;
     /** Keeps the mark of an entry that came relayed. */
     virtual void markRelayed(const QString& key) = 0;
+    /** The private message of a group kept under key; a null one for any other entry. */
+    virtual PrivateEntry privateEntry(const QString& key) const = 0;
+    /** Keeps the mark of a private message that a group's feed shows. */
+    virtual void markPrivateEntry(const QString& key, const PrivateEntry& entry) = 0;
 };
 
 } // namespace Air

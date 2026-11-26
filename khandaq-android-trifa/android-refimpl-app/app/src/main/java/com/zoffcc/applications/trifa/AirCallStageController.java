@@ -320,8 +320,12 @@ final class AirCallStageController
         final float areaW = area[2] - area[0];
         final float areaH = area[3] - area[1];
         final int[] base = AirCallStage.selfSize(w, h, density, frameW, frameH);
-        final int[] size = tiles.enlarged() ? AirCallStage.enlarged(base, areaW, areaH)
-                                            : AirCallStage.fitInside(base[0], base[1], areaW, areaH);
+        final int[] plain = AirCallStage.fitInside(base[0], base[1], areaW, areaH);
+        // R11: the long-pressed picture grows only as far as its corner stays clear of the header and the row.
+        final int[] size = tiles.enlarged() ? AirCallStage.enlargedClear(tiles.corner(), area, plain,
+                                                                         AirCallStage.enlarged(base, areaW, areaH),
+                                                                         obstacles, gap)
+                                            : plain;
         tileW = size[0];
         tileH = size[1];
 

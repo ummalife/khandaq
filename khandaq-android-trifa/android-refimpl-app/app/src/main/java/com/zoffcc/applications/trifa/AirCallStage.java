@@ -141,6 +141,59 @@ final class AirCallStage
         return fitInside(Math.round(size[0] * SELF_ENLARGE), Math.round(size[1] * SELF_ENLARGE), maxW, maxH);
     }
 
+    /**
+     * KHANDAQ (calls stage, 26.11): R11 for the long-pressed size. The biggest box from the plain size up to the
+     * long-pressed one, aspect of the long-pressed one, that its corner (origin) still keeps the gap clear of
+     * the obstacles. In a short window (a small phone, a phone on its side) the long press then grows your
+     * picture only as far as the room between the header and the row allows, instead of laying it over the
+     * name. The plain size when not even a bit more fits.
+     */
+    static int[] enlargedClear(final int corner, final float[] area, final int[] plain, final int[] wanted,
+                               final float[][] obstacles, final float gap)
+    {
+        if (wanted[0] <= plain[0] || wanted[1] <= 0 || clearAt(corner, area, wanted[0], wanted[1], obstacles, gap))
+        {
+            return wanted;
+        }
+        // The last width known to fit and the first known not to; a smaller box never crosses more.
+        int fits = plain[0];
+        int fails = wanted[0];
+        while (fails - fits > 1)
+        {
+            final int mid = (fits + fails) >>> 1;
+            if (clearAt(corner, area, mid, heightFor(mid, wanted), obstacles, gap))
+            {
+                fits = mid;
+            }
+            else
+            {
+                fails = mid;
+            }
+        }
+        return fits > plain[0] ? new int[]{fits, heightFor(fits, wanted)} : plain;
+    }
+
+    /** The height of a box this wide with the aspect of shape, floored as fitInside floors it. */
+    private static int heightFor(final int w, final int[] shape)
+    {
+        return (int) Math.floor(w * (shape[1] / (double) shape[0]) + 1e-4);
+    }
+
+    /** Whether a w by h box in its corner (origin) keeps the gap clear of every obstacle. */
+    private static boolean clearAt(final int corner, final float[] area, final float w, final float h,
+                                   final float[][] obstacles, final float gap)
+    {
+        final float[] o = origin(corner, area, w, h, obstacles, gap);
+        for (final float[] c : clearances(obstacles, gap, bottomSide(corner)))
+        {
+            if (o[0] < c[2] && o[0] + w > c[0] && o[1] < c[3] && o[1] + h > c[1])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** A box scaled down with its aspect kept until it fits maxW by maxH; never scaled up. */
     static int[] fitInside(final int w, final int h, final float maxW, final float maxH)
     {

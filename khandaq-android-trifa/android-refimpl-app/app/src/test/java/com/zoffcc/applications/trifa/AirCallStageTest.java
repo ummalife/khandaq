@@ -197,6 +197,36 @@ public class AirCallStageTest
     }
 
     @Test
+    public void aLongPressGrowsTheBoxOnlyAsFarAsItsCornerStaysClear()
+    {
+        // A regular phone: the long-pressed 224 x 398 fits between the header and the row as it is.
+        assertArrayEquals(new int[]{224, 398},
+                          AirCallStage.enlargedClear(CORNER_BOTTOM_RIGHT, new float[]{16f, 40f, 377f, 812f},
+                                                     new int[]{102, 181}, new int[]{224, 398},
+                                                     new float[][]{{120f, 52f, 273f, 140f}, {16f, 724f, 377f, 806f}},
+                                                     16));
+        // A small phone, 360 x 640: 207 x 367 would reach the name. Between the header (156 with the gap) and
+        // the row (504) there are 348, so the box stops at 196 x 347, its aspect kept.
+        assertArrayEquals(new int[]{196, 347},
+                          AirCallStage.enlargedClear(CORNER_BOTTOM_RIGHT, new float[]{16f, 40f, 344f, 600f},
+                                                     new int[]{94, 167}, new int[]{207, 367},
+                                                     new float[][]{{100f, 52f, 260f, 140f}, {16f, 520f, 344f, 592f}},
+                                                     16));
+        // A phone on its side, 852 x 393: over the row and right of the header, 314 x 176 at most.
+        assertArrayEquals(new int[]{314, 176},
+                          AirCallStage.enlargedClear(CORNER_BOTTOM_RIGHT, new float[]{16f, 40f, 836f, 353f},
+                                                     new int[]{181, 102}, new int[]{398, 224},
+                                                     new float[][]{{346f, 40f, 506f, 142f}, {234f, 255f, 618f, 345f}},
+                                                     16));
+        // No room even for a bit more: the plain size.
+        assertArrayEquals(new int[]{102, 181},
+                          AirCallStage.enlargedClear(CORNER_BOTTOM_RIGHT, new float[]{16f, 40f, 377f, 812f},
+                                                     new int[]{102, 181}, new int[]{224, 398},
+                                                     new float[][]{{16f, 52f, 377f, 560f}, {16f, 724f, 377f, 806f}},
+                                                     16));
+    }
+
+    @Test
     public void aBoxBiggerThanTheAreaIsCentredOnThatAxis()
     {
         final float[] area = {16f, 100f, 377f, 200f};

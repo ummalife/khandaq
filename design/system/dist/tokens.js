@@ -92,6 +92,16 @@ window.KQ_TOKENS = {
       "dark": "#3a1714",
       "use": "ground under danger"
     },
+    "private": {
+      "light": "#5a3fb4",
+      "dark": "#b9a6ff",
+      "use": "a private message in a group: its lock and the words who sees it"
+    },
+    "private-soft": {
+      "light": "#f0ecfb",
+      "dark": "#211b38",
+      "use": "ground under a private message in a group"
+    },
     "focus": {
       "light": "#2456d6",
       "dark": "#86a8ff",
@@ -315,6 +325,37 @@ window.KQ_TOKENS = {
         "surface",
         "raised",
         "danger-soft"
+      ],
+      "min": 4.5
+    },
+    {
+      "fg": "private",
+      "on": [
+        "bg",
+        "surface",
+        "raised",
+        "private-soft"
+      ],
+      "min": 4.5
+    },
+    {
+      "fg": "ink",
+      "on": [
+        "private-soft"
+      ],
+      "min": 7.0
+    },
+    {
+      "fg": "ink-2",
+      "on": [
+        "private-soft"
+      ],
+      "min": 4.5
+    },
+    {
+      "fg": "ink-3",
+      "on": [
+        "private-soft"
       ],
       "min": 4.5
     },

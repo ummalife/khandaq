@@ -19,6 +19,8 @@
     <color name="kq_transit_soft">#FBEDD6</color>
     <color name="kq_danger">#BF3329</color>
     <color name="kq_danger_soft">#FBE4E1</color>
+    <color name="kq_private">#5A3FB4</color>
+    <color name="kq_private_soft">#F0ECFB</color>
     <color name="kq_focus">#2456D6</color>
     <color name="kq_scrim">#420A0C10</color>
     <color name="kq_tone_1">#0B6E4F</color>

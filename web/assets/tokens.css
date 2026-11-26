@@ -20,6 +20,8 @@
   --kq-transit-soft: #fbedd6;
   --kq-danger: #bf3329;
   --kq-danger-soft: #fbe4e1;
+  --kq-private: #5a3fb4;
+  --kq-private-soft: #f0ecfb;
   --kq-focus: #2456d6;
   --kq-scrim: #0a0c1042;
   --kq-tone-1: #0b6e4f;
@@ -159,6 +161,8 @@
     --kq-transit-soft: #36270e;
     --kq-danger: #ff8b7e;
     --kq-danger-soft: #3a1714;
+    --kq-private: #b9a6ff;
+    --kq-private-soft: #211b38;
     --kq-focus: #86a8ff;
     --kq-scrim: #00000073;
     --kq-tone-1: #5ccf9e;
@@ -204,6 +208,8 @@
   --kq-transit-soft: #36270e;
   --kq-danger: #ff8b7e;
   --kq-danger-soft: #3a1714;
+  --kq-private: #b9a6ff;
+  --kq-private-soft: #211b38;
   --kq-focus: #86a8ff;
   --kq-scrim: #00000073;
   --kq-tone-1: #5ccf9e;

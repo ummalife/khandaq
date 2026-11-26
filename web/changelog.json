@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-20T19:36:47Z",
+  "generated_at": "2026-11-26T17:50:38Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,185 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.69",
+      "date": "2026-11-26",
+      "title": "Groups: a member to contacts, private messages that stand out, @mentions; the testers' reports on every client",
+      "summary": "A member of a group can be added to contacts from the group, a message to one member stands out in the feed and only the two of you see it, and @ opens a list of the members, in any script. With the app asleep, a group message now wakes the members who are away. A message deleted in a group stays deleted, your name in a group is kept, and the reports of the testers' group of 21 to 23 November are in on every client. The desktop is signed with a new release key: 0.2.68 and older need one download by hand.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "A member of a group becomes a contact",
+          "description": "In a group, “Add to contacts” on a member asks them over the group. When they accept, each of you is in the other's contacts. A member's key copied in a group is recognised in New contact and the search line, which used to say “12 characters missing”: that key is theirs in the group only and is not a Tox ID.",
+          "platforms": [
+            "android",
+            "ios",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Private messages stand out",
+          "description": "A message written to one member of a group stands on its own ground with a lock and the note “Only you and Name: other members don't see this”. Reply on it answers privately instead of quoting it to the group, and the history of the group never hands it to anyone.",
+          "platforms": [
+            "android",
+            "ios",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "@mentions as in Telegram",
+          "description": "Type @ in a group and pick a member from the list, online members first. Names in Cyrillic, Arabic or any other script work too. A mention is bold, opens the member, and notifies the member mentioned, also in a group that is muted.",
+          "platforms": [
+            "android",
+            "ios",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "A group message wakes the phone",
+          "description": "With the app asleep, a message to a group now wakes the members who are away and are the sender's contacts, with the group, the name and the text, as a contact's message does. When the message then comes over Tox, it does not alert a second time.",
+          "platforms": [
+            "android",
+            "ios"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "A deleted group message stays deleted",
+          "description": "A message deleted in a group no longer comes back when a member who missed the deletion relays the history of the group, also after a restart.",
+          "platforms": [
+            "android",
+            "ios",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "A new release key for the desktop",
+          "description": "Windows, macOS and Linux downloads and the desktop update are signed with a new key, SHA256:LGRvz7I3QsMDWMWGOiVccFADH+RB4h5q7eem1uLHKS0, published in web/downloads. Khandaq 0.2.68 and older trust only the old key, so they do not offer this version: download 0.2.69 once by hand, and it updates itself again from then on.",
+          "platforms": [
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Your name in a group is kept",
+          "description": "A name set for one group stays after a restart. On the desktop the group's details have “Your name in the group”, and a new profile name reaches every group that has no name of its own.",
+          "platforms": [
+            "android",
+            "ios",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Group messages on iPhone count and notify as a contact's do",
+          "description": "A message of a member who has left or is offline counts as unread, several messages that come at once notify for the newest, and a group's notification no longer clears the banner of a chat with a person.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Sender tiles beside group messages",
+          "description": "Other members' messages in a group have the sender's tile beside the last message of a run, as in Telegram. A tap on it opens the member.",
+          "platforms": [
+            "android",
+            "ios"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Pause a voice message while recording",
+          "description": "A recording has Pause and Resume. The message is sent as one, and its length leaves out the time paused.",
+          "platforms": [
+            "android",
+            "ios",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Add more before sending; draw and write on a photo",
+          "description": "The screen before photos or files go has “+” or “Add more”, which adds to the list instead of starting again. On the phones, Edit offers Crop and rotate or Draw and write; the photo in your library is never changed.",
+          "platforms": [
+            "android",
+            "ios",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Files open in the app",
+          "description": "A PDF opens in Khandaq, and the viewers have Share. On iPhone audio files play in their message and a video opens in a full player.",
+          "platforms": [
+            "android",
+            "ios"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "The keyboard follows a drag",
+          "description": "Dragging the messages down takes the keyboard down with the finger, and the long-press menu is never under the keyboard.",
+          "platforms": [
+            "android",
+            "ios"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "The Windows installer",
+          "description": "The site offers the installer first. The uninstaller removes the desktop shortcut, the installer carries Khandaq's icon, and tox: links and .tox files open when Khandaq is installed in a folder with spaces.",
+          "platforms": [
+            "windows"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "Notes in Saved Messages can be edited",
+          "description": "Edit on a note changes it in place and marks it edited, whatever its length.",
+          "platforms": [
+            "android",
+            "ios",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        },
+        {
+          "severity": "low",
+          "title": "Smaller fixes from the testers",
+          "description": "iPhone: the timer of a hands-free recording no longer stops while you scroll, a swipe on a chat row no longer switches the filter, and a long status wraps. Android: the attach sheet opens whole and Send stays in reach. Desktop: a message you send while scrolled up brings the conversation to its foot.",
+          "platforms": [
+            "android",
+            "ios",
+            "windows",
+            "macos",
+            "linux"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.68",
       "date": "2026-11-20",

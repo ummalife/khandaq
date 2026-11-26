@@ -534,5 +534,4 @@
     <string name="air_nc_verdict_member_unnamed_format">هذا مفتاح %1$s في إحدى مجموعاتك، وليس معرّفًا</string>
     <string name="air_nc_send_member_request">أرسل طلب اتصال عبر المجموعة</string>
     <string name="air_cmd_member_format">%1$s في المجموعة %2$s</string>
-    <string name="air_cmd_member_note">أرسل طلب اتصال عبر المجموعة</string>
 </resources>

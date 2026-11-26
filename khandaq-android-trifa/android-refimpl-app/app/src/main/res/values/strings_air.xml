@@ -485,5 +485,4 @@
     <string name="air_nc_verdict_member_unnamed_format">This is the key of %1$s in one of your groups, not an ID</string>
     <string name="air_nc_send_member_request">Send a contact request through the group</string>
     <string name="air_cmd_member_format">%1$s in the group %2$s</string>
-    <string name="air_cmd_member_note">Send a contact request through the group</string>
 </resources>

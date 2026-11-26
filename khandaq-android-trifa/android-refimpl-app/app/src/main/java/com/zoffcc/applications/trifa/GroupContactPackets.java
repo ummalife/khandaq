@@ -45,7 +45,7 @@ final class GroupContactPackets
         final byte[] address;
         final byte[] nonce;
 
-        private Packet(final byte kind, final byte[] address, final byte[] nonce)
+        Packet(final byte kind, final byte[] address, final byte[] nonce)
         {
             this.kind = kind;
             this.address = address;

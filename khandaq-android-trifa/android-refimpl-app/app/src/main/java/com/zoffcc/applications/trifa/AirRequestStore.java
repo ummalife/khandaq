@@ -62,9 +62,9 @@ final class AirRequestStore
     private static final String FIELD_GROUP_NONCE = "group_nonce";
     private static final String FIELD_GROUP_MEMBER_NAME = "group_member_name";
     private static final String FIELD_GROUP_NAME = "group_name";
-    private static final Pattern ADDRESS = Pattern.compile("[0-9A-F]{76}");
-    private static final Pattern NONCE = Pattern.compile("[0-9a-f]{16}");
-    private static final Pattern PUBLIC_KEY = Pattern.compile("[0-9A-F]{64}");
+    static final Pattern ADDRESS = Pattern.compile("[0-9A-F]{76}");
+    static final Pattern NONCE = Pattern.compile("[0-9a-f]{16}");
+    static final Pattern PUBLIC_KEY = Pattern.compile("[0-9A-F]{64}");
 
     interface Listener
     {
@@ -147,7 +147,7 @@ final class AirRequestStore
             this(publicKey, message, receivedMs, null);
         }
 
-        private Pending(String publicKey, String message, long receivedMs, GroupOffer group)
+        Pending(String publicKey, String message, long receivedMs, GroupOffer group)
         {
             this.publicKey = publicKey;
             this.message = message;

@@ -835,7 +835,7 @@ public class AirFragment extends Fragment
         final String title = member.groupName.isEmpty()
                              ? member.name
                              : getString(R.string.air_cmd_member_format, member.name, member.groupName);
-        memberKeyRow.showPerson(member.memberKey, member.name, title, getString(R.string.air_cmd_member_note));
+        memberKeyRow.showPerson(member.memberKey, member.name, title, getString(R.string.air_nc_send_member_request));
     }
 
     /** The tap on the member row: the offer goes to them over the group, and the toast says how it went. */

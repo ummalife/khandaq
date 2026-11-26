@@ -469,5 +469,4 @@
     <string name="air_nc_verdict_member_unnamed_format">这是 %1$s 在你的某个群组中的密钥，不是 ID</string>
     <string name="air_nc_send_member_request">通过群组发送联系人请求</string>
     <string name="air_cmd_member_format">%1$s，群组 %2$s</string>
-    <string name="air_cmd_member_note">通过群组发送联系人请求</string>
 </resources>

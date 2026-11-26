@@ -506,7 +506,6 @@
     <string name="air_group_member_key_note">Этот ключ действует только в этой группе, по нему в контакты не добавить. Нажмите «Добавить в контакты».</string>
     <string name="air_nc_verdict_member_format">Это ключ %1$s в группе «%2$s», а не ID</string>
     <string name="air_nc_verdict_member_unnamed_format">Это ключ %1$s в одной из ваших групп, а не ID</string>
-    <string name="air_nc_send_member_request">Отправить запрос через группу</string>
+    <string name="air_nc_send_member_request">Отправить запрос в контакты через группу</string>
     <string name="air_cmd_member_format">%1$s в группе «%2$s»</string>
-    <string name="air_cmd_member_note">Отправить запрос в контакты через группу</string>
 </resources>

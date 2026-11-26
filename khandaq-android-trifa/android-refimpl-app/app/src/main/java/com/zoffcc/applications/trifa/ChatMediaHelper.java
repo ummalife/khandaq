@@ -52,9 +52,13 @@ public final class ChatMediaHelper
     // KHANDAQ (Figma): sender name + timestamp shown in the media viewer overlay bar.
     public static final String EXTRA_SENDER_NAME = "sender_name";
     public static final String EXTRA_TIMESTAMP = "timestamp_millis";
+    // KHANDAQ (Khandaq Testers 8263): the name of a file the PDF viewer shows and hands to another app.
+    public static final String EXTRA_DISPLAY_NAME = "display_name";
 
     public static final String MODE_IMAGE = "image";
     public static final String MODE_VIDEO = "video";
+
+    static final String PDF_MIME_TYPE = "application/pdf";
 
     private ChatMediaHelper()
     {
@@ -159,6 +163,14 @@ public final class ChatMediaHelper
         {
             openVideoViewer(context, message.filename_fullpath, message.id, message.storage_frame_work, exportPath,
                             mimeType, senderNameForMessage(message), message.sent_timestamp);
+            return;
+        }
+
+        // KHANDAQ (Khandaq Testers 8263): a PDF opens in the app; any other document still opens elsewhere.
+        if (opensInPdfViewer(mimeType))
+        {
+            openPdfViewer(context, message.filename_fullpath, message.storage_frame_work, exportPath,
+                          fileDisplayName(message.text, null, message.filename_fullpath));
             return;
         }
 
@@ -342,6 +354,15 @@ public final class ChatMediaHelper
             return;
         }
 
+        // KHANDAQ (Khandaq Testers 8263): a PDF opens in the app; any other document still opens elsewhere.
+        if (opensInPdfViewer(mimeType))
+        {
+            final String mediaPath = HelperFiletransfer.resolveGroupMessageMediaPath(fresh);
+            openPdfViewer(context, mediaPath, fresh.storage_frame_work, exportPath,
+                          fileDisplayName(fresh.text, fresh.file_name, mediaPath));
+            return;
+        }
+
         if (exportPath != null)
         {
             HelperFiletransfer.open_local_file(exportPath, context);
@@ -486,6 +507,57 @@ public final class ChatMediaHelper
             e.printStackTrace();
             AirComposerNotice.say(context.getString(R.string.chat_opening_file_failed), true);
         }
+    }
+
+    /** KHANDAQ (Khandaq Testers 8263): the documents the app shows itself, in PdfViewerActivity. */
+    static boolean opensInPdfViewer(final String mimeType)
+    {
+        return PDF_MIME_TYPE.equalsIgnoreCase(mimeType);
+    }
+
+    static void openPdfViewer(final Context context, final String path, final boolean storageFramework,
+                              final String exportPath, final String displayName)
+    {
+        try
+        {
+            final Intent intent = new Intent(context, PdfViewerActivity.class);
+            intent.putExtra(EXTRA_VFS_PATH, path);
+            if (exportPath != null)
+            {
+                intent.putExtra(EXTRA_EXPORT_PATH, exportPath);
+            }
+            if (storageFramework)
+            {
+                intent.putExtra(EXTRA_STORAGE_FRAMEWORK, "1");
+            }
+            intent.putExtra(EXTRA_MIME_TYPE, PDF_MIME_TYPE);
+            intent.putExtra(EXTRA_DISPLAY_NAME, displayName);
+            context.startActivity(intent);
+        }
+        catch (Exception e)
+        {
+            Log.i(TAG, "openPdfViewer:EE:" + e.getClass().getSimpleName());
+            AirComposerNotice.say(context.getString(R.string.chat_opening_file_failed), true);
+        }
+    }
+
+    /** The name a file is shown under: the first line of its message, else its stored name, else its path's. */
+    static String fileDisplayName(final String text, final String fileName, final String path)
+    {
+        final String fromText = HelperFiletransfer.display_name_from_message_text(text);
+        if ((fromText != null) && !fromText.isEmpty())
+        {
+            return fromText;
+        }
+        if ((fileName != null) && !fileName.isEmpty())
+        {
+            return fileName;
+        }
+        if ((path != null) && !path.isEmpty() && !path.startsWith("content://"))
+        {
+            return new File(path).getName();
+        }
+        return null;
     }
 
     public static String messageMediaDisplayLabel(Context context, Message message)

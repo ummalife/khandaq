@@ -808,6 +808,8 @@
     <string name="MessageListActivity_longpress_to_record_audiomsg">اضغط مطولا لتسجيل رسالة صوتية</string>
     <string name="voice_recording_cancel">إلغاء</string>
     <string name="voice_recording_send">إرسال رسالة صوتية</string>
+    <string name="voice_recording_pause">إيقاف التسجيل مؤقتًا</string>
+    <string name="voice_recording_resume">متابعة التسجيل</string>
     <string name="message_list_open_friend_profile">فتح ملف جهة الاتصال</string>
     <string name="main_profile_open">فتح ملفي الشخصي</string>
     <string name="group_open_group_info">فتح معلومات المجموعة</string>
@@ -997,6 +999,26 @@
     <string name="media_send_caption_hint">أضف تعليقا</string>
     <string name="media_send_edit_photo">تعديل الصورة</string>
     <string name="media_send_edit_failed">تعذر تعديل الصورة</string>
+    <string name="media_send_add_more">إضافة صور أو فيديوهات</string>
+    <!-- Khandaq Testers 8263: the PDF viewer, and More (Share, Open in another app) of the media viewers -->
+    <string name="media_viewer_more">المزيد</string>
+    <string name="media_viewer_open_elsewhere">فتح في تطبيق آخر</string>
+    <string name="pdf_viewer_page_format">الصفحة %1$d من %2$d</string>
+    <string name="pdf_viewer_opens_elsewhere">لا يمكن عرض ملف PDF هذا هنا، لذا سيُفتح في تطبيق آخر</string>
+    <!-- Khandaq Testers 8264: the edits of a photo on the send screen, and Draw and write -->
+    <string name="media_send_edit_crop">قص وتدوير</string>
+    <string name="media_send_edit_markup">رسم وكتابة</string>
+    <string name="photo_markup_undo">تراجع</string>
+    <string name="photo_markup_done">تم</string>
+    <string name="photo_markup_text">نص</string>
+    <string name="photo_markup_add_text">إضافة نص</string>
+    <string name="photo_markup_text_hint">اكتب النص</string>
+    <string name="photo_markup_color_white">أبيض</string>
+    <string name="photo_markup_color_black">أسود</string>
+    <string name="photo_markup_color_red">أحمر</string>
+    <string name="photo_markup_color_yellow">أصفر</string>
+    <string name="photo_markup_color_green">أخضر</string>
+    <string name="photo_markup_color_blue">أزرق</string>
     <string name="media_send_counter_format">%1$d / %2$d</string>
     <string name="media_label_video">فيديو</string>
     <string name="media_label_audio">صوت</string>

@@ -798,6 +798,8 @@
     <string name="MessageListActivity_longpress_to_record_audiomsg">long press to record an Audio Message</string>
     <string name="voice_recording_cancel">Cancel</string>
     <string name="voice_recording_send">Send voice message</string>
+    <string name="voice_recording_pause">Pause recording</string>
+    <string name="voice_recording_resume">Resume recording</string>
     <string name="message_list_open_friend_profile">Open contact profile</string>
     <string name="main_profile_open">Open my profile</string>
     <string name="group_open_group_info">Open group info</string>
@@ -1019,6 +1021,26 @@
     <string name="media_send_caption_hint">Add a caption</string>
     <string name="media_send_edit_photo">Edit photo</string>
     <string name="media_send_edit_failed">Couldn\'t edit photo</string>
+    <string name="media_send_add_more">Add photos or videos</string>
+    <!-- Khandaq Testers 8263: the PDF viewer, and More (Share, Open in another app) of the media viewers -->
+    <string name="media_viewer_more">More</string>
+    <string name="media_viewer_open_elsewhere">Open in another app</string>
+    <string name="pdf_viewer_page_format">Page %1$d of %2$d</string>
+    <string name="pdf_viewer_opens_elsewhere">This PDF cannot be shown here, so it opens in another app</string>
+    <!-- Khandaq Testers 8264: the edits of a photo on the send screen, and Draw and write -->
+    <string name="media_send_edit_crop">Crop and rotate</string>
+    <string name="media_send_edit_markup">Draw and write</string>
+    <string name="photo_markup_undo">Undo</string>
+    <string name="photo_markup_done">Done</string>
+    <string name="photo_markup_text">Text</string>
+    <string name="photo_markup_add_text">Add text</string>
+    <string name="photo_markup_text_hint">Type the words</string>
+    <string name="photo_markup_color_white">White</string>
+    <string name="photo_markup_color_black">Black</string>
+    <string name="photo_markup_color_red">Red</string>
+    <string name="photo_markup_color_yellow">Yellow</string>
+    <string name="photo_markup_color_green">Green</string>
+    <string name="photo_markup_color_blue">Blue</string>
     <string name="media_send_counter_format">%1$d / %2$d</string>
     <string name="media_label_video">Video</string>
     <string name="media_label_audio">Audio</string>

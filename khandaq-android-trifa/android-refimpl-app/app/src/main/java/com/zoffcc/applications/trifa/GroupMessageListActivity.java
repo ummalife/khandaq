@@ -2463,8 +2463,7 @@ public class GroupMessageListActivity extends AppCompatActivity
     {
         // KHANDAQ (Figma attachments 2031:13703): mirror the 1:1 attach sheet — teal camera/video/gallery
         // chips + a grid of recent device media — but route everything to the GROUP send flow.
-        final com.google.android.material.bottomsheet.BottomSheetDialog sheet =
-                new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        final com.google.android.material.bottomsheet.BottomSheetDialog sheet = AttachSheet.create(this);
         final View content = getLayoutInflater().inflate(R.layout.bottomsheet_attach, null);
         // KHANDAQ (redesign, E8): the limit stands next to the choice, the same figure as the refusal.
         final TextView attachLimit = content.findViewById(R.id.attach_sheet_limit);

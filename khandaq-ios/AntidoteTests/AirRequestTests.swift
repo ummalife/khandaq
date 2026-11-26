@@ -833,7 +833,7 @@ class VoiceRecordingClockTests: XCTestCase {
         clock.resume(at: start.addingTimeInterval(11))
         clock.pause(at: start.addingTimeInterval(13))
         clock.resume(at: start.addingTimeInterval(20))
-        // Recorded: 0–2, 10–13 and 20–21; the second pause and the second resume change nothing.
+        // Recorded: 0-2, 10-13 and 20-21; the second pause and the second resume change nothing.
         XCTAssertEqual(clock.elapsed(at: start.addingTimeInterval(21)) ?? -1, 6, accuracy: 0.001)
     }
 

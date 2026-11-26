@@ -91,7 +91,8 @@
         <item name="cornerSize">@dimen/kq_radius_control</item>
     </style>
 
-    <!-- The create sheet: transparent window so the sheet's own top corners show. -->
+    <!-- The create sheet and the attach sheet of a chat or a group (AttachSheet.create): transparent
+         window so the sheet's own top corners show. -->
     <style name="ThemeOverlay.KQ.Air.Sheet" parent="ThemeOverlay.MaterialComponents.BottomSheetDialog">
         <item name="bottomSheetStyle">@style/Widget.KQ.Air.Sheet</item>
     </style>

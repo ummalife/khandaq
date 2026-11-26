@@ -466,7 +466,7 @@ shows.
   there is no transit mark.
 - **A private message in the group feed** is there for its sender and its recipient only, in its
   place among the messages, on the `private-soft` ground with a lock and the note in `private`:
-  "Privately to Hamza: other members don't see this", or "Privately to you: …". No history sync
+  "Privately to Hamza: other members don't see this", or "Privately to you: ...". No history sync
   serves it and no reply quotes it into the group.
 - **Group settings** are drawn as the screens of Settings: your name in this group and the topic, each
   with what it does; Who can join (the two choices, the password, the member limit); Who can write and

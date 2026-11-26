@@ -277,14 +277,17 @@ void VideoSurface::paintEvent(QPaintEvent* event)
         // second time without smoothing. Now it is converted at the size it is drawn at, but never
         // above its own (swscale shrinks it), and a frame drawn bigger than it is grows in the
         // painter, smoothly.
-        const QSize source = lastFrame->getSourceDimensions().size();
+        // KHANDAQ (0.2.70 Windows build, 27.11): not "source" or "frameSize", which are members;
+        // the Windows build (-Wshadow -Werror) refuses a local that shadows one.
+        const QSize pictureSize = lastFrame->getSourceDimensions().size();
         const QRect area = contentsRect();
         const QRect drawn = Air::CallStage::videoRect(
-            source, area, fills(source) ? Air::CallStage::Scale::Fill : Air::CallStage::Scale::Fit);
+            pictureSize, area,
+            fills(pictureSize) ? Air::CallStage::Scale::Fill : Air::CallStage::Scale::Fit);
         const qreal dpr = devicePixelRatioF();
         QSize pixels(qRound(drawn.width() * dpr), qRound(drawn.height() * dpr));
-        if (pixels.width() > source.width() || pixels.height() > source.height()) {
-            pixels = source;
+        if (pixels.width() > pictureSize.width() || pixels.height() > pictureSize.height()) {
+            pixels = pictureSize;
         }
         if (!pixels.isEmpty()) {
             const QImage frame = lastFrame->toQImage(pixels);

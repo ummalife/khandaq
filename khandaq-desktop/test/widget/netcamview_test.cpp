@@ -716,18 +716,20 @@ void TestNetCamView::messagesTellWhatCame()
 {
     TestStage stage;
     startStage(stage, QSize(1024, 640), landscape);
-    AirCallControl* const messages = stage.control("callStageMessages");
+    // KHANDAQ (0.2.70 Windows build, 27.11): not "messages", the fixture member; the Windows
+    // build (-Wshadow -Werror) refuses a local that shadows it.
+    AirCallControl* const messagesControl = stage.control("callStageMessages");
     QSignalSpy clicks(&stage.view, &NetCamView::showMessageClicked);
-    QVERIFY(!messages->isEngaged());
+    QVERIFY(!messagesControl->isEngaged());
     stage.view.setShowMessages(true, true);
-    QVERIFY(messages->isEngaged());
-    QVERIFY(messages->hasNotice());
+    QVERIFY(messagesControl->isEngaged());
+    QVERIFY(messagesControl->hasNotice());
     stage.view.setShowMessages(true);
-    QVERIFY(!messages->hasNotice());
+    QVERIFY(!messagesControl->hasNotice());
     stage.view.setShowMessages(false, true);
-    QVERIFY(!messages->isEngaged());
-    QVERIFY(!messages->hasNotice());
-    messages->click();
+    QVERIFY(!messagesControl->isEngaged());
+    QVERIFY(!messagesControl->hasNotice());
+    messagesControl->click();
     QCOMPARE(clicks.count(), 1);
 }
 

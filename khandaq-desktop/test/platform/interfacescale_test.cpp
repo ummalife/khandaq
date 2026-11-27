@@ -37,6 +37,7 @@ private slots:
     void decideAfterRestart();
     void decideFromAFactorQtIgnores();
     void sizesTheScreenHasRoomFor();
+    void screensAtTheirOwnScale();
 
 private:
     static void writeIni(const QString& path, const QString& group, const QString& key,
@@ -239,6 +240,34 @@ void TestInterfaceScale::sizesTheScreenHasRoomFor()
     QVERIFY(InterfaceScale::fits(QSize(100, 100), least, 200, 110));
     QVERIFY(InterfaceScale::fits(QSize(), least, 100, 200));
     QVERIFY(InterfaceScale::fits(QSize(0, 900), least, 100, 200));
+}
+
+void TestInterfaceScale::screensAtTheirOwnScale()
+{
+    // Qt 5.12 gives a screen its DPI rounded to a whole factor (inbox #27: Windows at 125 % was
+    // drawn at 100 %); the correction brings each screen back to its own.
+    QCOMPARE(InterfaceScale::screenCorrection(96), 1.0);
+    QCOMPARE(InterfaceScale::screenCorrection(120), 1.25);
+    QCOMPARE(InterfaceScale::screenCorrection(144), 0.75);
+    QCOMPARE(InterfaceScale::screenCorrection(168), 0.875);
+    QCOMPARE(InterfaceScale::screenCorrection(192), 1.0);
+    QCOMPARE(InterfaceScale::screenCorrection(216), 1.125);
+    QCOMPARE(InterfaceScale::screenCorrection(240), 2.5 / 3.0);
+    // Nothing below 100 %, which Qt does not scale down, and nothing from a DPI not known.
+    QCOMPARE(InterfaceScale::screenCorrection(72), 1.0);
+    QCOMPARE(InterfaceScale::screenCorrection(0), 1.0);
+
+    // Only the screens that need it, by the names Qt 5.12 gives them on Windows.
+    const QVector<InterfaceScale::ScreenDpi> screens{{QStringLiteral("\\\\.\\DISPLAY1"), 120},
+                                                     {QStringLiteral("\\\\.\\DISPLAY2"), 96},
+                                                     {QStringLiteral("\\\\.\\DISPLAY3"), 144}};
+    QCOMPARE(InterfaceScale::screenFactors(screens),
+             QByteArrayLiteral("\\\\.\\DISPLAY1=1.25;\\\\.\\DISPLAY3=0.75"));
+    const QVector<InterfaceScale::ScreenDpi> usual{{QStringLiteral("\\\\.\\DISPLAY1"), 96}};
+    QCOMPARE(InterfaceScale::screenFactors(usual), QByteArray());
+    QCOMPARE(InterfaceScale::screenFactors(QVector<InterfaceScale::ScreenDpi>()), QByteArray());
+    const QVector<InterfaceScale::ScreenDpi> unnamed{{QString(), 120}};
+    QCOMPARE(InterfaceScale::screenFactors(unnamed), QByteArray());
 }
 
 QTEST_GUILESS_MAIN(TestInterfaceScale)

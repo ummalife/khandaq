@@ -88,4 +88,32 @@ void applyBeforeApplication(const char* argv0);
 /** The size this run of Khandaq has, as applyBeforeApplication left it (100 before it ran). */
 int inForce();
 
+/**
+ * KHANDAQ (inbox #27, 27.11): Qt 5.12 on Windows scales a screen by its DPI rounded to a whole
+ * factor (QWindowsScreen::pixelDensity: 120 dpi, 125 %, is 1; 144 dpi, 150 %, is 2), so Khandaq
+ * was drawn as at 100 % on a screen set to 125 %, and as at 200 % on one set to 150 %.
+ * QT_SCREEN_SCALE_FACTORS multiplies that whole factor per screen: by what the screen's DPI asks
+ * for over what Qt gives it, each screen comes to its own scale. The size chosen in Settings
+ * (QT_SCALE_FACTOR) still comes on top of it.
+ */
+struct ScreenDpi
+{
+    /** The name Qt 5.12 gives the screen on Windows: its device's, such as \\.\DISPLAY1. */
+    QString name;
+    /** Its effective DPI: 96 at 100 %, 120 at 125 %. */
+    int dpi;
+};
+
+/**
+ * The factor a screen of dpi needs over the whole one Qt 5.12 gives it: 1.25 at 120 dpi, 0.75 at
+ * 144, 1 at 96 and at 192. Never below 1 at a DPI below 96, which Qt does not scale down either.
+ */
+double screenCorrection(int dpi);
+
+/**
+ * QT_SCREEN_SCALE_FACTORS for screens: "name=factor" of each screen whose factor is not 1, joined
+ * with ";"; empty when no screen needs one.
+ */
+QByteArray screenFactors(const QVector<ScreenDpi>& screens);
+
 } // namespace InterfaceScale

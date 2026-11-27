@@ -20,6 +20,7 @@
 #include "airmodel.h"
 
 #include "src/core/toxid.h"
+#include "src/model/air/airlocation.h"
 
 #include <QCollator>
 #include <QHash>
@@ -1514,6 +1515,10 @@ MessageText readMessageText(const QString& raw)
 QString entryWords(const QString& raw)
 {
     const MessageText text = readMessageText(raw);
+    Location place;
+    if (!text.unreadable && readLocation(text.body, place)) {
+        return locationCoordinates(place);
+    }
     return text.marked ? text.body : raw;
 }
 

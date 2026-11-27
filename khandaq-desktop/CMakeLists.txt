@@ -225,6 +225,8 @@ set(${PROJECT_NAME}_SOURCES
   src/chatlog/chatmessage.h
   src/chatlog/content/airlabel.cpp
   src/chatlog/content/airlabel.h
+  src/chatlog/content/airlocationcard.cpp
+  src/chatlog/content/airlocationcard.h
   src/chatlog/content/filetransferwidget.cpp
   src/chatlog/content/filetransferwidget.h
   src/chatlog/content/image.cpp
@@ -326,6 +328,8 @@ set(${PROJECT_NAME}_SOURCES
   src/model/air/airhistorysync.h
   src/model/air/airlocalstore.cpp
   src/model/air/airlocalstore.h
+  src/model/air/airlocation.cpp
+  src/model/air/airlocation.h
   src/model/air/airmessagemarks.cpp
   src/model/air/airmessagemarks.h
   src/model/air/airmedia.cpp
@@ -401,6 +405,8 @@ set(${PROJECT_NAME}_SOURCES
   src/model/toxclientstandards.h
   src/net/bootstrapnodeupdater.cpp
   src/net/bootstrapnodeupdater.h
+  src/net/locationmaploader.cpp
+  src/net/locationmaploader.h
   src/net/sshsig.cpp
   src/net/sshsig.h
   src/net/updatecheck.cpp

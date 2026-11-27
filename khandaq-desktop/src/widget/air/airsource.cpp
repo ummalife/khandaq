@@ -578,7 +578,9 @@ QVector<Air::MessageHit> AirSource::search(const QString& query) const
                 continue;
             }
             const Message& message = item.getContentAsMessage().message;
-            const QString body = flat(Air::plainMessageBody(message.content));
+            // KHANDAQ (28.11.2026): a place is found and shown by its name and coordinates.
+            const QString body =
+                flat(AirStrings::shownWords(Air::plainMessageBody(message.content)));
             if (Air::matchRanges(body, trimmed).isEmpty()) {
                 continue;
             }

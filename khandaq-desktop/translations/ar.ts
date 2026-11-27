@@ -4305,6 +4305,21 @@ Opening it can run a program on your computer. Links in messages come from other
         <translation>صورة</translation>
     </message>
     <message>
+        <source>Location</source>
+        <comment>a place a phone shared: the name under its map, over its coordinates; alone in the list of chats and in notifications</comment>
+        <translation>الموقع</translation>
+    </message>
+    <message>
+        <source>Location: %1</source>
+        <comment>a place a phone shared, in the quote of a reply, a search hit and the export: %1 is its coordinates, as 55.75580, 37.61730</comment>
+        <translation>الموقع: %1</translation>
+    </message>
+    <message>
+        <source>Reacted %1 to your location</source>
+        <comment>notification and band under who reacted: %1 is the emoji, on a place you shared</comment>
+        <translation>تفاعل بـ %1 على موقعك</translation>
+    </message>
+    <message>
         <source>via a relay</source>
         <comment>contact reach mark: online, connected through a TCP relay; short, it shares the line with the name</comment>
         <translation>عبر خادم وسيط</translation>

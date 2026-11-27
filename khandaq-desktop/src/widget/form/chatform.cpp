@@ -434,7 +434,7 @@ void ChatForm::refreshQueue()
             item.id = message.outboxId;
             item.time = clockText(message.timestamp);
             // The words, as the transcript shows them: a reply without its header.
-            const QString words = AirStrings::messageWords(message.text);
+            const QString words = AirStrings::transcriptWords(message.text);
             item.text = message.isAction ? ChatForm::ACTION_PREFIX + words : words;
             (message.failed ? failed : waiting).append(item);
         }

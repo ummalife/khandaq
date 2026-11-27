@@ -25,9 +25,12 @@
 #include "content/notificationicon.h"
 #include "content/spinner.h"
 #include "content/airlabel.h"
+#include "content/airlocationcard.h"
 #include "content/text.h"
+#include "src/model/air/airlocation.h"
 #include "src/model/air/airmention.h"
 #include "src/model/air/airmodel.h"
+#include "src/net/locationmaploader.h"
 #include "src/widget/air/airstrings.h"
 #include "src/widget/air/airstyle.h"
 #include "src/widget/style.h"
@@ -109,11 +112,18 @@ QFont ChatMessage::bodyFont(Settings& settings)
     return chosen;
 }
 
-Text* ChatMessage::createBody(const QString& rawMessage, const QString& sender, MessageType type,
-                              DocumentCache& documentCache, SmileyPack& smileyPack,
-                              Settings& settings, Style& style)
+ChatLineContent* ChatMessage::createBody(const QString& rawMessage, const QString& sender,
+                                         MessageType type, DocumentCache& documentCache,
+                                         SmileyPack& smileyPack, Settings& settings, Style& style)
 {
-    const QString words = AirStrings::messageWords(rawMessage);
+    // KHANDAQ (28.11.2026): a place shows its map and coordinates, as on the phones, never the
+    // words it travels as ("khandaq-location:LAT,LON"). An action keeps the words of its line.
+    Air::Location place;
+    if (type != ACTION && Air::messageLocation(rawMessage, place)) {
+        return new AirLocationCard(place, &settings, style, LocationMapLoader::instance());
+    }
+
+    const QString words = AirStrings::transcriptWords(rawMessage);
     // A text that holds the marks itself shows its mentions plain.
     const QVector<Air::MentionSpan> spans =
         words.contains(mentionOpen) || words.contains(mentionClose)

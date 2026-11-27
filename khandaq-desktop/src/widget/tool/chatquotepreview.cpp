@@ -119,7 +119,7 @@ void ChatQuotePreview::setReply(const Air::ReplyMeta& meta, const QString& name,
     replyName = name;
     replyToSelf = self;
     retranslateUi();
-    setAccessibleDescription(quote);
+    setAccessibleDescription(AirStrings::shownWords(quote));
     setVisible(true);
     updateGeometry();
     update();
@@ -173,7 +173,10 @@ QString ChatQuotePreview::quoteText() const
 
 QStringList ChatQuotePreview::shownLines(int width) const
 {
-    return AirPaint::linesOf(quote.left(maxLaidOut), air().font(TextRole::Body),
+    // KHANDAQ (28.11.2026): a reply to a place shows its name and coordinates; the reply goes out
+    // with the words the place came as (replyMeta).
+    const QString shown = replying ? AirStrings::shownWords(quote) : quote;
+    return AirPaint::linesOf(shown.left(maxLaidOut), air().font(TextRole::Body),
                              textRect(width).width(), replying || editing ? replyLines : maxLines);
 }
 

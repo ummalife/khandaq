@@ -916,7 +916,7 @@ bool GenericChatForm::canReplyTo(ChatLogIdx idx) const
     const ChatLogItem& item = chatLog.at(idx);
     switch (item.getContentType()) {
     case ChatLogItem::ContentType::message:
-        return !Air::replyQuote(AirStrings::messageWords(item.getContentAsMessage().message.content))
+        return !Air::replyQuote(AirStrings::quotedWords(item.getContentAsMessage().message.content))
                     .isEmpty();
     case ChatLogItem::ContentType::fileTransfer:
         return !Air::replyQuote(item.getContentAsFile().file.fileName).isEmpty();
@@ -938,7 +938,9 @@ bool GenericChatForm::startReply(ChatLogIdx idx, const QString& words)
         // A file is quoted by its name, as on the phones.
         shown = item.getContentAsFile().file.fileName;
     } else {
-        shown = AirStrings::messageWords(item.getContentAsMessage().message.content);
+        // KHANDAQ (28.11.2026): a place is quoted by the words it came as, as the phones quote it;
+        // the quote shows it by its name (AirStrings::shownWords). The id stays what it was.
+        shown = AirStrings::quotedWords(item.getContentAsMessage().message.content);
     }
 
     const ReplyAuthor author = replyAuthorOf(item);
@@ -1318,11 +1320,12 @@ void GenericChatForm::onExportChat()
         QString datestamp = item.getTimestamp().date().toString("yyyy-MM-dd");
         QString author = item.getDisplayName();
 
-        // The words the transcript shows, without the markup of a reply.
+        // The words the transcript shows: no markup of a reply, a place with its coordinates.
         buffer =
             buffer
             % QString{datestamp % '\t' % timestamp % '\t' % author % '\t'
-                      % AirStrings::messageWords(item.getContentAsMessage().message.content) % '\n'};
+                      % AirStrings::transcriptWords(item.getContentAsMessage().message.content)
+                      % '\n'};
     }
     file.write(buffer.toUtf8());
     file.close();

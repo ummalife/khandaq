@@ -1,0 +1,25 @@
+{
+  "version": "0.2.75",
+  "date": "2026-11-27",
+  "title": "The first call goes through, and long messages open at once",
+  "summary": "On Android the first audio call after the app starts reaches the other side again, and a chat with a very long message opens without freezing. Only the Android app changes in this release: the iPhone app stays at 1.4.34 (143014) and the desktop at 0.2.73.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "Android: the first audio call after the app starts goes through",
+      "description": "The first audio call placed after the app started never reached the other side: the call screen showed Calling, but the call was never sent, and only the next call went through. An audio call has no camera to wait for, so the call began before its screen existed, and the first update of the screen's text stopped the call before it was sent. The screen's text now waits for the screen, and nothing on the screen can stop the call itself.",
+      "platforms": [
+        "android"
+      ]
+    },
+    {
+      "severity": "important",
+      "title": "Android: a chat with a very long message opens at once",
+      "description": "A chat with a very long message still froze for up to a second and a half as it opened, longer on a slow phone, up to the system's \"isn't responding\" dialog: everything the list does to a message's words costs as much as they are long. A message now shows at most its first 3,000 characters in the chat, cut at the end of a line or a word, and Read more under it opens the whole text in a reader that lays it out in pieces as you scroll. Copy there takes the whole text, and a search shows the part of the message around the match.",
+      "platforms": [
+        "android"
+      ]
+    }
+  ]
+}

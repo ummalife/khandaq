@@ -1839,6 +1839,8 @@ public class AirFragment extends Fragment
             androidx.core.view.WindowCompat.getInsetsController(window, window.getDecorView())
                     .setAppearanceLightNavigationBars(!HelperGeneric.is_nightmode_active(context));
         }
+        // KHANDAQ (inbox #7, 27.11): whole on a tablet in landscape too, where it showed only "Create".
+        AirSheet.openWhole(sheet);
         sheet.show();
     }
 

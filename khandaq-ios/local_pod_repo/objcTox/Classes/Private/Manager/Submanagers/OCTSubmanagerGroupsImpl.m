@@ -1985,6 +1985,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 
     if (result) {
         [[self.dataSource managerGetRealmManager] setGroupPeerRole:role peerId:peerId chat:chat];
+        [self saveProfileAfterGroupStateChange];
     }
 
     return result;
@@ -2056,6 +2057,18 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
     return [[self.dataSource managerGetTox] groupTopicForGroupNumber:(OCTToxGroupNumber)chat.groupNumber error:error];
 }
 
+/**
+ * KHANDAQ (inbox #25, 27.11): toxcore keeps a group's topic (its name here), password, topic lock, peer limit, privacy
+ * and voice states and its members' roles in the profile, and nothing saved the profile after one of them changed
+ * here. The change was in toxcore and in the Realm until the app was ended; after a restart toxcore loaded the profile
+ * saved before it, and refreshGroupMetadataForChat wrote that older value over the Realm's: a group renamed a second
+ * time went back to its first new name. A first rename stayed only because toxcore then had no topic to write over it.
+ */
+- (void)saveProfileAfterGroupStateChange
+{
+    [self.dataSource managerSaveTox];
+}
+
 - (BOOL)setGroupTopic:(NSString *)topic forChat:(OCTChat *)chat error:(NSError **)error
 {
     NSParameterAssert(chat);
@@ -2083,6 +2096,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 
     if (result) {
         [[self.dataSource managerGetRealmManager] updateGroupTopic:sanitized forChat:chat];
+        [self saveProfileAfterGroupStateChange];
     }
 
     return result;
@@ -2124,6 +2138,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 
     if (result) {
         [[self.dataSource managerGetRealmManager] updateGroupPassword:sanitized forChat:chat];
+        [self saveProfileAfterGroupStateChange];
     }
 
     return result;
@@ -2160,6 +2175,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 
     if (result) {
         [[self.dataSource managerGetRealmManager] updateGroupTopicLockEnabled:(topicLock == OCTToxGroupTopicLockEnabled) forChat:chat];
+        [self saveProfileAfterGroupStateChange];
     }
 
     return result;
@@ -2215,6 +2231,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 
     if (result) {
         [[self.dataSource managerGetRealmManager] updateGroupPeerLimit:peerLimit forChat:chat];
+        [self saveProfileAfterGroupStateChange];
     }
 
     return result;
@@ -2277,6 +2294,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 
     if (result) {
         [[self.dataSource managerGetRealmManager] updateGroupPrivacyState:privacyState forChat:chat];
+        [self saveProfileAfterGroupStateChange];
     }
 
     return result;
@@ -2322,6 +2340,7 @@ NSString *const kOCTGroupLiveVideoActivityGroupNumberKey = @"groupNumber";
 
     if (result) {
         [[self.dataSource managerGetRealmManager] updateGroupVoiceState:voiceState forChat:chat];
+        [self saveProfileAfterGroupStateChange];
     }
 
     return result;

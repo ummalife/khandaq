@@ -1,0 +1,17 @@
+{
+  "version": "0.2.74",
+  "date": "2026-11-27",
+  "title": "Calls keep the microphone in the background",
+  "summary": "On Android 11 and newer the other side of a call keeps hearing you when the screen is locked or another app is open during the call. Only the Android app changes in this release: the iPhone app stays at 1.4.34 (143014) and the desktop at 0.2.73.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "medium",
+      "title": "Android: a call keeps its microphone in the background",
+      "description": "Since Android 11 an app gets the microphone in the background only through a foreground service of the microphone type. The call's service was a special use service only, so when the screen was locked or another app was opened during a call, the call recorded silence and the other side stopped hearing you, as testers wrote. The call's service now also runs as a microphone service from Android 11 on, once the microphone is allowed; if Android 14 refuses that type at the moment the call starts, the call goes on with the service it had before.",
+      "platforms": [
+        "android"
+      ]
+    }
+  ]
+}

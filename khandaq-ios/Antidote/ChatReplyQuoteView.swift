@@ -74,7 +74,9 @@ final class ChatReplyQuoteView: UIControl {
             ? String(localized: "chat_reply_unknown_sender")
             : meta.senderName
         nameLabel.text = name
-        previewLabel.textColor = isTranscript ? KQColor.ink2 : theme.colorForType(.ChatListCellMessage)
+        if !isTranscript {
+            previewLabel.textColor = theme.colorForType(.ChatListCellMessage)
+        }
         // KHANDAQ (inbox #10, 27.11): the quote of a message deleted here says so, not what the message said.
         previewLabel.text = meta.targetDeleted
             ? String(localized: "chat_reply_deleted")
@@ -89,6 +91,17 @@ final class ChatReplyQuoteView: UIControl {
     /// KHANDAQ (redesign stage 2): the quote inside a transcript entry: a sunken plate with the name and
     /// the quoted words in grey, without the coloured bar on its edge.
     private(set) var isTranscript = false
+
+    /// KHANDAQ (inbox #28, 28.11): the plate and the words of a transcript quote that stands on a bubble (the preview of
+    /// a chat) in that bubble's colours; nil keeps the transcript's own. On our own dark bubble the sunken plate
+    /// stood out as a white card.
+    var bubbleColors: (plate: UIColor, text: UIColor)? {
+        didSet {
+            if isTranscript {
+                applyTranscriptColors()
+            }
+        }
+    }
 
     func useTranscriptStyle() {
         guard !isTranscript else {
@@ -110,8 +123,8 @@ final class ChatReplyQuoteView: UIControl {
     }
 
     private func applyTranscriptColors() {
-        backgroundColor = KQColor.sunken
-        nameLabel.textColor = KQColor.ink2
-        previewLabel.textColor = KQColor.ink2
+        backgroundColor = bubbleColors?.plate ?? KQColor.sunken
+        nameLabel.textColor = bubbleColors?.text ?? KQColor.ink2
+        previewLabel.textColor = bubbleColors?.text ?? KQColor.ink2
     }
 }

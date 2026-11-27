@@ -138,7 +138,7 @@ class ChatBaseTextCell: ChatMovableDateCell {
         let cacheKey = ChatBaseTextCell.mapSnapshotKey(latitude: latitude, longitude: longitude)
         shownLocationKey = cacheKey
 
-        if let cachedImage = ChatBaseTextCell.mapSnapshotCache.object(forKey: cacheKey) {
+        if let cachedImage = ChatBaseTextCell.cachedMapSnapshot(latitude: latitude, longitude: longitude) {
             bubbleView.setLocationMapImage(cachedImage)
             return
         }
@@ -147,23 +147,41 @@ class ChatBaseTextCell: ChatMovableDateCell {
         // start and the snapshot only fills it in.
         bubbleView.showLocationMapPlaceholder()
 
+        ChatBaseTextCell.makeMapSnapshot(latitude: latitude, longitude: longitude) { [weak self] image in
+            self?.applyLocationMapSnapshot(image, forKey: cacheKey)
+        }
+    }
+
+    /// The size of a place's map snapshot, in points.
+    static let mapSnapshotSize = CGSize(width: 260, height: 120)
+
+    /// KHANDAQ (inbox #28, 28.11): the map of a place made before, by a row of a conversation or by the preview of a
+    /// chat, which show one place by one snapshot.
+    static func cachedMapSnapshot(latitude: Double, longitude: Double) -> UIImage? {
+        return mapSnapshotCache.object(forKey: mapSnapshotKey(latitude: latitude, longitude: longitude))
+    }
+
+    /// Makes the map of a place and keeps it for the next row that shows the place. `completion` gets the map on the
+    /// main queue, and never runs when no map could be made (no network).
+    static func makeMapSnapshot(latitude: Double, longitude: Double, completion: @escaping (UIImage) -> Void) {
+        let cacheKey = mapSnapshotKey(latitude: latitude, longitude: longitude)
         let options = MKMapSnapshotter.Options()
         options.region = MKCoordinateRegionMakeWithDistance(
             CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
             800,
             800)
-        options.size = CGSize(width: 260, height: 120)
+        options.size = mapSnapshotSize
         options.scale = UIScreen.main.scale
 
-        MKMapSnapshotter(options: options).start { [weak self] snapshot, _ in
+        MKMapSnapshotter(options: options).start { snapshot, _ in
             guard let image = snapshot?.image else {
                 return
             }
 
-            ChatBaseTextCell.mapSnapshotCache.setObject(image, forKey: cacheKey)
+            mapSnapshotCache.setObject(image, forKey: cacheKey)
 
             DispatchQueue.main.async {
-                self?.applyLocationMapSnapshot(image, forKey: cacheKey)
+                completion(image)
             }
         }
     }

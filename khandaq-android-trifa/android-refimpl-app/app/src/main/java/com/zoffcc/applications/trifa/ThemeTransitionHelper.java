@@ -86,7 +86,14 @@ final class ThemeTransitionHelper
         {
             return;
         }
-        activity.getWindow().getDecorView().post(() -> playCrossfade(activity));
+        // KHANDAQ (inbox #12, 27.11): the snapshot covers the new window before its first frame, and only its fade
+        // waits for that frame. With both posted, the first frame came in the new theme and the next one in the old,
+        // under the snapshot, before the fade: every switch flashed new, old, then faded to new.
+        final Runnable fade = coverWithSnapshot(activity);
+        if (fade != null)
+        {
+            activity.getWindow().getDecorView().post(fade);
+        }
     }
 
     private static void captureSnapshot(@NonNull final Activity activity)
@@ -116,13 +123,15 @@ final class ThemeTransitionHelper
         }
     }
 
-    private static void playCrossfade(@NonNull final Activity activity)
+    /** The old window's snapshot laid over the new one at once; returns its fade, or null when there is none. */
+    @Nullable
+    private static Runnable coverWithSnapshot(@NonNull final Activity activity)
     {
         if (!pendingCrossfade || pendingSnapshot == null || pendingSnapshot.isRecycled())
         {
             clearPendingSnapshot();
             pendingCrossfade = false;
-            return;
+            return null;
         }
 
         pendingCrossfade = false;
@@ -132,7 +141,7 @@ final class ThemeTransitionHelper
         if (!(activity.getWindow().getDecorView() instanceof ViewGroup))
         {
             snapshot.recycle();
-            return;
+            return null;
         }
 
         final ViewGroup decor = (ViewGroup) activity.getWindow().getDecorView();
@@ -148,6 +157,12 @@ final class ThemeTransitionHelper
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
+        return () -> fadeOut(activity, decor, overlay, snapshot);
+    }
+
+    private static void fadeOut(@NonNull final Activity activity, @NonNull final ViewGroup decor,
+                                @NonNull final ImageView overlay, @NonNull final Bitmap snapshot)
+    {
         final ValueAnimator animator = ValueAnimator.ofFloat(1f, 0f);
         // Reduced motion: the window still changes with a fade, only a short one.
         animator.setDuration(AirUi.reducedMotion()

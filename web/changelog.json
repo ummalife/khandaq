@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27T18:54:09Z",
+  "generated_at": "2026-11-27T20:12:25Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,39 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.76",
+      "date": "2026-11-27",
+      "title": "A group keeps its new name, and the desktop follows the scale of Windows",
+      "summary": "On the iPhone a group renamed a second time keeps its new name after the app restarts, and holding a group in the chat list shows who wrote each message. On Windows the desktop app is drawn at the scale set in the display settings, 125 % included. The iPhone app gets TestFlight build 143015 (1.4.34) and the desktop gets 0.2.76; Android stays at 0.2.75.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "iPhone: a group keeps its new name after the app restarts",
+          "description": "A group renamed a second time had its first new name again once the app was restarted, as a tester found. The iPhone app changed a group's name and settings but did not save them with the profile, so the next start loaded the older save. A group's name, password, member limit, privacy, who may change the name, who may speak and the members' roles are now saved as soon as they change.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Windows: the app follows the scale of the display settings",
+          "description": "On Windows at a scale of 125 % the desktop app was drawn as at 100 %, its text and icons small next to every other window, as a tester found, and at 150 % it was drawn as at 200 %. The toolkit the app is built on rounds a screen's scale to a whole number; the app now makes up the rest before its window opens, so it is drawn at 125 %, 150 % or 175 % as set, each screen at its own scale. If you raised the size in the app's settings to make up for it, set it back to 100 %. A window left at nearly the whole screen opens within the screen at its new scale.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "iPhone: holding a group in the list shows who wrote",
+          "description": "Holding a group in the chat list showed its last messages as a talk between two, without the names of those who wrote them, under a round picture unlike the group's in the list. The preview now shows the group as the group itself does: the author's name over each run of their messages, in their colour, their initials beside the last message of the run, and the group's notices in the middle. Its header has the picture of the row: the Khandaq Community logo, the group's or the person's initials, the person's photo, or the bookmark of Saved Messages.",
+          "platforms": [
+            "ios"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.75",
       "date": "2026-11-27",

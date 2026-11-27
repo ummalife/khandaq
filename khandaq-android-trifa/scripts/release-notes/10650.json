@@ -1,0 +1,4 @@
+{
+  "en-US": "Calls: the first audio call after the app starts reaches the other side again, and on Android 11 and newer the other side keeps hearing you when you lock the screen or switch to another app during a call. A chat with a very long message opens without freezing: the message shows its start, and Read more opens the whole text.",
+  "ru-RU": "Звонки: первый аудиозвонок после запуска приложения снова доходит до собеседника, а на Android 11 и новее собеседник продолжает вас слышать, если во время звонка заблокировать экран или перейти в другое приложение. Чат с очень длинным сообщением открывается без зависаний: в ленте видно его начало, «Читать полностью» открывает текст целиком."
+}

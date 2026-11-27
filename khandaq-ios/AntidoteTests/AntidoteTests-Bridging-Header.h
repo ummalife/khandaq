@@ -286,6 +286,11 @@ void friendMessageCallback(void *cTox, uint32_t friendNumber, uint32_t cType, co
 - (BOOL)tickAt:(NSTimeInterval)now;
 @end
 
+// KHANDAQ (calls, 27.11): the sizes a call's camera is asked for, declared here so a test can read them.
+@interface OCTVideoEngine : NSObject
++ (nonnull NSArray<NSString *> *)capturePresetsInOrder;
+@end
+
 #undef LOG_INFO
 #undef LOG_DEBUG
 #import "DDLog.h"

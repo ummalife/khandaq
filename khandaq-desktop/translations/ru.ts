@@ -2062,9 +2062,9 @@
         <translation>Например, Книжный клуб</translation>
     </message>
     <message>
-        <source>Everyone you invite sees it. Later the topic can change, the name cannot.</source>
+        <source>Everyone you invite sees it. You can change it later in the group dossier.</source>
         <comment>New group: under the name</comment>
-        <translation>Его увидят все приглашённые. Потом можно будет менять тему, но не название.</translation>
+        <translation>Его увидят все приглашённые. Потом его можно поменять в досье группы.</translation>
     </message>
     <message>
         <source>Who can join</source>
@@ -4045,6 +4045,11 @@
         <translation>Не удалось сменить имя в группе</translation>
     </message>
     <message>
+        <source>Couldn&apos;t change the name</source>
+        <comment>title of the error when the group refused its new name</comment>
+        <translation>Не удалось сменить название</translation>
+    </message>
+    <message>
         <source>Couldn&apos;t invite to the group</source>
         <comment>title of the error when no invitation went</comment>
         <translation>Не удалось пригласить в группу</translation>
@@ -5436,8 +5441,8 @@ Opening it can run a program on your computer. Links in messages come from other
         <translation>%1 теперь известен как %2</translation>
     </message>
     <message>
-        <source>%1 has set the title to %2</source>
-        <translation>%1 сменил заголовок на %2</translation>
+        <source>%1 renamed the group to %2</source>
+        <translation>%1 переименовал(а) группу: %2</translation>
     </message>
     <message>
         <source>Cleared</source>

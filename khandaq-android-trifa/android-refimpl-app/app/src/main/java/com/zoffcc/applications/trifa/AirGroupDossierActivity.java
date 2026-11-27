@@ -495,9 +495,10 @@ public final class AirGroupDossierActivity extends AirScreenActivity
         AirScreenKit.addSection(column, getString(R.string.air_group_history), getString(R.string.air_group_history_note),
                                 historyPlate);
 
-        // Everything else the group has: topic, password, member limit, who may write.
+        // Everything else the group has: name, password, member limit, who may write. KHANDAQ (inbox #13, 27.11):
+        // the line under it calls the topic the group's name, as the settings do (Khandaq Community: its topic).
         final AirSettingRow settings = new AirSettingRow(this, getString(R.string.air_group_settings), true)
-                .detail(getString(R.string.air_group_settings_detail));
+                .detail(getString(AirGroupSettingsModel.topicWords(groupId).settingsDetail));
         settings.setOnClickListener(v -> openSettings());
         AirScreenKit.addSection(column, null, null, AirScreenKit.plateOf(this, settings));
 

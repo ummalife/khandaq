@@ -441,7 +441,9 @@ const Source sources[] = {
     {Text::NewGroupTitle, QT_TRANSLATE_NOOP3("Air", "New group", "title of the New group panel")},
     {Text::NewGroupName, QT_TRANSLATE_NOOP3("Air", "Name", "New group: the name field")},
     {Text::NewGroupNamePlaceholder, QT_TRANSLATE_NOOP3("Air", "For example, Book club", "New group: placeholder of the name")},
-    {Text::NewGroupNameNote, QT_TRANSLATE_NOOP3("Air", "Everyone you invite sees it. Later the topic can change, the name cannot.", "New group: under the name")},
+    // KHANDAQ (inbox #13, 27.11): one name, which Rename in the dossier changes later; no topic
+    // beside it.
+    {Text::NewGroupNameNote, QT_TRANSLATE_NOOP3("Air", "Everyone you invite sees it. You can change it later in the group dossier.", "New group: under the name")},
     {Text::NewGroupPrivacy, QT_TRANSLATE_NOOP3("Air", "Who can join", "New group and group dossier section")},
     {Text::PrivacyInviteOnly, QT_TRANSLATE_NOOP3("Air", "By invitation only", "who can join a group")},
     {Text::PrivacyInviteOnlyNote, QT_TRANSLATE_NOOP3("Air", "Only people invited by a member can join. The group key alone does not let anyone in.", "who can join a group: consequence")},
@@ -903,6 +905,8 @@ const Source sources[] = {
     {Text::ErrorKickTitle, QT_TRANSLATE_NOOP3("Air", "Couldn't remove the member", "title of the error when the group refused to remove a member")},
     {Text::ErrorPrivacyTitle, QT_TRANSLATE_NOOP3("Air", "Couldn't change who can join", "title of the error when the group refused a change of who can join")},
     {Text::ErrorGroupSelfNameTitle, QT_TRANSLATE_NOOP3("Air", "Couldn't change your name in the group", "title of the error when the group refused our name in it")},
+    // KHANDAQ (inbox #13, 27.11): a rename that toxcore refused; the group keeps its name.
+    {Text::ErrorGroupRenameTitle, QT_TRANSLATE_NOOP3("Air", "Couldn't change the name", "title of the error when the group refused its new name")},
     {Text::ErrorInviteTitle, QT_TRANSLATE_NOOP3("Air", "Couldn't invite to the group", "title of the error when no invitation went")},
     {Text::ErrorInviteSomeTitle, QT_TRANSLATE_NOOP3("Air", "Not everyone was invited", "title of the error when some invitations went and some did not")},
     {Text::InviteRetry, QT_TRANSLATE_NOOP3("Air", "Try again once the group is connected and they are online.", "what to do when invitations did not go")},

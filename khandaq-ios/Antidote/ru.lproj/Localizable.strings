@@ -744,6 +744,7 @@
 "group_private_message_unread_action_format" = "Личное сообщение (%d непр.)";
 "group_topic_set_failed" = "Не удалось обновить тему.";
 "group_topic_too_long" = "Тема слишком длинная.";
+"group_name_too_long" = "Название слишком длинное.";
 "group_password_header" = "Пароль группы";
 "group_password_placeholder" = "Задать или изменить пароль";
 "group_password_footer" = "Только основатель. Пустое поле удаляет пароль.";
@@ -1067,6 +1068,7 @@
 "air_group_member_you_format" = "%@ (вы)";
 "air_group_member_hint" = "Открывает действия с участником";
 "air_group_dossier_title" = "Группа";
+"air_group_dossier_original_name_format" = "Изначально «%@»";
 "air_group_your_role" = "Ваша роль";
 "air_group_who_gets_now" = "Кто получит сообщение сейчас";
 "air_group_who_gets_now_note_format" = "В сети сейчас %1$d из %2$d. Остальные получат сообщения, когда появятся.";
@@ -1091,6 +1093,7 @@
 "air_group_clear_history_message" = "Сообщения удалятся только с этого устройства, у участников они останутся.";
 "air_group_settings" = "Настройки группы";
 "air_group_settings_detail" = "Ваше имя в группе, тема, кто входит и кто пишет";
+"air_group_settings_detail_group_name" = "Ваше имя в группе, название, кто входит и кто пишет";
 "air_group_leave" = "Выйти из группы";
 "air_group_leave_note" = "Сообщения группы перестанут приходить, а история удалится с этого устройства.";
 "air_group_leave_title_format" = "Выйти из группы «%@»?";
@@ -1139,7 +1142,7 @@
 "air_new_group_title" = "Новая группа";
 "air_new_group_name" = "Название";
 "air_new_group_name_placeholder" = "Например, Книжный клуб";
-"air_new_group_name_note" = "Его увидят все приглашённые. Потом можно будет менять тему, но не название.";
+"air_new_group_name_note" = "Его увидят все приглашённые. Потом его можно поменять в настройках группы.";
 "air_new_group_privacy" = "Кто может войти";
 "air_group_privacy_invite_only" = "Только по приглашению";
 "air_group_privacy_invite_only_note" = "Войти можно только по приглашению кого-то из участников. По ключу группы войти нельзя.";
@@ -1323,6 +1326,7 @@
 "error_failed_leave_group" = "Не удалось выйти из группы";
 "error_failed_role" = "Не удалось сменить роль";
 "error_failed_topic" = "Не удалось сменить тему";
+"error_failed_rename_group" = "Не удалось сменить название";
 "error_failed_group_name" = "Не удалось сменить имя в группе";
 "error_failed_group_settings" = "Не удалось изменить настройки группы";
 "error_failed_send_file" = "Файл не отправлен";
@@ -1455,6 +1459,12 @@
 "air_group_settings_topic_locked" = "Тему меняют только основатель и модераторы.";
 "air_group_settings_topic_not_observers" = "Тему меняют все, кроме наблюдателей.";
 "air_group_settings_topic_lock" = "Тему меняют только основатель и модераторы";
+"air_group_settings_group_name" = "Название группы";
+"air_group_settings_group_name_note" = "Его видят все участники: в списке чатов и в шапке группы.";
+"air_group_settings_group_name_locked" = "Название меняют только основатель и модераторы.";
+"air_group_settings_group_name_not_observers" = "Название меняют все, кроме наблюдателей.";
+"air_group_settings_group_name_lock" = "Название меняют только основатель и модераторы";
+"air_group_settings_group_name_empty" = "Название не может быть пустым.";
 "air_group_settings_join" = "Кто может войти";
 "air_group_settings_password_set" = "Задан";
 "air_group_settings_password_none" = "Нет";

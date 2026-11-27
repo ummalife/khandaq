@@ -369,7 +369,7 @@
     <string name="air_new_group_title">Новая группа</string>
     <string name="air_new_group_name">Название</string>
     <string name="air_new_group_name_placeholder">Например, Книжный клуб</string>
-    <string name="air_new_group_name_note">Его увидят все приглашённые. Потом можно будет менять тему, но не название.</string>
+    <string name="air_new_group_name_note">Его увидят все приглашённые. Потом его можно поменять в настройках группы.</string>
     <string name="air_new_group_privacy">Кто может войти</string>
     <string name="air_group_privacy_invite_only">Только по приглашению</string>
     <string name="air_group_privacy_invite_only_note">Войти можно только по приглашению кого-то из участников. По ключу группы не войти.</string>
@@ -461,7 +461,9 @@
     <string name="air_group_history">История</string>
     <string name="air_group_history_note">Сообщения, написанные без вас, пересылают другие участники. Если подпись автора не подтверждается, у сообщения стоит пометка, что отправитель не подтверждён.</string>
     <string name="air_group_settings">Настройки группы</string>
+    <!-- KHANDAQ (inbox #13, 27.11): the line of Khandaq Community, whose settings keep its topic; _name for every other group -->
     <string name="air_group_settings_detail">Ваше имя в группе, тема, кто входит и кто пишет</string>
+    <string name="air_group_settings_detail_name">Ваше имя в группе, название, кто входит и кто пишет</string>
     <string name="air_group_nobody_found">Никого с таким именем</string>
     <string name="air_group_who_gets_now_note_format">В сети сейчас %1$d из %2$d. Остальные получат сообщения, когда появятся.</string>
     <string name="air_group_key_copied">Ключ группы скопирован</string>

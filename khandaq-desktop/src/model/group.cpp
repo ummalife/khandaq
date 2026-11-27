@@ -62,11 +62,12 @@ void Group::setName(const QString& newTitle)
     // changes nothing and sets no topic (Widget::titleChangedByUser).
     const QString shortTitle =
         Air::Community::groupTitle(groupId.getByteArray(), newTitle.left(MAX_GROUP_TITLE_LENGTH));
+    // KHANDAQ (inbox #13, 27.11): a rename only asks toxcore for the topic. The title and the line
+    // of the rename come once toxcore took it (Core::changeGroupTitle, then setTitle); a rename it
+    // refuses leaves the title the group had. The title changed here at once, and stayed so when
+    // toxcore refused, though no member saw it.
     if (!shortTitle.isEmpty() && title != shortTitle) {
-        title = shortTitle;
-        emit displayedNameChanged(title);
-        emit titleChangedByUser(title);
-        emit titleChanged(selfName, title);
+        emit titleChangedByUser(shortTitle);
     }
 }
 

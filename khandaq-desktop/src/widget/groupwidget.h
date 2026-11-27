@@ -26,6 +26,7 @@
 #include "src/core/groupid.h"
 #include "src/core/toxpk.h"
 
+#include <functional>
 #include <memory>
 
 class Settings;
@@ -55,6 +56,11 @@ public:
      */
     void showContextMenu(const QPoint& globalPos, const QList<QAction*>& leadingActions = {},
                          bool offersGroupId = true);
+    /**
+     * KHANDAQ (inbox #13, 27.11): asked as the menu opens whether it offers Rename: while our role
+     * may change the name (GroupChatForm::offersRename). Without it, the menu offers Rename.
+     */
+    void setRenameOffered(std::function<bool()> offered);
 
     bool isFriend() const final;
     bool isGroup() const final;
@@ -89,4 +95,5 @@ public:
 
 private:
     std::shared_ptr<GroupChatroom> chatroom;
+    std::function<bool()> renameOffered;
 };

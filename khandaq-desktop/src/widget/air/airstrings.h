@@ -868,6 +868,7 @@ enum class Text
     ErrorKickTitle,
     ErrorPrivacyTitle,
     ErrorGroupSelfNameTitle,
+    ErrorGroupRenameTitle,
     ErrorInviteTitle,
     ErrorInviteSomeTitle,
     InviteRetry,

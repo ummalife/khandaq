@@ -4,6 +4,7 @@
     <string name="air_gs_self_name">你在群组中的名字</string>
     <string name="air_gs_self_name_note">本群成员可以看到它，你的个人资料名称不会改变。</string>
     <string name="air_gs_name_empty">名字不能为空。</string>
+    <!-- KHANDAQ (inbox #13, 27.11): the topic of Khandaq Community only (AirGroupSettingsModel.COMMUNITY_TOPIC_WORDS) -->
     <string name="air_gs_topic">主题</string>
     <string name="air_gs_topic_none">无主题</string>
     <string name="air_gs_topic_note">所有成员都能看到主题：在列表和群组顶部，它会代替群组名称显示。</string>
@@ -11,6 +12,13 @@
     <string name="air_gs_topic_not_observers">除观察者外，所有成员都可以更改主题。</string>
     <string name="air_gs_topic_empty">主题不能为空。</string>
     <string name="air_gs_topic_lock">仅创建者和管理员可更改主题</string>
+    <!-- KHANDAQ (inbox #13, 27.11): every other group's topic is its name (AirGroupSettingsModel.GROUP_NAME_WORDS) -->
+    <string name="air_gs_group_name">群组名称</string>
+    <string name="air_gs_group_name_note">所有成员都会在聊天列表和群组顶部看到它。</string>
+    <string name="air_gs_group_name_locked">只有创建者和管理员可以更改名称。</string>
+    <string name="air_gs_group_name_not_observers">除观察者外，所有人都可以更改名称。</string>
+    <string name="air_gs_group_name_empty">名称不能为空。</string>
+    <string name="air_gs_group_name_lock">只有创建者和管理员可以更改名称</string>
     <string name="air_gs_join">谁可以加入</string>
     <string name="air_gs_password">群密码</string>
     <string name="air_gs_password_note">新成员需要输入密码，已在群组中的成员会继续留在群组中。</string>

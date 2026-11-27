@@ -73,6 +73,7 @@ private slots:
     void group_file_waits_for_a_member_in_the_core_loop();
     void group_file_goes_to_a_member_in_the_core_loop();
     void a_group_being_left_takes_no_text();
+    void a_group_goes_by_its_topic_else_by_its_name();
     void an_invite_from_a_friend_online_replaces_a_group_joined_by_its_id();
     void a_file_goes_on_from_where_it_stopped_once_the_friend_is_back();
     void an_offer_of_a_file_partly_here_goes_on_from_what_is_here();
@@ -90,6 +91,8 @@ private slots:
 private:
     /** Alice makes a group, and Bob joins it by her invite: both count the two of them then. */
     void makeGroupWithBob(const QString& name, int& aliceGroup, uint32_t& bobGroup);
+    /** Bob joins a group of Alice's by her invite: both count the two of them then. */
+    void inviteBob(int aliceGroup, uint32_t& bobGroup);
 
     /* Test Variables */
     Core::ToxCoreErrors* err = nullptr;
@@ -250,6 +253,14 @@ bool linkedTo(Core& core, uint32_t friendId)
     return tox_friend_get_connection_status(core.getTox(), friendId, nullptr)
            != TOX_CONNECTION_NONE;
 }
+
+/** KHANDAQ (inbox #13, 27.11): a title a node gave a group (groupTitleChanged), and by whom. */
+struct TitleChange
+{
+    int group;
+    QString author;
+    QString title;
+};
 
 void bootstrapToxes(Core& alice, MockBootstrapListGenerator& alicesNodes,
     Core& bob, MockBootstrapListGenerator& bobsNodes)
@@ -610,6 +621,13 @@ void TestCore::makeGroupWithBob(const QString& name, int& aliceGroup, uint32_t& 
     QCOMPARE(aliceFriends.size(), 1);
     aliceGroup = alice->createGroup(name, TOX_GROUP_PRIVACY_STATE_PRIVATE);
     QVERIFY(aliceGroup >= 0);
+    inviteBob(aliceGroup, bobGroup);
+}
+
+void TestCore::inviteBob(int aliceGroup, uint32_t& bobGroup)
+{
+    const QVector<uint32_t> aliceFriends = alice->getFriendList();
+    QCOMPARE(aliceFriends.size(), 1);
 
     // The loop of Bob's node tells of the invitation. The context goes before what the
     // connection writes to, and the connection with it.
@@ -712,6 +730,111 @@ void TestCore::a_group_being_left_takes_no_text()
     QCOMPARE(alice->sendGroupMessage(group, QStringLiteral("Anyone?"), wireId),
              Core::SendResult::NotReady);
     QCOMPARE(wireId, uint32_t{0});
+}
+
+void TestCore::a_group_goes_by_its_topic_else_by_its_name()
+{
+    // KHANDAQ (inbox #13, 27.11): as on iOS and Android, a group goes by its topic, which a rename
+    // sets, while it has one, else by its name in the group state; the name covered the topic here.
+    // Alice founds the group and renames it before Bob joins: the topic stays the title through his
+    // join, on both nodes. Bob, a member while the topic lock is on, as in a new group, may not
+    // rename it: toxcore refuses, and the title stays. An empty topic gives the group its name.
+    const QString name = QStringLiteral("Book club");
+    const QString topic = QStringLiteral("Reading circle");
+    const QVector<uint32_t> aliceFriends = alice->getFriendList();
+    QCOMPARE(aliceFriends.size(), 1);
+    const int aliceGroup = alice->createGroup(name, TOX_GROUP_PRIVACY_STATE_PRIVATE);
+    QVERIFY(aliceGroup >= 0);
+
+    // What the nodes say of the titles and of a refused rename, from the test or from their loops,
+    // is kept under a lock, which the test never holds while it takes a core's. The context goes
+    // with the test, before what the connections write to, and the connections with it.
+    QMutex seenLock;
+    QList<TitleChange> aliceTitles;
+    QList<TitleChange> bobTitles;
+    QList<int> bobRefusals;
+    QObject context;
+    const auto keep = [&seenLock](QList<TitleChange>* titles) {
+        return [&seenLock, titles](int number, const QString& author, const QString& title) {
+            const QMutexLocker locker{&seenLock};
+            titles->append({number, author, title});
+        };
+    };
+    connect(alice.get(), &Core::groupTitleChanged, &context, keep(&aliceTitles), Qt::DirectConnection);
+    connect(bob.get(), &Core::groupTitleChanged, &context, keep(&bobTitles), Qt::DirectConnection);
+    connect(
+        bob.get(), &Core::groupTitleChangeFailed, &context,
+        [&](int number) {
+            const QMutexLocker locker{&seenLock};
+            bobRefusals.append(number);
+        },
+        Qt::DirectConnection);
+    // The titles a node gave the group, in their order, and the last of them.
+    const auto titlesIn = [&seenLock](const QList<TitleChange>& titles, int number) {
+        const QMutexLocker locker{&seenLock};
+        QList<TitleChange> given;
+        for (const TitleChange& change : titles) {
+            if (change.group == number) {
+                given.append(change);
+            }
+        }
+        return given;
+    };
+    const auto lastIn = [&titlesIn](const QList<TitleChange>& titles, int number) {
+        const QList<TitleChange> given = titlesIn(titles, number);
+        return given.isEmpty() ? TitleChange{number, QString(), QString()} : given.last();
+    };
+    const auto refusals = [&] {
+        const QMutexLocker locker{&seenLock};
+        return bobRefusals;
+    };
+
+    // Alice founded it: toxcore takes her rename, and the title comes under her name there.
+    alice->changeGroupTitle(aliceGroup, topic);
+    QCOMPARE(alice->getGroupTopic(aliceGroup), topic);
+    QCOMPARE(alice->getGroupName(aliceGroup), name);
+    QCOMPARE(alice->getGroupTitle(aliceGroup), topic);
+    QCOMPARE(titlesIn(aliceTitles, aliceGroup).size(), 1);
+    QCOMPARE(lastIn(aliceTitles, aliceGroup).title, topic);
+    QVERIFY(!lastIn(aliceTitles, aliceGroup).author.isEmpty());
+    QCOMPARE(lastIn(aliceTitles, aliceGroup).author, alice->getGroupSelfName(aliceGroup));
+
+    uint32_t bobGroup = std::numeric_limits<uint32_t>::max();
+    inviteBob(aliceGroup, bobGroup);
+    if (QTest::currentTestFailed()) {
+        return;
+    }
+    const int bobNumber = static_cast<int>(bobGroup);
+    // Bob's node: the invitation names the group, then the topic comes with its state.
+    QTRY_COMPARE_WITH_TIMEOUT(lastIn(bobTitles, bobNumber).title, topic, connected_message_wait);
+    QCOMPARE(bob->getGroupTitle(bobNumber), topic);
+    // Alice's: the join of Bob gave the title again, the topic and not the name.
+    QTRY_VERIFY_WITH_TIMEOUT(titlesIn(aliceTitles, aliceGroup).size() >= 2, connected_message_wait);
+    for (const TitleChange& change : titlesIn(aliceTitles, aliceGroup)) {
+        QCOMPARE(change.title, topic);
+    }
+
+    // Bob may not set the topic: toxcore refuses, and his title and the topic stay.
+    QVERIFY(alice->getGroupSelfRole(aliceGroup) == TOX_GROUP_ROLE_FOUNDER);
+    QVERIFY(bob->getGroupSelfRole(bobNumber) == TOX_GROUP_ROLE_USER);
+    QVERIFY(bob->getGroupTopicLock(bobNumber) == TOX_GROUP_TOPIC_LOCK_ENABLED);
+    const int bobTitleCount = titlesIn(bobTitles, bobNumber).size();
+    bob->changeGroupTitle(bobNumber, QStringLiteral("Our circle"));
+    QCOMPARE(refusals(), QList<int>{bobNumber});
+    QCOMPARE(bob->getGroupTopic(bobNumber), topic);
+    QCOMPARE(bob->getGroupTitle(bobNumber), topic);
+    const QList<TitleChange> bobGiven = titlesIn(bobTitles, bobNumber);
+    for (int i = bobTitleCount; i < bobGiven.size(); ++i) {
+        QCOMPARE(bobGiven.at(i).title, topic);
+    }
+
+    // An empty topic: the group goes by its name again, on Bob's node under Alice, who set it.
+    alice->changeGroupTitle(aliceGroup, QString());
+    QCOMPARE(alice->getGroupTitle(aliceGroup), name);
+    QCOMPARE(lastIn(aliceTitles, aliceGroup).title, name);
+    QTRY_COMPARE_WITH_TIMEOUT(lastIn(bobTitles, bobNumber).title, name, connected_message_wait);
+    QCOMPARE(lastIn(bobTitles, bobNumber).author, alice->getGroupSelfName(aliceGroup));
+    QCOMPARE(refusals().size(), 1);
 }
 
 void TestCore::an_invite_from_a_friend_online_replaces_a_group_joined_by_its_id()

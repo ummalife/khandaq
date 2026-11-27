@@ -8,8 +8,8 @@ import XCTest
 /**
  E13 to E15, the group screens as plain values: the order of the members, who gets a message now and
  what the header and the hint say about it, who may write, what the founder and a moderator may change,
- the invitation list, the name of a new group, the length counter, and how the transcript names
- authors, marks a mention of you and the state of our own message.
+ the invitation list, the name of a new group and the one name of a group (inbox #13), the length
+ counter, and how the transcript names authors, marks a mention of you and the state of our own message.
  */
 class AirGroupModelTests: XCTestCase {
     private var savedLanguage: Any?
@@ -967,6 +967,237 @@ class AirGroupModelTests: XCTestCase {
         XCTAssertNil(AirGroupSettingsText.voiceDetail(.moderator))
     }
 
+    // MARK: - One name for a group (inbox #13)
+
+    /// KHANDAQ (inbox #13, 27.11): the name a group is made with never changes and its topic is its title (#46), so
+    /// its settings show that title as the group's name: the topic, else the name it was made with, else the
+    /// default title, never "No topic". Its screen opens with the same title.
+    func testTheGroupNameRowShowsTheTitleTheGroupGoesBy() throws {
+        let renamed = try groupChat(name: "Book club", topic: "Reading circle")
+        let named = try groupChat(name: "Book club", topic: nil)
+        let clearedTopic = try groupChat(name: "Book club", topic: "")
+        let unnamed = try groupChat(name: nil, topic: nil)
+        let words = AirGroupTopicWords(chat: renamed)
+        XCTAssertEqual(words, .groupName)
+
+        XCTAssertEqual(words.value(topic: "Reading circle", chat: renamed), "Reading circle")
+        XCTAssertEqual(words.value(topic: "", chat: named), "Book club")
+        XCTAssertEqual(words.value(topic: "", chat: clearedTopic), "Book club")
+        XCTAssertEqual(words.value(topic: "", chat: unnamed), String(localized: "group_chat_default_title"))
+        for chat in [renamed, named, clearedTopic, unnamed] {
+            XCTAssertEqual(words.value(topic: chat.groupTopic ?? "", chat: chat), ChatListContent.groupTitle(for: chat),
+                           "the title of the list and of the group's header")
+        }
+
+        XCTAssertEqual(words.initialValue(topic: "Reading circle", chat: renamed), "Reading circle")
+        XCTAssertEqual(words.initialValue(topic: "", chat: named), "Book club")
+        XCTAssertEqual(words.initialValue(topic: "", chat: unnamed), "", "no default title to save as a name")
+    }
+
+    /// A group's settings say "name" where Khandaq Community's keep the words of its topic.
+    func testAGroupSaysNameWhereKhandaqCommunitySaysTopic() throws {
+        let name = AirGroupTopicWords.groupName
+        XCTAssertEqual(name.title, "Group name")
+        XCTAssertEqual(name.note(canEdit: true, locked: true), "Every member sees it in the chat list and at the top of the group.")
+        XCTAssertEqual(name.note(canEdit: false, locked: true), "Only the founder and the moderators change the name.")
+        XCTAssertEqual(name.note(canEdit: false, locked: false), "Everyone but observers can change the name.")
+        XCTAssertEqual(name.lockTitle, "Only the founder and moderators change the name")
+        XCTAssertEqual(name.settingsDetail, "Your name in the group, the group's name, who joins and who writes")
+        XCTAssertEqual(name.fieldKind, .groupName)
+        XCTAssertEqual(name.lockErrorType, .setGroupNameLock)
+        XCTAssertEqual(AirGroupFieldController.Kind.groupName.title, "Group name")
+        XCTAssertEqual(AirGroupFieldController.Kind.groupName.hint, name.note(canEdit: true, locked: false))
+        XCTAssertEqual(AirGroupFieldController.Kind.groupName.errorType, .renameGroup)
+        XCTAssertEqual(AirGroupFieldController.Kind.groupName.maxBytes, 512, "the limit of a topic")
+        XCTAssertEqual(String(localized: "air_new_group_name_note"),
+                       "Everyone you invite sees it. You can change it later in the group's settings.")
+
+        let community = try groupChat(name: "Khandaq Community", topic: "Be kind", chatIdHex: KhandaqCommunity.chatIdHex)
+        let topic = AirGroupTopicWords(chat: community)
+        XCTAssertEqual(topic, .topic)
+        XCTAssertEqual(topic.title, "Topic")
+        XCTAssertEqual(topic.value(topic: "Be kind", chat: community), "Be kind")
+        XCTAssertEqual(topic.value(topic: "", chat: community), "No topic")
+        XCTAssertEqual(topic.initialValue(topic: "Be kind", chat: community), "Be kind")
+        XCTAssertEqual(topic.note(canEdit: true, locked: false),
+                       "Every member sees the topic: in the list and at the top of the group it stands in place of the name.")
+        XCTAssertEqual(topic.note(canEdit: false, locked: true), "Only the founder and the moderators change the topic.")
+        XCTAssertEqual(topic.note(canEdit: false, locked: false), "Everyone but observers can change the topic.")
+        XCTAssertEqual(topic.lockTitle, "Only the founder and moderators change the topic")
+        XCTAssertEqual(topic.settingsDetail, "Your name in the group, the topic, who joins and who writes")
+        XCTAssertEqual(topic.fieldKind, .topic)
+        XCTAssertEqual(topic.lockErrorType, .setGroupTopicLock)
+        XCTAssertEqual(AirGroupFieldController.Kind.topic.title, "Topic")
+        XCTAssertEqual(AirGroupFieldController.Kind.topic.errorType, .setGroupTopic)
+    }
+
+    /// In every language of the app a group's name has words of its own, and none of them says "topic".
+    func testTheWordsOfAGroupsNameAreInEveryLanguageAndNoneSaysTopic() throws {
+        let renamed = try groupChat(name: "Book club", topic: "Reading circle")
+        let topicWords = ["en": ["topic"], "ru": ["тем"], "ar": ["موضوع"], "zh": ["主题", "话题"]]
+        XCTAssertEqual(Set(topicWords.keys), Set(AppLanguage.supportedCodes))
+        let tooLong = NSError(domain: kOCTToxErrorDomain, code: OCTToxErrorGroupTopicSet.tooLong.rawValue, userInfo: nil)
+        let refused = NSError(domain: kOCTToxErrorDomain, code: OCTToxErrorGroupFounderSetTopicLock.permissions.rawValue, userInfo: nil)
+        for language in AppLanguage.supportedCodes {
+            use(language)
+            let words = AirGroupTopicWords.groupName
+            let rename = errorAlert(for: .renameGroup, error: tooLong)
+            let lock = errorAlert(for: .setGroupNameLock, error: refused)
+            let texts = [words.title,
+                         words.note(canEdit: true, locked: false),
+                         words.note(canEdit: false, locked: true),
+                         words.note(canEdit: false, locked: false),
+                         words.lockTitle,
+                         words.settingsDetail,
+                         String(localized: "air_new_group_name_note"),
+                         String(localized: "air_group_settings_group_name_empty"),
+                         rename?.title,
+                         rename?.message,
+                         errorAlert(for: .renameGroup, error: nil)?.title,
+                         lock?.title,
+                         lock?.message,
+                         AirGroupTopicWords.originalNameLine(for: renamed)].map { $0 ?? "" }
+            for text in texts {
+                XCTAssertFalse(text.isEmpty, "\(language): a text is missing")
+                XCTAssertNil(text.range(of: "^[a-z0-9_]+$", options: .regularExpression), "\(language): a key instead of words: \(text)")
+                for word in topicWords[language] ?? [] {
+                    XCTAssertFalse(text.lowercased().contains(word), "\(language) says topic: \(text)")
+                }
+            }
+        }
+
+        use("ru")
+        XCTAssertEqual(AirGroupTopicWords.groupName.title, "Название группы")
+        XCTAssertEqual(AirGroupTopicWords.originalNameLine(for: renamed), "Изначально «Book club»")
+        XCTAssertEqual(errorAlert(for: .renameGroup, error: tooLong)?.title, "Не удалось сменить название")
+        XCTAssertEqual(errorAlert(for: .renameGroup, error: tooLong)?.message, "Название слишком длинное.")
+    }
+
+    /// A failed change of a group's name says "name"; Khandaq Community's topic keeps the words it had.
+    func testAFailedChangeOfAGroupsNameSaysName() {
+        let tooLong = NSError(domain: kOCTToxErrorDomain, code: OCTToxErrorGroupTopicSet.tooLong.rawValue, userInfo: nil)
+        let offline = NSError(domain: kOCTToxErrorDomain, code: OCTToxErrorGroupTopicSet.disconnected.rawValue, userInfo: nil)
+        XCTAssertEqual(errorAlert(for: .renameGroup, error: tooLong)?.title, "Couldn't change the name")
+        XCTAssertEqual(errorAlert(for: .renameGroup, error: tooLong)?.message, "The name is too long.")
+        XCTAssertEqual(errorAlert(for: .renameGroup, error: offline)?.message, String(localized: "group_error_disconnected"))
+        XCTAssertEqual(errorAlert(for: .renameGroup, error: nil)?.title, "Couldn't change the name")
+
+        XCTAssertEqual(errorAlert(for: .setGroupTopic, error: tooLong)?.title, "Could not update group topic.")
+        XCTAssertEqual(errorAlert(for: .setGroupTopic, error: tooLong)?.message, "Topic is too long.")
+        XCTAssertEqual(errorAlert(for: .setGroupTopic, error: nil)?.title, "Could not update group topic.")
+
+        let refused = NSError(domain: kOCTToxErrorDomain, code: OCTToxErrorGroupFounderSetTopicLock.permissions.rawValue, userInfo: nil)
+        XCTAssertEqual(errorAlert(for: .setGroupNameLock, error: refused)?.title, "Couldn't change the group's settings")
+        XCTAssertEqual(errorAlert(for: .setGroupNameLock, error: refused)?.message, String(localized: "group_error_permissions"))
+        XCTAssertEqual(errorAlert(for: .setGroupTopicLock, error: refused)?.title, "Could not update topic lock.")
+    }
+
+    /// The dossier tells the name a group was made with only while the group goes by another, and says what it is;
+    /// Khandaq Community has one name.
+    func testTheDossierTellsTheNameAGroupWasMadeWithOnlyWhileItGoesByAnother() throws {
+        XCTAssertEqual(AirGroupTopicWords.originalNameLine(for: try groupChat(name: "Book club", topic: "Reading circle")),
+                       "Originally “Book club”")
+        XCTAssertNil(AirGroupTopicWords.originalNameLine(for: try groupChat(name: "Book club", topic: nil)))
+        XCTAssertNil(AirGroupTopicWords.originalNameLine(for: try groupChat(name: "Book club", topic: "")))
+        XCTAssertNil(AirGroupTopicWords.originalNameLine(for: try groupChat(name: "Book club", topic: "Book club")), "renamed back")
+        XCTAssertNil(AirGroupTopicWords.originalNameLine(for: try groupChat(name: nil, topic: "Reading circle")))
+        XCTAssertNil(AirGroupTopicWords.originalNameLine(for: try groupChat(name: "Khandaq Community", topic: "Be kind",
+                                                                            chatIdHex: KhandaqCommunity.chatIdHex)))
+
+        // The dossiers themselves: the title, the line under it, and what their settings hold.
+        let group = try dossierWorld(privacy: .public, role: .user)
+        let community = try dossierWorld(privacy: .public, role: .user)
+        for (world, chatIdHex) in [(group, DossierWorld.key), (community, KhandaqCommunity.chatIdHex)] {
+            let realm: RLMRealm = world.realmManager.realm
+            realm.beginWriteTransaction()
+            world.chat.groupChatIdHex = chatIdHex
+            world.chat.groupTopic = "Reading circle"
+            try realm.commitWriteTransaction()
+            world.dossier.loadViewIfNeeded()
+        }
+        XCTAssertEqual((view(in: group.dossier, "air.group.dossier.name") as? UILabel)?.text, "Reading circle")
+        XCTAssertEqual((view(in: group.dossier, "air.group.dossier.originalName") as? UILabel)?.text, "Originally “Book club”")
+        XCTAssertEqual((view(in: group.dossier, "air.group.dossier.settings") as? AirSettingRow)?.detailLabel.text,
+                       "Your name in the group, the group's name, who joins and who writes")
+        XCTAssertEqual((view(in: community.dossier, "air.group.dossier.name") as? UILabel)?.text, "Khandaq Community")
+        XCTAssertNil(view(in: community.dossier, "air.group.dossier.originalName"))
+        XCTAssertEqual((view(in: community.dossier, "air.group.dossier.settings") as? AirSettingRow)?.detailLabel.text,
+                       "Your name in the group, the topic, who joins and who writes")
+    }
+
+    /// The founder's settings of a group: "Group name" with the title the group goes by, and its screen opened with
+    /// it, which refuses an empty name in the words of a name and saves the rest as the topic. Nothing there says
+    /// "topic".
+    func testTheSettingsOfAGroupCallItsTopicItsName() throws {
+        let chat = try groupChat(name: "Book club", topic: "Reading circle")
+        chat.groupNumber = 7
+        let groups = TopicRecordingGroups()
+        groups.selfRoles[7] = .founder
+        let settings = GroupInfoController(chat: chat, submanagerGroups: groups)
+        let navigation = UINavigationController(rootViewController: settings)
+        settings.loadViewIfNeeded()
+        settings.viewWillAppear(false)
+
+        let row = try XCTUnwrap(view(in: settings, "air.group.settings.topic") as? AirSettingRow)
+        XCTAssertEqual(row.titleLabel.text, "Group name")
+        XCTAssertEqual(row.valueLabel.text, "Reading circle")
+        XCTAssertEqual((view(in: settings, "air.group.settings.topicLock") as? UISwitch)?.accessibilityLabel,
+                       "Only the founder and moderators change the name")
+        let texts = subviews(of: settings.view).compactMap { ($0 as? UILabel)?.text }
+        XCTAssertTrue(texts.contains("Every member sees it in the chat list and at the top of the group."), "\(texts)")
+        XCTAssertFalse(texts.contains { $0.lowercased().contains("topic") }, "\(texts)")
+
+        row.sendActions(for: .touchUpInside)
+        let field = try XCTUnwrap(navigation.topViewController as? AirGroupFieldController)
+        field.loadViewIfNeeded()
+        XCTAssertEqual(field.title, "Group name")
+        let input = try XCTUnwrap(view(in: field, "air.group.field.input") as? UITextField)
+        XCTAssertEqual(input.text, "Reading circle", "opened with the name the group goes by")
+        XCTAssertEqual(input.placeholder, "Group name")
+        let note = try XCTUnwrap(view(in: field, "air.field.note") as? UILabel)
+        XCTAssertEqual(note.text, "Every member sees it in the chat list and at the top of the group.")
+
+        let save = try XCTUnwrap(view(in: field, "air.group.field.save") as? UIControl)
+        input.text = "   "
+        save.sendActions(for: .touchUpInside)
+        XCTAssertEqual(note.text, "The name cannot be empty.")
+        XCTAssertEqual(groups.topicsSet, [], "an empty name is not sent")
+
+        input.text = " Reading circle 2026 "
+        save.sendActions(for: .touchUpInside)
+        XCTAssertEqual(groups.topicsSet, ["Reading circle 2026"], "the name is saved as the topic")
+    }
+
+    /// Khandaq Community's settings keep "Topic" with its topic and the words of a topic; an observer of a group sees
+    /// the name it was made with and who may change it.
+    func testTheSettingsOfKhandaqCommunityKeepItsTopic() throws {
+        let groups = TopicRecordingGroups()
+        let community = try groupChat(name: "Khandaq Community", topic: "Be kind", chatIdHex: KhandaqCommunity.chatIdHex)
+        community.groupNumber = 8
+        community.groupTopicLockEnabled = true
+        let settings = GroupInfoController(chat: community, submanagerGroups: groups)
+        settings.loadViewIfNeeded()
+        settings.viewWillAppear(false)
+        let row = try XCTUnwrap(view(in: settings, "air.group.settings.topic") as? AirSettingRow)
+        XCTAssertEqual(row.titleLabel.text, "Topic")
+        XCTAssertEqual(row.valueLabel.text, "Be kind")
+        XCTAssertTrue(subviews(of: settings.view).compactMap { ($0 as? UILabel)?.text }
+            .contains("Only the founder and the moderators change the topic."))
+
+        let observed = try groupChat(name: "Book club", topic: nil)
+        observed.groupNumber = 9
+        groups.selfRoles[9] = .observer
+        let observer = GroupInfoController(chat: observed, submanagerGroups: groups)
+        observer.loadViewIfNeeded()
+        observer.viewWillAppear(false)
+        let nameRow = try XCTUnwrap(view(in: observer, "air.group.settings.topic") as? AirSettingRow)
+        XCTAssertEqual(nameRow.titleLabel.text, "Group name")
+        XCTAssertEqual(nameRow.valueLabel.text, "Book club", "the name it was made with, not No topic")
+        XCTAssertFalse(nameRow.isEnabled)
+        XCTAssertTrue(subviews(of: observer.view).compactMap { ($0 as? UILabel)?.text }
+            .contains("Everyone but observers can change the name."))
+    }
+
     // MARK: - Events of a real group (stage 5)
 
     /// objcTox posts a group's events to a center of its own; the screens hear them on the default one.
@@ -1113,6 +1344,16 @@ private extension AirGroupModelTests {
         return unsafeBitCast(cls, to: type)
     }
 
+    /// A group's chat outside any Realm, made from the app's class (KhandaqCommunityTests).
+    func groupChat(name: String?, topic: String?, chatIdHex: String = String(repeating: "B", count: 64)) throws -> OCTChat {
+        let chat = try appClass("OCTChat", as: OCTChat.Type.self).init()
+        chat.isGroup = true
+        chat.groupChatIdHex = chatIdHex
+        chat.groupName = name
+        chat.groupTopic = topic
+        return chat
+    }
+
     /// An entry of a group outside any Realm, made from the app's class (GroupReportTests).
     func groupEntry(peerId: Int32) throws -> OCTMessageAbstract {
         let message = try appClass("OCTMessageAbstract", as: OCTMessageAbstract.Type.self).init()
@@ -1201,6 +1442,15 @@ private final class StoringGroups: OCTSubmanagerGroupsMock {
         writing = true
         body(realmManager)
         writing = false
+    }
+}
+
+/// objcTox's groups for the settings of a group outside any Realm: the topics set are kept here, in order.
+private final class TopicRecordingGroups: OCTSubmanagerGroupsMock {
+    private(set) var topicsSet: [String] = []
+
+    override func setGroupTopic(_ topic: String!, for chat: OCTChat!) throws {
+        topicsSet.append(topic ?? "")
     }
 }
 

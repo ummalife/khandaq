@@ -1042,13 +1042,16 @@ extension GroupScreenTesting {
 }
 
 extension GroupScreenTesting where Self: XCTestCase {
-    /// Lets the main loop run for `seconds`: the screen appears, jumps, and hears from its list.
+    /// Lets the main loop run for `seconds`: the screen appears, jumps, and hears from its list. In a run of
+    /// the whole suite the loop first works off what the tests before it left (the windows of the snapshot
+    /// tests, which never let the loop run), and that took up to about six seconds (27.11): the wait is for
+    /// the loop to have run, so only a loop that does not come back fails it.
     func settle(for seconds: TimeInterval) {
         let settled = expectation(description: "the main loop ran")
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
             settled.fulfill()
         }
-        wait(for: [settled], timeout: seconds + 5)
+        wait(for: [settled], timeout: seconds + 30)
     }
 }
 

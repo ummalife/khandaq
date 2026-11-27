@@ -23,6 +23,7 @@
 #include "src/friendlist.h"
 #include "src/model/air/aircommunity.h"
 #include "src/model/notificationgenerator.h"
+#include "src/model/systemmessage.h"
 
 #include "mock/mockcoreidhandler.h"
 #include "mock/mockgroupquery.h"
@@ -70,6 +71,7 @@ private slots:
     void theCommunityStartsWithItsNameWhateverItCameWith();
     void neitherTopicNorRenameChangesTheCommunity();
     void otherGroupsTakeTheirTitleAsBefore();
+    void aRenameChangesTheTitleOnceToxcoreTookIt();
     void aNotificationNamesTheCommunity();
 
 private:
@@ -130,14 +132,81 @@ void TestGroup::otherGroupsTakeTheirTitleAsBefore()
     QCOMPARE(changed.count(), 1);
     QCOMPARE(changed.at(0).at(0).toString(), QStringLiteral("Yusuf"));
 
+    // KHANDAQ (inbox #13, 27.11): a rename asks toxcore for the topic, and the title changes once
+    // it took it (Core::changeGroupTitle).
     other.setName(QStringLiteral("Our family"));
-    QCOMPARE(other.getName(), QStringLiteral("Our family"));
+    QCOMPARE(other.getName(), QStringLiteral("Family"));
     QCOMPARE(renamed.count(), 1);
     QCOMPARE(renamed.at(0).at(0).toString(), QStringLiteral("Our family"));
+    other.setTitle(QStringLiteral("self"), QStringLiteral("Our family"));
+    QCOMPARE(other.getName(), QStringLiteral("Our family"));
 
     // An empty title changes nothing, as before.
     other.setTitle(QString(), QString());
     QCOMPARE(other.getName(), QStringLiteral("Our family"));
+}
+
+/**
+ * KHANDAQ (inbox #13, 27.11): a group has one name. A rename asks toxcore for it, and the title
+ * changes only once toxcore took it, with the line of the rename under the name the member has in
+ * the group, once. A rename toxcore refused leaves the title as it was and writes nothing. Khandaq
+ * Community, whose name never changes, asks for none and takes no topic, name or join.
+ */
+void TestGroup::aRenameChangesTheTitleOnceToxcoreTookIt()
+{
+    // As GroupChatForm::onTitleChanged writes the line.
+    const auto line = [](const QList<QVariant>& change) -> QString {
+        SystemMessage message;
+        message.messageType = SystemMessageType::titleChanged;
+        message.args[0] = change.at(0).toString();
+        message.args[1] = change.at(1).toString();
+        return message.toString();
+    };
+
+    const GroupId groupId(QByteArray(32, '\x0c'));
+    Group group(2, groupId, QStringLiteral("Book club"), false, QStringLiteral("Amina"),
+                *groupQuery, *coreIdHandler, *friendList);
+    QSignalSpy shown(&group, &Group::displayedNameChanged);
+    QSignalSpy changed(&group, &Group::titleChanged);
+    QSignalSpy asked(&group, &Group::titleChangedByUser);
+    group.setName(QStringLiteral("Reading circle"));
+    QCOMPARE(asked.count(), 1);
+    QCOMPARE(asked.at(0).at(0).toString(), QStringLiteral("Reading circle"));
+    QCOMPARE(group.getName(), QStringLiteral("Book club"));
+    QCOMPARE(shown.count(), 0);
+    QCOMPARE(changed.count(), 0);
+
+    // Toxcore took it: Core::changeGroupTitle gives the title under our name in the group.
+    group.setTitle(QStringLiteral("Amina"), QStringLiteral("Reading circle"));
+    QCOMPARE(group.getName(), QStringLiteral("Reading circle"));
+    QCOMPARE(shown.count(), 1);
+    QCOMPARE(changed.count(), 1);
+    QCOMPARE(line(changed.at(0)), QStringLiteral("Amina renamed the group to Reading circle"));
+    // The same title again, as the join of a member brings it: no second line.
+    group.setTitle(QString(), QStringLiteral("Reading circle"));
+    QCOMPARE(shown.count(), 1);
+    QCOMPARE(changed.count(), 1);
+
+    // Refused (Core::groupTitleChangeFailed): nothing follows the request, and the title stays.
+    group.setName(QStringLiteral("Our circle"));
+    QCOMPARE(asked.count(), 2);
+    QCOMPARE(group.getName(), QStringLiteral("Reading circle"));
+    QCOMPARE(shown.count(), 1);
+    QCOMPARE(changed.count(), 1);
+
+    Group community(0, GroupId(Air::Community::chatId()), communityName, false,
+                    QStringLiteral("Amina"), *groupQuery, *coreIdHandler, *friendList);
+    QSignalSpy communityShown(&community, &Group::displayedNameChanged);
+    QSignalSpy communityChanged(&community, &Group::titleChanged);
+    QSignalSpy communityAsked(&community, &Group::titleChangedByUser);
+    // A rename, a topic a member set, and the name the join of a member brings.
+    community.setName(QStringLiteral("Reading circle"));
+    community.setTitle(QStringLiteral("Amina"), QStringLiteral("Reading circle"));
+    community.setTitle(QString(), QStringLiteral("Book club"));
+    QCOMPARE(community.getName(), communityName);
+    QCOMPARE(communityShown.count(), 0);
+    QCOMPARE(communityChanged.count(), 0);
+    QCOMPARE(communityAsked.count(), 0);
 }
 
 void TestGroup::aNotificationNamesTheCommunity()

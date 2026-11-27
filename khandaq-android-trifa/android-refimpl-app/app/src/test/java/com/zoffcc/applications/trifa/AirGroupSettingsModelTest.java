@@ -1,11 +1,13 @@
 package com.zoffcc.applications.trifa;
 
 import org.junit.Test;
+import org.khandaq.messenger.R;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Locale;
 
 import static com.zoffcc.applications.trifa.AirGroupModel.ROLE_FOUNDER;
 import static com.zoffcc.applications.trifa.AirGroupModel.ROLE_MODERATOR;
@@ -14,15 +16,25 @@ import static com.zoffcc.applications.trifa.AirGroupModel.ROLE_USER;
 import static com.zoffcc.applications.trifa.AirGroupModel.VOICE_ALL;
 import static com.zoffcc.applications.trifa.AirGroupModel.VOICE_FOUNDER;
 import static com.zoffcc.applications.trifa.AirGroupModel.VOICE_MODERATOR;
+import static com.zoffcc.applications.trifa.AirGroupSettingsModel.COMMUNITY_TOPIC_WORDS;
+import static com.zoffcc.applications.trifa.AirGroupSettingsModel.GROUP_NAME_WORDS;
 import static com.zoffcc.applications.trifa.AirGroupSettingsModel.TOPIC_LOCK_DISABLED;
 import static com.zoffcc.applications.trifa.AirGroupSettingsModel.TOPIC_LOCK_ENABLED;
+import static com.zoffcc.applications.trifa.AirGroupSettingsModel.currentName;
+import static com.zoffcc.applications.trifa.AirGroupSettingsModel.topicFieldValue;
+import static com.zoffcc.applications.trifa.AirGroupSettingsModel.topicRowValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 /** The rules of the group settings (GroupInfoActivity), as GroupInfoController and AirGroupSettingsText on iOS. */
 public class AirGroupSettingsModelTest
 {
+    private static final String GROUP_ID = "64077ffa76cede3b392535c691a360fbe7ce4d0d4b8dcd968226ef988c0ae4ec";
+    /** What the screen passes for R.string.air_gs_topic_none. */
+    private static final String NO_TOPIC = "No topic";
+
     @Test
     public void the_topic_lock_is_toxcores_values()
     {
@@ -126,6 +138,108 @@ public class AirGroupSettingsModelTest
         assertEquals(ToxVars.Tox_Group_Voice_State.TOX_GROUP_VOICE_STATE_ALL.value, VOICE_ALL);
         assertEquals(ToxVars.Tox_Group_Voice_State.TOX_GROUP_VOICE_STATE_MODERATOR.value, VOICE_MODERATOR);
         assertEquals(ToxVars.Tox_Group_Voice_State.TOX_GROUP_VOICE_STATE_FOUNDER.value, VOICE_FOUNDER);
+    }
+
+    // ---- KHANDAQ (inbox #13, 27.11): a group's topic is its name; Khandaq Community keeps its topic ----
+
+    @Test
+    public void every_group_but_khandaq_community_calls_its_topic_its_name()
+    {
+        assertSame(GROUP_NAME_WORDS, AirGroupSettingsModel.topicWords(GROUP_ID));
+        assertSame(GROUP_NAME_WORDS, AirGroupSettingsModel.topicWords(null));
+        assertSame(GROUP_NAME_WORDS, AirGroupSettingsModel.topicWords(""));
+        assertSame(COMMUNITY_TOPIC_WORDS, AirGroupSettingsModel.topicWords(KhandaqCommunity.CHAT_ID));
+        assertSame(COMMUNITY_TOPIC_WORDS,
+                   AirGroupSettingsModel.topicWords(KhandaqCommunity.CHAT_ID.toLowerCase(Locale.ROOT)));
+    }
+
+    @Test
+    public void a_group_s_words_say_its_name_and_the_community_s_are_the_topic_s_as_before()
+    {
+        assertTrue(GROUP_NAME_WORDS.namesTheGroup);
+        assertEquals(R.string.air_gs_group_name, GROUP_NAME_WORDS.title);
+        assertEquals(R.string.air_gs_group_name_note, GROUP_NAME_WORDS.note);
+        assertEquals(R.string.air_gs_group_name_locked, GROUP_NAME_WORDS.locked);
+        assertEquals(R.string.air_gs_group_name_not_observers, GROUP_NAME_WORDS.notObservers);
+        assertEquals(R.string.air_gs_group_name_empty, GROUP_NAME_WORDS.empty);
+        assertEquals(R.string.air_gs_group_name_lock, GROUP_NAME_WORDS.lock);
+        assertEquals(R.string.air_group_settings_detail_name, GROUP_NAME_WORDS.settingsDetail);
+
+        assertFalse(COMMUNITY_TOPIC_WORDS.namesTheGroup);
+        assertEquals(R.string.air_gs_topic, COMMUNITY_TOPIC_WORDS.title);
+        assertEquals(R.string.air_gs_topic_note, COMMUNITY_TOPIC_WORDS.note);
+        assertEquals(R.string.air_gs_topic_locked, COMMUNITY_TOPIC_WORDS.locked);
+        assertEquals(R.string.air_gs_topic_not_observers, COMMUNITY_TOPIC_WORDS.notObservers);
+        assertEquals(R.string.air_gs_topic_empty, COMMUNITY_TOPIC_WORDS.empty);
+        assertEquals(R.string.air_gs_topic_lock, COMMUNITY_TOPIC_WORDS.lock);
+        assertEquals(R.string.air_group_settings_detail, COMMUNITY_TOPIC_WORDS.settingsDetail);
+    }
+
+    @Test
+    public void the_note_says_what_it_does_while_it_changes_here_else_who_changes_it()
+    {
+        for (final AirGroupSettingsModel.TopicWords words :
+                new AirGroupSettingsModel.TopicWords[]{GROUP_NAME_WORDS, COMMUNITY_TOPIC_WORDS})
+        {
+            assertEquals(words.note, AirGroupSettingsModel.topicNote(words, true, TOPIC_LOCK_ENABLED));
+            assertEquals(words.note, AirGroupSettingsModel.topicNote(words, true, -1));
+            assertEquals(words.locked, AirGroupSettingsModel.topicNote(words, false, TOPIC_LOCK_ENABLED));
+            assertEquals(words.notObservers, AirGroupSettingsModel.topicNote(words, false, TOPIC_LOCK_DISABLED));
+            // A lock toxcore did not give is not said to be on.
+            assertEquals(words.notObservers, AirGroupSettingsModel.topicNote(words, false, -1));
+        }
+    }
+
+    @Test
+    public void the_name_a_group_goes_by_is_its_topic_else_the_name_it_was_created_with()
+    {
+        assertEquals("Book club", currentName("Book club", "Reading circle"));
+        assertEquals("Reading circle", currentName("", "Reading circle"));
+        assertEquals("Reading circle", currentName(null, "Reading circle"));
+        assertEquals("Reading circle", currentName("  ", "Reading circle"));
+        assertEquals("", currentName("", " "));
+        assertEquals("", currentName(null, null));
+    }
+
+    @Test
+    public void a_group_s_row_shows_the_title_it_goes_by_never_no_topic()
+    {
+        assertEquals("Book club", topicRowValue(GROUP_NAME_WORDS, "Book club", "Reading circle", GROUP_ID, NO_TOPIC));
+        assertEquals("Reading circle", topicRowValue(GROUP_NAME_WORDS, "", "Reading circle", GROUP_ID, NO_TOPIC));
+        assertEquals("Reading circle", topicRowValue(GROUP_NAME_WORDS, null, "Reading circle", GROUP_ID, NO_TOPIC));
+        assertEquals("Reading circle", topicRowValue(GROUP_NAME_WORDS, "  ", "Reading circle", GROUP_ID, NO_TOPIC));
+        // Neither a topic nor a name: the start of its ID, as the list and the top of the group name it.
+        assertEquals("64077ffa", topicRowValue(GROUP_NAME_WORDS, "", "", GROUP_ID, NO_TOPIC));
+        assertEquals("64077ffa", topicRowValue(GROUP_NAME_WORDS, null, null, GROUP_ID, NO_TOPIC));
+        assertEquals(HelperGroup.group_list_title(null, null, GROUP_ID),
+                     topicRowValue(GROUP_NAME_WORDS, null, null, GROUP_ID, NO_TOPIC));
+    }
+
+    @Test
+    public void the_community_s_row_shows_its_topic_or_no_topic_as_before()
+    {
+        assertEquals("Reading circle rules",
+                     topicRowValue(COMMUNITY_TOPIC_WORDS, "Reading circle rules", KhandaqCommunity.DISPLAY_NAME,
+                                   KhandaqCommunity.CHAT_ID, NO_TOPIC));
+        assertEquals(NO_TOPIC, topicRowValue(COMMUNITY_TOPIC_WORDS, "", KhandaqCommunity.DISPLAY_NAME,
+                                             KhandaqCommunity.CHAT_ID, NO_TOPIC));
+        assertEquals(NO_TOPIC, topicRowValue(COMMUNITY_TOPIC_WORDS, null, KhandaqCommunity.DISPLAY_NAME,
+                                             KhandaqCommunity.CHAT_ID, NO_TOPIC));
+    }
+
+    @Test
+    public void the_field_starts_with_the_name_the_group_goes_by()
+    {
+        assertEquals("Book club", topicFieldValue(GROUP_NAME_WORDS, "Book club", "Reading circle"));
+        assertEquals("Reading circle", topicFieldValue(GROUP_NAME_WORDS, "", "Reading circle"));
+        // Neither: the field starts empty with its hint, not with the start of the ID.
+        assertEquals("", topicFieldValue(GROUP_NAME_WORDS, "", ""));
+        assertEquals("", topicFieldValue(GROUP_NAME_WORDS, null, null));
+        // Khandaq Community's field is its topic, as before.
+        assertEquals("Reading circle rules",
+                     topicFieldValue(COMMUNITY_TOPIC_WORDS, "Reading circle rules", KhandaqCommunity.DISPLAY_NAME));
+        assertEquals("", topicFieldValue(COMMUNITY_TOPIC_WORDS, "", KhandaqCommunity.DISPLAY_NAME));
+        assertEquals("", topicFieldValue(COMMUNITY_TOPIC_WORDS, null, KhandaqCommunity.DISPLAY_NAME));
     }
 
     @Test

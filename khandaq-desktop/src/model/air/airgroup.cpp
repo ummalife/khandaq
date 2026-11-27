@@ -255,6 +255,14 @@ ComposeRight composeRight(GroupRole self, GroupVoice voice)
     return ComposeRight::Write;
 }
 
+bool canRenameGroup(GroupRole self, bool topicLocked)
+{
+    if (self == GroupRole::Observer) {
+        return false;
+    }
+    return !topicLocked || self == GroupRole::Founder || self == GroupRole::Moderator;
+}
+
 bool actionRole(MemberAction action, GroupRole* role)
 {
     switch (action) {

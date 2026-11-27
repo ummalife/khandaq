@@ -732,6 +732,7 @@
 "group_private_message_unread_action_format" = "رسالة خاصة (%d غير مقروءة)";
 "group_topic_set_failed" = "تعذر تحديث موضوع المجموعة.";
 "group_topic_too_long" = "الموضوع طويل جدا.";
+"group_name_too_long" = "الاسم طويل جدًا.";
 "group_password_header" = "كلمة مرور المجموعة";
 "group_password_placeholder" = "تعيين أو تغيير كلمة المرور";
 "group_password_footer" = "للمؤسس فقط. اتركها فارغة لإزالة كلمة المرور.";
@@ -1054,6 +1055,7 @@
 "air_group_member_you_format" = "%@ (أنت)";
 "air_group_member_hint" = "يفتح الإجراءات الخاصة بهذا العضو";
 "air_group_dossier_title" = "المجموعة";
+"air_group_dossier_original_name_format" = "في الأصل «%@»";
 "air_group_your_role" = "دورك";
 "air_group_who_gets_now" = "من يستلم الرسالة الآن";
 "air_group_who_gets_now_note_format" = "متصلون الآن: %1$d من %2$d. يستلم الباقون الرسائل عند اتصالهم.";
@@ -1078,6 +1080,7 @@
 "air_group_clear_history_message" = "تُحذف الرسائل من هذا الجهاز فقط، وتبقى لدى الأعضاء.";
 "air_group_settings" = "إعدادات المجموعة";
 "air_group_settings_detail" = "اسمك في المجموعة، الموضوع، من ينضم ومن يكتب";
+"air_group_settings_detail_group_name" = "اسمك في المجموعة، اسم المجموعة، من ينضم ومن يكتب";
 "air_group_leave" = "مغادرة المجموعة";
 "air_group_leave_note" = "تتوقف رسائلها عن الوصول، ويُحذف السجل من هذا الجهاز.";
 "air_group_leave_title_format" = "مغادرة %@؟";
@@ -1126,7 +1129,7 @@
 "air_new_group_title" = "مجموعة جديدة";
 "air_new_group_name" = "الاسم";
 "air_new_group_name_placeholder" = "مثلًا: نادي الكتاب";
-"air_new_group_name_note" = "سيراه كل من تدعوهم. يمكن لاحقًا تغيير الموضوع، أما الاسم فلا.";
+"air_new_group_name_note" = "سيراه كل من تدعوهم. يمكنك تغييره لاحقًا من إعدادات المجموعة.";
 "air_new_group_privacy" = "من يمكنه الانضمام";
 "air_group_privacy_invite_only" = "بالدعوة فقط";
 "air_group_privacy_invite_only_note" = "لا ينضم إلا من يدعوه أحد الأعضاء. لا يمكن الانضمام بمفتاح المجموعة.";
@@ -1310,6 +1313,7 @@
 "error_failed_leave_group" = "تعذّرت مغادرة المجموعة";
 "error_failed_role" = "تعذّر تغيير الدور";
 "error_failed_topic" = "تعذّر تغيير الموضوع";
+"error_failed_rename_group" = "تعذّر تغيير الاسم";
 "error_failed_group_name" = "تعذّر تغيير اسمك في المجموعة";
 "error_failed_group_settings" = "تعذّر تغيير إعدادات المجموعة";
 "error_failed_send_file" = "لم يُرسَل الملف";
@@ -1442,6 +1446,12 @@
 "air_group_settings_topic_locked" = "لا يغيّر الموضوع إلا المؤسس والمشرفون.";
 "air_group_settings_topic_not_observers" = "يغيّر الموضوع جميع الأعضاء ما عدا المراقبين.";
 "air_group_settings_topic_lock" = "لا يغيّر الموضوع إلا المؤسس والمشرفون";
+"air_group_settings_group_name" = "اسم المجموعة";
+"air_group_settings_group_name_note" = "يراه جميع الأعضاء في قائمة المحادثات وفي أعلى المجموعة.";
+"air_group_settings_group_name_locked" = "لا يغيّر الاسمَ إلا المؤسس والمشرفون.";
+"air_group_settings_group_name_not_observers" = "يمكن للجميع تغيير الاسم ما عدا المراقبين.";
+"air_group_settings_group_name_lock" = "لا يغيّر الاسمَ إلا المؤسس والمشرفون";
+"air_group_settings_group_name_empty" = "لا يمكن أن يكون الاسم فارغًا.";
 "air_group_settings_join" = "من يمكنه الانضمام";
 "air_group_settings_password_set" = "مُعيّنة";
 "air_group_settings_password_none" = "لا توجد";

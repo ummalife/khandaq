@@ -333,7 +333,7 @@
     <string name="air_new_group_title">新建群组</string>
     <string name="air_new_group_name">名称</string>
     <string name="air_new_group_name_placeholder">例如：读书会</string>
-    <string name="air_new_group_name_note">所有受邀者都会看到。之后可以修改主题，但不能修改名称。</string>
+    <string name="air_new_group_name_note">你邀请的每个人都会看到它。之后可以在群组设置中更改。</string>
     <string name="air_new_group_privacy">谁可以加入</string>
     <string name="air_group_privacy_invite_only">仅限邀请</string>
     <string name="air_group_privacy_invite_only_note">只有成员邀请的人才能加入。仅凭群组密钥无法加入。</string>
@@ -422,7 +422,9 @@
     <string name="air_group_history">历史</string>
     <string name="air_group_history_note">你不在时写的消息由其他成员转交。如果作者签名无法验证，消息会标注发送者未确认。</string>
     <string name="air_group_settings">群组设置</string>
+    <!-- KHANDAQ (inbox #13, 27.11): the line of Khandaq Community, whose settings keep its topic; _name for every other group -->
     <string name="air_group_settings_detail">你在群组中的名字、主题、谁能加入、谁能发言</string>
+    <string name="air_group_settings_detail_name">你在群组中的名字、群组名称、谁能加入、谁能发言</string>
     <string name="air_group_nobody_found">没有这个名字的成员</string>
     <string name="air_group_who_gets_now_note_format">当前在线 %1$d 人（共 %2$d 人），其他人上线后会收到消息。</string>
     <string name="air_group_key_copied">群组密钥已复制</string>

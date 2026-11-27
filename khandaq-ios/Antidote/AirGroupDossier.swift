@@ -151,10 +151,12 @@ final class AirGroupDossierController: AirScrollController {
         name.accessibilityTraits = UIAccessibilityTraitHeader
         name.accessibilityIdentifier = "air.group.dossier.name"
         var head: [UIView] = [name]
-        // The name the group was made with, under the topic it shows by; Khandaq Community has one name only.
-        if !KhandaqCommunity.isCommunity(chat),
-           let topic = chat.groupTopic, !topic.isEmpty, topic != chat.groupName, let original = chat.groupName, !original.isEmpty {
-            head.append(AirKit.body(original))
+        // KHANDAQ (inbox #13, 27.11): the name the group was made with, under the name it goes by now, says
+        // what it is ("Originally “Book club”"); Khandaq Community has one name only.
+        if let original = AirGroupTopicWords.originalNameLine(for: chat) {
+            let line = AirKit.body(original)
+            line.accessibilityIdentifier = "air.group.dossier.originalName"
+            head.append(line)
         }
         let counts = AirKit.label(.label, weight: 400, color: KQColor.ink2, lines: 0)
         counts.font = KQFont.tabular(KQFont.font(.label, weight: 400))
@@ -251,9 +253,10 @@ final class AirGroupDossierController: AirScrollController {
         historyRows.append(clear)
         addSection(String(localized: "air_group_history"), rows: historyRows, note: String(localized: "air_group_history_note"))
 
-        // Everything else the group has: name, topic, password, limits, who may write.
+        // Everything else the group has: your name in it, its name (Khandaq Community: its topic), password,
+        // limits, who may write.
         let settings = AirSettingRow(title: String(localized: "air_group_settings"),
-                                     detail: String(localized: "air_group_settings_detail"))
+                                     detail: AirGroupTopicWords(chat: chat).settingsDetail)
         settings.accessibilityIdentifier = "air.group.dossier.settings"
         settings.addTarget(self, action: #selector(settingsTapped), for: .touchUpInside)
         addSection(nil, rows: [settings])

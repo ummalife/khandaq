@@ -743,6 +743,7 @@
 "group_private_message_unread_action_format" = "Private message (%d unread)";
 "group_topic_set_failed" = "Could not update group topic.";
 "group_topic_too_long" = "Topic is too long.";
+"group_name_too_long" = "The name is too long.";
 "group_password_header" = "Group password";
 "group_password_placeholder" = "Set or change password";
 "group_password_footer" = "Founder only. Leave empty to remove password.";
@@ -1065,6 +1066,7 @@
 "air_group_member_you_format" = "%@ (you)";
 "air_group_member_hint" = "Opens the actions for this member";
 "air_group_dossier_title" = "Group";
+"air_group_dossier_original_name_format" = "Originally “%@”";
 "air_group_your_role" = "Your role";
 "air_group_who_gets_now" = "Who gets a message now";
 "air_group_who_gets_now_note_format" = "Online now: %1$d of %2$d. The others get messages when they come online.";
@@ -1089,6 +1091,7 @@
 "air_group_clear_history_message" = "The messages are removed from this device only; the members keep theirs.";
 "air_group_settings" = "Group settings";
 "air_group_settings_detail" = "Your name in the group, the topic, who joins and who writes";
+"air_group_settings_detail_group_name" = "Your name in the group, the group's name, who joins and who writes";
 "air_group_leave" = "Leave the group";
 "air_group_leave_note" = "Its messages stop coming, and the history leaves this device.";
 "air_group_leave_title_format" = "Leave %@?";
@@ -1137,7 +1140,7 @@
 "air_new_group_title" = "New group";
 "air_new_group_name" = "Name";
 "air_new_group_name_placeholder" = "For example, Book club";
-"air_new_group_name_note" = "Everyone you invite sees it. Later the topic can change, the name cannot.";
+"air_new_group_name_note" = "Everyone you invite sees it. You can change it later in the group's settings.";
 "air_new_group_privacy" = "Who can join";
 "air_group_privacy_invite_only" = "By invitation only";
 "air_group_privacy_invite_only_note" = "Only people invited by a member can join. The group key does not let anyone in.";
@@ -1321,6 +1324,7 @@
 "error_failed_leave_group" = "Couldn't leave the group";
 "error_failed_role" = "Couldn't change the role";
 "error_failed_topic" = "Couldn't change the topic";
+"error_failed_rename_group" = "Couldn't change the name";
 "error_failed_group_name" = "Couldn't change your name in the group";
 "error_failed_group_settings" = "Couldn't change the group's settings";
 "error_failed_send_file" = "The file wasn't sent";
@@ -1453,6 +1457,12 @@
 "air_group_settings_topic_locked" = "Only the founder and the moderators change the topic.";
 "air_group_settings_topic_not_observers" = "Everyone but observers can change the topic.";
 "air_group_settings_topic_lock" = "Only the founder and moderators change the topic";
+"air_group_settings_group_name" = "Group name";
+"air_group_settings_group_name_note" = "Every member sees it in the chat list and at the top of the group.";
+"air_group_settings_group_name_locked" = "Only the founder and the moderators change the name.";
+"air_group_settings_group_name_not_observers" = "Everyone but observers can change the name.";
+"air_group_settings_group_name_lock" = "Only the founder and moderators change the name";
+"air_group_settings_group_name_empty" = "The name cannot be empty.";
 "air_group_settings_join" = "Who can join";
 "air_group_settings_password_set" = "Set";
 "air_group_settings_password_none" = "None";

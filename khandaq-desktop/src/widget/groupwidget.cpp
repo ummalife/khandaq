@@ -29,11 +29,11 @@
 #include <QMenu>
 #include <QMimeData>
 #include <QPalette>
-#include <QRegularExpression>
 
 #include "maskablepixmapwidget.h"
 #include "form/groupchatform.h"
 #include "src/core/core.h"
+#include "src/model/air/aircommunity.h"
 #include "src/model/friend.h"
 #include "src/friendlist.h"
 #include "src/model/group.h"
@@ -113,7 +113,12 @@ void GroupWidget::showContextMenu(const QPoint& globalPos, const QList<QAction*>
     menu.addSeparator();
 
     QAction* copyGroupId = offersGroupId ? menu.addAction(tr("Copy Group ID")) : nullptr;
-    QAction* setTitle = menu.addAction(tr("Set title..."));
+    // KHANDAQ (inbox #13, 27.11): Rename, as in the dossier: while our role may change the name,
+    // and never for Khandaq Community, whose name never changes (Group::setName).
+    const bool offersRename =
+        (!renameOffered || renameOffered()) && !Air::Community::isCommunity(groupId.getByteArray());
+    QAction* setTitle =
+        offersRename ? menu.addAction(AirStrings::text(AirStrings::Text::DossierRename)) : nullptr;
     QAction* quitGroup = menu.addAction(tr("Quit group", "Menu to quit a groupchat"));
 
     QAction* selectedItem = menu.exec(globalPos);
@@ -139,6 +144,11 @@ void GroupWidget::showContextMenu(const QPoint& globalPos, const QList<QAction*>
     } else if (selectedItem == copyGroupId) {
         QApplication::clipboard()->setText(groupId.toString());
     }
+}
+
+void GroupWidget::setRenameOffered(std::function<bool()> offered)
+{
+    renameOffered = std::move(offered);
 }
 
 void GroupWidget::mousePressEvent(QMouseEvent* ev)
@@ -212,11 +222,11 @@ void GroupWidget::editName()
     }
 
     Group* group = chatroom->getGroup();
-    QString title = tr("Set title...");
-    title.remove(QRegularExpression(QStringLiteral("[.\\x{2026}]+$")));
+    // KHANDAQ (inbox #13, 27.11): titled Rename, as the menu item that opens it.
     bool accepted = false;
     const QString name =
-        QInputDialog::getText(window(), title, AirStrings::text(AirStrings::Text::GroupNamePrompt),
+        QInputDialog::getText(window(), AirStrings::text(AirStrings::Text::DossierRename),
+                              AirStrings::text(AirStrings::Text::GroupNamePrompt),
                               QLineEdit::Normal, group->getName(), &accepted);
     if (accepted && !name.trimmed().isEmpty()) {
         group->setName(name.trimmed());

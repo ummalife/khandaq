@@ -360,8 +360,11 @@ void AirGroupDossier::setInfo(const AirGroupInfo& info_)
     nameLabel->setText(info.name);
     // KHANDAQ (0.2.57): Khandaq Community keeps its name (Air::Community::groupTitle), so it offers
     // no Rename, which here sets the topic of the group.
-    renameButton->setVisible(
-        !Air::Community::isCommunity(QByteArray::fromHex(info.groupKey.toLatin1())));
+    // KHANDAQ (inbox #13, 27.11): nor does a group whose topic your role may not set: toxcore
+    // refuses the rename.
+    const QByteArray chatId = QByteArray::fromHex(info.groupKey.toLatin1());
+    renameButton->setVisible(!Air::Community::isCommunity(chatId)
+                             && Air::canRenameGroup(info.selfRole, info.topicLocked));
     countsLabel->setText(AirStrings::groupHeaderText(info.reach));
     // What is typed stays while the field is being edited, as on the You page.
     if (!selfNameField->edit()->hasFocus()) {

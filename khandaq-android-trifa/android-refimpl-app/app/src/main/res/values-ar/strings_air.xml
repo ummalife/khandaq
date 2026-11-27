@@ -393,7 +393,7 @@
     <string name="air_new_group_title">مجموعة جديدة</string>
     <string name="air_new_group_name">الاسم</string>
     <string name="air_new_group_name_placeholder">مثلًا: نادي الكتاب</string>
-    <string name="air_new_group_name_note">سيراه كل من تدعوهم. يمكن لاحقًا تغيير الموضوع، أما الاسم فلا.</string>
+    <string name="air_new_group_name_note">سيراه كل من تدعوهم. يمكنك تغييره لاحقًا من إعدادات المجموعة.</string>
     <string name="air_new_group_privacy">من يمكنه الانضمام</string>
     <string name="air_group_privacy_invite_only">بالدعوة فقط</string>
     <string name="air_group_privacy_invite_only_note">لا ينضم إلا من يدعوه أحد الأعضاء. مفتاح المجموعة وحده لا يكفي للانضمام.</string>
@@ -487,7 +487,9 @@
     <string name="air_group_history">السجل</string>
     <string name="air_group_history_note">الرسائل المكتوبة أثناء غيابك ينقلها أعضاء آخرون. إذا لم يُتحقق من توقيع الكاتب، تُعلَّم الرسالة بأن المرسل غير مؤكد.</string>
     <string name="air_group_settings">إعدادات المجموعة</string>
+    <!-- KHANDAQ (inbox #13, 27.11): the line of Khandaq Community, whose settings keep its topic; _name for every other group -->
     <string name="air_group_settings_detail">اسمك في المجموعة، الموضوع، من ينضم ومن يكتب</string>
+    <string name="air_group_settings_detail_name">اسمك في المجموعة، اسم المجموعة، من ينضم ومن يكتب</string>
     <string name="air_group_nobody_found">لا أحد بهذا الاسم</string>
     <string name="air_group_who_gets_now_note_format">متصلون الآن: %1$d من %2$d. يستلم الباقون الرسائل عند اتصالهم.</string>
     <string name="air_group_key_copied">نُسخ مفتاح المجموعة</string>

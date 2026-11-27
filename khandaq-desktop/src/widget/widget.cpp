@@ -1027,6 +1027,7 @@ void Widget::onCoreChanged(Core& core_)
     connect(core, &Core::groupPeerlistChanged, this, &Widget::onGroupPeerlistChanged);
     connect(core, &Core::groupPeerNameChanged, this, &Widget::onGroupPeerNameChanged);
     connect(core, &Core::groupTitleChanged, this, &Widget::onGroupTitleChanged);
+    connect(core, &Core::groupTitleChangeFailed, this, &Widget::onGroupTitleChangeFailed);
     connect(core, &Core::groupPeerAudioPlaying, this, &Widget::onGroupPeerAudioPlaying);
     connect(core, &Core::emptyGroupCreated, this, &Widget::onEmptyGroupCreated);
     connect(core, &Core::groupJoined, this, &Widget::onGroupJoined);
@@ -4010,6 +4011,21 @@ void Widget::titleChangedByUser(const QString& title)
     emit changeGroupTitle(group->getId(), title);
 }
 
+void Widget::onGroupTitleChangeFailed(uint32_t groupnumber)
+{
+    const auto& groupId = groupList->id2Key(groupnumber);
+    // A failure queued before the group went has nowhere to show (discardGroup).
+    const QSharedPointer<GroupChatForm> form = groupChatForms.value(groupId);
+    if (!form) {
+        return;
+    }
+    // KHANDAQ (inbox #13, 27.11): the group kept its title (Group::setName), and the error says
+    // why, over its conversation while that shows, as its other changes refused do.
+    QWidget* const anchor = form->isVisible() ? static_cast<QWidget*>(form.data()) : this;
+    AirDialog::notice(anchor, AirStrings::text(AirStrings::Text::ErrorGroupRenameTitle),
+                      AirStrings::text(AirStrings::Text::GroupChangeFailed));
+}
+
 void Widget::onGroupPeerAudioPlaying(int groupnumber, ToxPk peerPk)
 {
     const GroupId& groupId = groupList->id2Key(groupnumber);
@@ -4232,6 +4248,9 @@ Group* Widget::createGroup(uint32_t groupnumber, const GroupId& groupId)
     form->setAir(airLocal, airSource);
     // The form goes with the group, so leaving waits until the dossier's click is over.
     connect(form, &GroupChatForm::leaveRequested, this, &Widget::leaveGroup, Qt::QueuedConnection);
+    // KHANDAQ (inbox #13, 27.11): the list's menu offers Rename as the dossier does.
+    const QPointer<GroupChatForm> renamesForm(form);
+    widget->setRenameOffered([renamesForm] { return renamesForm && renamesForm->offersRename(); });
     connect(form, &GroupChatForm::heldFileAccepted, this, &Widget::saveHeldGroupFile);
     // KHANDAQ (26.11.2026): a member to contacts, and our private messages in the feed.
     connect(form, &GroupChatForm::contactOfferRequested, this,

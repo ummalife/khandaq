@@ -4,6 +4,7 @@
     <string name="air_gs_self_name">اسمك في المجموعة</string>
     <string name="air_gs_self_name_note">يراه أعضاء هذه المجموعة، ويبقى اسم ملفك الشخصي كما هو.</string>
     <string name="air_gs_name_empty">لا يمكن أن يكون الاسم فارغًا.</string>
+    <!-- KHANDAQ (inbox #13, 27.11): the topic of Khandaq Community only (AirGroupSettingsModel.COMMUNITY_TOPIC_WORDS) -->
     <string name="air_gs_topic">الموضوع</string>
     <string name="air_gs_topic_none">بلا موضوع</string>
     <string name="air_gs_topic_note">يرى كل الأعضاء الموضوع: يظهر بدل الاسم في القائمة وفي أعلى المجموعة.</string>
@@ -11,6 +12,13 @@
     <string name="air_gs_topic_not_observers">يغيّر الموضوع جميع الأعضاء ما عدا المراقبين.</string>
     <string name="air_gs_topic_empty">لا يمكن أن يكون الموضوع فارغًا.</string>
     <string name="air_gs_topic_lock">لا يغيّر الموضوع إلا المؤسس والمشرفون</string>
+    <!-- KHANDAQ (inbox #13, 27.11): every other group's topic is its name (AirGroupSettingsModel.GROUP_NAME_WORDS) -->
+    <string name="air_gs_group_name">اسم المجموعة</string>
+    <string name="air_gs_group_name_note">يراه جميع الأعضاء في قائمة المحادثات وفي أعلى المجموعة.</string>
+    <string name="air_gs_group_name_locked">لا يغيّر الاسمَ إلا المؤسس والمشرفون.</string>
+    <string name="air_gs_group_name_not_observers">يمكن للجميع تغيير الاسم ما عدا المراقبين.</string>
+    <string name="air_gs_group_name_empty">لا يمكن أن يكون الاسم فارغًا.</string>
+    <string name="air_gs_group_name_lock">لا يغيّر الاسمَ إلا المؤسس والمشرفون</string>
     <string name="air_gs_join">من يمكنه الانضمام</string>
     <string name="air_gs_password">كلمة مرور المجموعة</string>
     <string name="air_gs_password_note">سيحتاج الأعضاء الجدد إلى كلمة المرور، ومن في المجموعة الآن يبقى فيها.</string>

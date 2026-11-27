@@ -17,6 +17,7 @@
     along with Khandaq.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "src/model/air/aircommunity.h"
 #include "src/model/air/airgroup.h"
 #include "src/model/air/airyou.h"
 #include "src/widget/air/airchatparts.h"
@@ -164,6 +165,7 @@ private slots:
     void composerPausesAVoiceNoteAndLetsItGoOn();
     void dossierSaysTheRoleAndListsTheMembers();
     void dossierSetsYourNameInTheGroup();
+    void dossierOffersRenameWhereTheRoleMayButNotForTheCommunity();
     void memberMenuIsTheSameFromTheRowAndFromTheirName();
     void aGroupByInvitationOnlySharesNoKeyAndItsFounderOpensIt();
     void privateThreadTellsAnObserverWhyItCannotAnswer();
@@ -880,6 +882,68 @@ void TestAirGroupViews::dossierSetsYourNameInTheGroup()
     QCOMPARE(asked.count(), 2);
     QCOMPARE(asked.at(1).at(0).toString(), QStringLiteral("Amina B."));
     QCOMPARE(field->text(), QStringLiteral("Sister Amina"));
+}
+
+/**
+ * KHANDAQ (inbox #13, 27.11): a group has one name, and Rename in its dossier changes it in the
+ * head of the chat, where your role may set the topic, which toxcore refuses otherwise: the founder
+ * and the moderators, and while the topic lock is off everyone but an observer. Khandaq Community
+ * keeps its name and offers no Rename.
+ */
+void TestAirGroupViews::dossierOffersRenameWhereTheRoleMayButNotForTheCommunity()
+{
+    QWidget host;
+    host.resize(1100, 800);
+    auto* const dossier = new AirGroupDossier(&host);
+    host.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&host));
+    AirGroupInfo info;
+    info.name = QStringLiteral("Reading circle");
+    info.groupKey = groupKey;
+    info.selfName = QStringLiteral("Amina");
+    info.selfRole = Air::GroupRole::Founder;
+    info.members = {member(1, QStringLiteral("Amina"), Air::GroupRole::Founder, true, true)};
+    info.reach = Air::GroupReach::make(1, 1, 0, true);
+    dossier->setInfo(info);
+    dossier->open();
+
+    QVERIFY(showsText(dossier, QStringLiteral("Reading circle")));
+    auto* const rename = part<AirButton>(dossier, "groupRename");
+    QVERIFY(rename->isVisibleTo(dossier));
+    QCOMPARE(rename->text(), AirStrings::text(Text::DossierRename));
+
+    // The topic lock is on in a new group.
+    const auto offers = [&](Air::GroupRole role, bool locked) {
+        info.selfRole = role;
+        info.topicLocked = locked;
+        dossier->setInfo(info);
+        return rename->isVisibleTo(dossier);
+    };
+    QVERIFY(offers(Air::GroupRole::Moderator, true));
+    QVERIFY(!offers(Air::GroupRole::Member, true));
+    QVERIFY(!offers(Air::GroupRole::Observer, true));
+    QVERIFY(offers(Air::GroupRole::Member, false));
+    QVERIFY(!offers(Air::GroupRole::Observer, false));
+    QVERIFY(offers(Air::GroupRole::Founder, true));
+
+    // The field is in the head of the chat: the dossier folds away for it.
+    QSignalSpy renames(dossier, &AirGroupDossier::renameRequested);
+    rename->click();
+    QCOMPARE(renames.count(), 1);
+    QVERIFY(!dossier->isOpen());
+
+    info.name = QString::fromLatin1(Air::Community::name);
+    info.groupKey = QString::fromLatin1(Air::Community::chatIdHex);
+    dossier->setInfo(info);
+    dossier->open();
+    QVERIFY(showsText(dossier, QString::fromLatin1(Air::Community::name)));
+    QVERIFY(!rename->isVisibleTo(dossier));
+    QVERIFY(!offers(Air::GroupRole::Member, false));
+
+    // Another group again: Rename is back.
+    info.name = QStringLiteral("Book club");
+    info.groupKey = groupKey;
+    QVERIFY(offers(Air::GroupRole::Founder, true));
 }
 
 /**

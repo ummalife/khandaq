@@ -345,7 +345,7 @@
     <string name="air_new_group_title">New group</string>
     <string name="air_new_group_name">Name</string>
     <string name="air_new_group_name_placeholder">For example, Book club</string>
-    <string name="air_new_group_name_note">Everyone you invite sees it. Later the topic can change, the name cannot.</string>
+    <string name="air_new_group_name_note">Everyone you invite sees it. You can change it later in the group\'s settings.</string>
     <string name="air_new_group_privacy">Who can join</string>
     <string name="air_group_privacy_invite_only">By invitation only</string>
     <string name="air_group_privacy_invite_only_note">Only people invited by a member can join. The group key lets nobody in.</string>
@@ -438,7 +438,9 @@
     <string name="air_group_history">History</string>
     <string name="air_group_history_note">Messages written while you were away are passed on by other members. If the author\'s signature does not check out, the message says the sender is not confirmed.</string>
     <string name="air_group_settings">Group settings</string>
+    <!-- KHANDAQ (inbox #13, 27.11): the line of Khandaq Community, whose settings keep its topic; _name for every other group -->
     <string name="air_group_settings_detail">Your name in the group, the topic, who joins and who writes</string>
+    <string name="air_group_settings_detail_name">Your name in the group, the group\'s name, who joins and who writes</string>
     <string name="air_group_nobody_found">Nobody with that name</string>
     <string name="air_group_who_gets_now_note_format">Online now: %1$d of %2$d. The others get messages when they come online.</string>
     <string name="air_group_key_copied">Group key copied</string>

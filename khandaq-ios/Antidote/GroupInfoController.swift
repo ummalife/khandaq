@@ -6,10 +6,11 @@ import SnapKit
 import UIKit
 
 /// "Group settings", opened from the group dossier (E14), as the screens of Settings are drawn: your
-/// name in this group and the topic, then who can join (with the password and the member limit) and
-/// who can write (with who changes the topic). The founder changes the last two; everyone else sees
-/// what they are and who changes them. The dossier keeps the members, the key, notifications, the
-/// history and "Leave the group". The calls to objcTox are the ones the old screen made.
+/// name in this group and the group's name (Khandaq Community: its topic, AirGroupTopicWords), then who
+/// can join (with the password and the member limit) and who can write (with who changes the name).
+/// The founder changes the last two; everyone else sees what they are and who changes them. The dossier
+/// keeps the members, the key, notifications, the history and "Leave the group". The calls to objcTox
+/// are the ones the old screen made.
 final class GroupInfoController: AirScrollController {
     let chat: OCTChat
 
@@ -135,7 +136,7 @@ final class GroupInfoController: AirScrollController {
         joinFailure.isHidden = true
         writeFailure.isHidden = true
 
-        // Your name here, then the topic.
+        // Your name here, then the group's.
         let nameRow = AirSettingRow(title: String(localized: "air_group_settings_self_name"),
                                     value: selfName.isEmpty ? nil : selfName,
                                     opens: isLive)
@@ -147,8 +148,11 @@ final class GroupInfoController: AirScrollController {
         nameRow.addTarget(self, action: #selector(nameTapped), for: .touchUpInside)
         addSection(nil, rows: [nameRow], note: String(localized: "air_group_settings_self_name_note"))
 
-        let topicRow = AirSettingRow(title: String(localized: "air_group_settings_topic"),
-                                     value: topic.isEmpty ? String(localized: "air_group_settings_topic_none") : topic,
+        // KHANDAQ (inbox #13, 27.11): the topic is the group's name here, and the row shows the title the
+        // group goes by; Khandaq Community keeps its topic.
+        let words = AirGroupTopicWords(chat: chat)
+        let topicRow = AirSettingRow(title: words.title,
+                                     value: words.value(topic: topic, chat: chat),
                                      opens: canEditTopic)
         topicRow.accessibilityIdentifier = "air.group.settings.topic"
         topicRow.isEnabled = canEditTopic
@@ -156,15 +160,7 @@ final class GroupInfoController: AirScrollController {
             topicRow.accessibilityTraits = UIAccessibilityTraitStaticText
         }
         topicRow.addTarget(self, action: #selector(topicTapped), for: .touchUpInside)
-        let topicNote: String
-        if canEditTopic {
-            topicNote = "air_group_settings_topic_note"
-        }
-        else {
-            // An observer never changes it; with the topic open everyone else may.
-            topicNote = topicLocked ? "air_group_settings_topic_locked" : "air_group_settings_topic_not_observers"
-        }
-        addSection(nil, rows: [topicRow], note: String(localized: topicNote))
+        addSection(nil, rows: [topicRow], note: words.note(canEdit: canEditTopic, locked: topicLocked))
 
         // Who can join.
         if isFounder {
@@ -213,7 +209,7 @@ final class GroupInfoController: AirScrollController {
             write.addArrangedSubview(writeFailure)
             updateChoices()
 
-            let lock = AirSettingRow.toggle(title: String(localized: "air_group_settings_topic_lock"),
+            let lock = AirSettingRow.toggle(title: words.lockTitle,
                                             isOn: topicLocked,
                                             identifier: "air.group.settings.topicLock") { [weak self] on in
                 self?.topicLockChanged(on)
@@ -292,7 +288,7 @@ final class GroupInfoController: AirScrollController {
             // The switch goes back to what the group keeps.
             reload()
             build()
-            show(errorAlert(for: .setGroupTopicLock, error: error), in: writeFailure)
+            show(errorAlert(for: AirGroupTopicWords(chat: chat).lockErrorType, error: error), in: writeFailure)
         }
     }
 
@@ -318,7 +314,8 @@ final class GroupInfoController: AirScrollController {
         guard canEditTopic else {
             return
         }
-        open(.topic, value: topic)
+        let words = AirGroupTopicWords(chat: chat)
+        open(words.fieldKind, value: words.initialValue(topic: topic, chat: chat))
     }
 
     @objc private func passwordTapped() {
@@ -393,11 +390,135 @@ enum AirGroupSettingsText {
     }
 }
 
+/// KHANDAQ (inbox #13, 27.11): what the group screens call the topic of NGC. A group keeps the name it was made
+/// with, and every client shows the topic as its title once there is one (#46): so the topic is the group's
+/// name, the one name its members may change, and saving it still sets the topic. Khandaq Community keeps
+/// "Topic": its title is pinned and its topic is its description.
+enum AirGroupTopicWords {
+    /// Any group but Khandaq Community: the topic is called the group's name.
+    case groupName
+    /// Khandaq Community: the topic, as before.
+    case topic
+
+    init(chat: OCTChat?) {
+        self = KhandaqCommunity.isCommunity(chat) ? .topic : .groupName
+    }
+
+    /// The row's title, which is also the title and the placeholder of its screen.
+    var title: String {
+        switch self {
+            case .groupName:
+                return String(localized: "air_group_settings_group_name")
+            case .topic:
+                return String(localized: "air_group_settings_topic")
+        }
+    }
+
+    /// The line under the row: who sees the value while you may change it, otherwise who may. An observer
+    /// never changes it; with the lock off everyone else may.
+    func note(canEdit: Bool, locked: Bool) -> String {
+        switch self {
+            case .groupName:
+                if canEdit {
+                    return String(localized: "air_group_settings_group_name_note")
+                }
+                return String(localized: locked ? "air_group_settings_group_name_locked" : "air_group_settings_group_name_not_observers")
+            case .topic:
+                if canEdit {
+                    return String(localized: "air_group_settings_topic_note")
+                }
+                return String(localized: locked ? "air_group_settings_topic_locked" : "air_group_settings_topic_not_observers")
+        }
+    }
+
+    /// The founder's switch of who changes it.
+    var lockTitle: String {
+        switch self {
+            case .groupName:
+                return String(localized: "air_group_settings_group_name_lock")
+            case .topic:
+                return String(localized: "air_group_settings_topic_lock")
+        }
+    }
+
+    /// What "Group settings" in the dossier says it holds.
+    var settingsDetail: String {
+        switch self {
+            case .groupName:
+                return String(localized: "air_group_settings_detail_group_name")
+            case .topic:
+                return String(localized: "air_group_settings_detail")
+        }
+    }
+
+    /// The row's value: the title the group goes by in the list and at its top, never "No topic"; Khandaq
+    /// Community's topic (`topic`, as toxcore holds it), as before.
+    func value(topic: String, chat: OCTChat) -> String {
+        switch self {
+            case .groupName:
+                return AirGroupTopicWords.currentName(of: chat) ?? String(localized: "group_chat_default_title")
+            case .topic:
+                return topic.isEmpty ? String(localized: "air_group_settings_topic_none") : topic
+        }
+    }
+
+    /// What the screen of the value opens with: that same title, nothing while the group has no name yet.
+    func initialValue(topic: String, chat: OCTChat) -> String {
+        switch self {
+            case .groupName:
+                return AirGroupTopicWords.currentName(of: chat) ?? ""
+            case .topic:
+                return topic
+        }
+    }
+
+    var fieldKind: AirGroupFieldController.Kind {
+        switch self {
+            case .groupName:
+                return .groupName
+            case .topic:
+                return .topic
+        }
+    }
+
+    var lockErrorType: ErrorHandlerType {
+        switch self {
+            case .groupName:
+                return .setGroupNameLock
+            case .topic:
+                return .setGroupTopicLock
+        }
+    }
+
+    /// The group's title (ChatListContent.groupTitle: the topic, else the name it was made with); nil while it
+    /// has neither and goes by the default title.
+    static func currentName(of chat: OCTChat) -> String? {
+        guard !(chat.groupTopic ?? "").isEmpty || !(chat.groupName ?? "").isEmpty else {
+            return nil
+        }
+        return ChatListContent.groupTitle(for: chat)
+    }
+
+    /// The line under the title of the dossier once the title is not the name the group was made with:
+    /// "Originally “Book club”". Nil while it is that name, and always for Khandaq Community.
+    static func originalNameLine(for chat: OCTChat) -> String? {
+        guard !KhandaqCommunity.isCommunity(chat), let original = chat.groupName, !original.isEmpty,
+              original != ChatListContent.groupTitle(for: chat) else {
+            return nil
+        }
+        return String(localized: "air_group_dossier_original_name_format", original)
+    }
+}
+
 /// One value of the group settings on a screen of its own: the field, what the value does under it
 /// and "Save". A refusal or a failure takes the place of that line, a failure with "Details".
 final class AirGroupFieldController: AirScrollController {
     enum Kind {
         case selfName
+        /// KHANDAQ (inbox #13, 27.11): the topic of a group other than Khandaq Community, which is its name
+        /// (AirGroupTopicWords); saved as the topic.
+        case groupName
+        /// Khandaq Community's topic.
         case topic
         case password
         case peerLimit
@@ -406,8 +527,10 @@ final class AirGroupFieldController: AirScrollController {
             switch self {
                 case .selfName:
                     return String(localized: "air_group_settings_self_name")
+                case .groupName:
+                    return AirGroupTopicWords.groupName.title
                 case .topic:
-                    return String(localized: "air_group_settings_topic")
+                    return AirGroupTopicWords.topic.title
                 case .password:
                     return String(localized: "group_password_header")
                 case .peerLimit:
@@ -419,8 +542,10 @@ final class AirGroupFieldController: AirScrollController {
             switch self {
                 case .selfName:
                     return String(localized: "air_group_settings_self_name_note")
+                case .groupName:
+                    return AirGroupTopicWords.groupName.note(canEdit: true, locked: false)
                 case .topic:
-                    return String(localized: "air_group_settings_topic_note")
+                    return AirGroupTopicWords.topic.note(canEdit: true, locked: false)
                 case .password:
                     return String(localized: "air_group_settings_password_note")
                 case .peerLimit:
@@ -433,7 +558,7 @@ final class AirGroupFieldController: AirScrollController {
             switch self {
                 case .selfName:
                     return 128
-                case .topic:
+                case .groupName, .topic:
                     return 512
                 case .password:
                     return 32
@@ -446,6 +571,8 @@ final class AirGroupFieldController: AirScrollController {
             switch self {
                 case .selfName:
                     return .setGroupSelfPeerName
+                case .groupName:
+                    return .renameGroup
                 case .topic:
                     return .setGroupTopic
                 case .password:
@@ -459,7 +586,8 @@ final class AirGroupFieldController: AirScrollController {
             switch self {
                 case .selfName:
                     return "name"
-                case .topic:
+                case .groupName, .topic:
+                    // The same value of NGC, under the identifier the screen had.
                     return "topic"
                 case .password:
                     return "password"
@@ -506,7 +634,7 @@ final class AirGroupFieldController: AirScrollController {
             case .selfName:
                 field.field.textContentType = .nickname
                 field.field.autocapitalizationType = .words
-            case .topic:
+            case .groupName, .topic:
                 field.field.autocapitalizationType = .sentences
             case .password:
                 field.field.textContentType = .newPassword
@@ -558,6 +686,15 @@ final class AirGroupFieldController: AirScrollController {
                     return
                 }
                 apply(name, confirmation: String(localized: "air_group_settings_saved"))
+            case .groupName:
+                // KHANDAQ (inbox #13, 27.11): objcTox refuses an empty topic as one too long; here the refusal
+                // says why, in the words of a name.
+                let name = AirGroupName.clean(text)
+                guard !name.isEmpty else {
+                    refuse(String(localized: "air_group_settings_group_name_empty"))
+                    return
+                }
+                apply(name, confirmation: String(localized: "air_group_settings_saved"))
             case .topic:
                 apply(AirGroupName.clean(text), confirmation: String(localized: "air_group_settings_saved"))
             case .password:
@@ -586,7 +723,7 @@ final class AirGroupFieldController: AirScrollController {
                 case .selfName:
                     try submanagerGroups.setGroupSelfPeerName(value, for: chat)
                     submanagerGroups.refreshPeers(for: chat)
-                case .topic:
+                case .groupName, .topic:
                     try submanagerGroups.setGroupTopic(value, for: chat)
                 case .password:
                     try submanagerGroups.setGroupPassword(value.isEmpty ? nil : value, for: chat)

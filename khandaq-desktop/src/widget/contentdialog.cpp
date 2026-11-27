@@ -25,6 +25,7 @@
 #include <QDragEnterEvent>
 #include <QGuiApplication>
 #include <QMimeData>
+#include <QPointer>
 #include <QShortcut>
 #include <QSplitter>
 
@@ -38,6 +39,7 @@
 #include "src/persistence/settings.h"
 #include "src/widget/contentlayout.h"
 #include "src/widget/form/chatform.h"
+#include "src/widget/form/groupchatform.h"
 #include "src/widget/friendlistlayout.h"
 #include "src/widget/friendwidget.h"
 #include "src/widget/groupwidget.h"
@@ -193,6 +195,9 @@ GroupWidget* ContentDialog::addGroup(std::shared_ptr<GroupChatroom> chatroom, Ge
     chatForms[groupId] = form;
 
     connect(groupWidget, &GroupWidget::chatroomWidgetClicked, this, &ContentDialog::activate);
+    // KHANDAQ (inbox #13, 27.11): its menu offers Rename as the list's does.
+    const QPointer<GroupChatForm> groupForm(qobject_cast<GroupChatForm*>(form));
+    groupWidget->setRenameOffered([groupForm] { return groupForm && groupForm->offersRename(); });
 
     // FIXME: emit should be removed
     emit groupWidget->chatroomWidgetClicked(groupWidget);

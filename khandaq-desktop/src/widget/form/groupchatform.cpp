@@ -365,6 +365,13 @@ bool GroupChatForm::isPrivateOpen(const QString& peerKey) const
     return privateThread->isOpen() && privateThread->peerKey() == peerKey;
 }
 
+bool GroupChatForm::offersRename() const
+{
+    const int groupNumber = static_cast<int>(group->getId());
+    return Air::canRenameGroup(airRole(core.getGroupSelfRole(groupNumber)),
+                               core.getGroupTopicLock(groupNumber) == TOX_GROUP_TOPIC_LOCK_ENABLED);
+}
+
 #ifdef KHANDAQ_SCREENSHOT_HOOK
 void GroupChatForm::askMemberActionForShots(const QString& name, Air::MemberAction action)
 {
@@ -561,6 +568,8 @@ AirGroupInfo GroupChatForm::dossierInfo() const
     info.privacy = core.getGroupPrivacyState(groupNumber) == TOX_GROUP_PRIVACY_STATE_PRIVATE
                        ? Air::GroupPrivacy::InviteOnly
                        : Air::GroupPrivacy::Open;
+    // KHANDAQ (inbox #13, 27.11): with selfRole, whether the dossier offers Rename.
+    info.topicLocked = core.getGroupTopicLock(groupNumber) == TOX_GROUP_TOPIC_LOCK_ENABLED;
     info.members = members;
     const QStringList blackList = settings.getBlackList();
     for (const Air::GroupMember& member : members) {

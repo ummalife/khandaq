@@ -56,6 +56,11 @@ struct AirGroupInfo
     Air::GroupRole selfRole = Air::GroupRole::Member;
     Air::GroupVoice voice = Air::GroupVoice::All;
     Air::GroupPrivacy privacy = Air::GroupPrivacy::InviteOnly;
+    /**
+     * KHANDAQ (inbox #13, 27.11): the topic lock, on as toxcore makes a group: with selfRole, it
+     * says whether you may rename the group (Air::canRenameGroup).
+     */
+    bool topicLocked = true;
     /** Everyone in the group, you included, in the order of the roster. */
     QVector<Air::GroupMember> members;
     /** The keys of the members whose messages come without a notification. */

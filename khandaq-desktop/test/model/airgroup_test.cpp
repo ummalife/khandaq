@@ -20,6 +20,7 @@
 #include "src/model/air/airgroup.h"
 #include "src/model/air/airlocalstore.h"
 #include "src/model/air/airmodel.h"
+#include "src/model/systemmessage.h"
 #include "src/widget/air/airstrings.h"
 
 #include <QTranslator>
@@ -55,6 +56,7 @@ private slots:
     void aTextGoesOnlyOnceTheGroupConfirmedSomeoneElse();
     void aMemberIsReachableDirectlyOrThroughARelayOfTheGroups();
     void observersAndTheVoiceStateDecideWhoWrites();
+    void onlyWhoMaySetTheTopicRenamesTheGroup();
     void founderAndModeratorsChangeRolesWithinTheirRights();
     void everyChangeIsAskedInOneSentenceAndToldOnceDone();
     void invitationListPutsThoseOnlineFirst();
@@ -62,6 +64,7 @@ private slots:
     void invitationsForOfflineContactsWaitOnThisDevice();
     void privacyIsSaidWithItsConsequence();
     void nameIsOneLineAndFitsInFortyEightBytes();
+    void aGroupHasOneNameThatChangesLater();
     void counterShowsTheLastTenthOfAGroupMessage();
     void groupKeyIsCleanedLikeAnIdOfItsOwnLength();
     void privateMessagesStayOnThisDeviceUntilTheGroupIsLeft();
@@ -476,6 +479,34 @@ void TestAirGroup::observersAndTheVoiceStateDecideWhoWrites()
             "Наблюдатель не может писать здесь, даже лично: попросите модератора вне группы."));
 }
 
+/**
+ * KHANDAQ (inbox #13, 27.11): a rename sets the topic, which toxcore lets an observer never set,
+ * and only the founder and the moderators while the topic lock is on, as it is in a new group.
+ * Where toxcore refuses it all the same, the error says the name was not changed.
+ */
+void TestAirGroup::onlyWhoMaySetTheTopicRenamesTheGroup()
+{
+    using Air::GroupRole;
+    for (const bool locked : {true, false}) {
+        QVERIFY(Air::canRenameGroup(GroupRole::Founder, locked));
+        QVERIFY(Air::canRenameGroup(GroupRole::Moderator, locked));
+        QVERIFY(!Air::canRenameGroup(GroupRole::Observer, locked));
+    }
+    QVERIFY(!Air::canRenameGroup(GroupRole::Member, true));
+    QVERIFY(Air::canRenameGroup(GroupRole::Member, false));
+
+    using AirStrings::Text;
+    QCOMPARE(AirStrings::text(Text::ErrorGroupRenameTitle),
+             QStringLiteral("Couldn't change the name"));
+    use(QStringLiteral("ru"));
+    QCOMPARE(AirStrings::text(Text::ErrorGroupRenameTitle),
+             QStringLiteral("Не удалось сменить название"));
+    use(QStringLiteral("ar"));
+    QCOMPARE(AirStrings::text(Text::ErrorGroupRenameTitle), QStringLiteral("تعذّر تغيير الاسم"));
+    use(QStringLiteral("zh_CN"));
+    QCOMPARE(AirStrings::text(Text::ErrorGroupRenameTitle), QStringLiteral("无法更改名称"));
+}
+
 void TestAirGroup::founderAndModeratorsChangeRolesWithinTheirRights()
 {
     using Air::GroupRole;
@@ -689,6 +720,52 @@ void TestAirGroup::nameIsOneLineAndFitsInFortyEightBytes()
                                     + QStringLiteral("  ")),
              0);
     QCOMPARE(Air::groupNameLimitBytes, 48);
+}
+
+/**
+ * KHANDAQ (inbox #13, 27.11): a group has one name, which Rename in its dossier changes later. The
+ * note under the name of a new group speaks of no topic beside it, and the transcript says that the
+ * group was renamed, in the four languages of the app.
+ */
+void TestAirGroup::aGroupHasOneNameThatChangesLater()
+{
+    using AirStrings::Text;
+    // The line GroupChatForm::onTitleChanged writes.
+    const auto renamed = [](const QString& member, const QString& name) -> QString {
+        SystemMessage line;
+        line.messageType = SystemMessageType::titleChanged;
+        line.args[0] = member;
+        line.args[1] = name;
+        return line.toString();
+    };
+
+    QCOMPARE(AirStrings::text(Text::NewGroupNameNote),
+             QStringLiteral("Everyone you invite sees it. You can change it later in the group "
+                            "dossier."));
+    QCOMPARE(renamed(QStringLiteral("Amina"), QStringLiteral("Reading circle")),
+             QStringLiteral("Amina renamed the group to Reading circle"));
+    // A "%1" or a "%2" in a name is part of the name.
+    QCOMPARE(renamed(QStringLiteral("Amina %2"), QStringLiteral("Book club %1")),
+             QStringLiteral("Amina %2 renamed the group to Book club %1"));
+
+    use(QStringLiteral("ru"));
+    QCOMPARE(AirStrings::text(Text::NewGroupNameNote),
+             QStringLiteral(
+                 "Его увидят все приглашённые. Потом его можно поменять в досье группы."));
+    QCOMPARE(renamed(QStringLiteral("Amina"), QStringLiteral("Книжный клуб")),
+             QStringLiteral("Amina переименовал(а) группу: Книжный клуб"));
+
+    use(QStringLiteral("ar"));
+    QCOMPARE(AirStrings::text(Text::NewGroupNameNote),
+             QStringLiteral("سيراه كل من تدعوهم. يمكنك تغييره لاحقًا من ملف المجموعة."));
+    QCOMPARE(renamed(QStringLiteral("Amina"), QStringLiteral("Reading circle")),
+             QStringLiteral("Amina غيّر اسم المجموعة إلى Reading circle"));
+
+    use(QStringLiteral("zh_CN"));
+    QCOMPARE(AirStrings::text(Text::NewGroupNameNote),
+             QStringLiteral("你邀请的每个人都会看到它。之后可以在群组资料中更改。"));
+    QCOMPARE(renamed(QStringLiteral("Amina"), QStringLiteral("Reading circle")),
+             QStringLiteral("Amina 将群组名称改为 Reading circle"));
 }
 
 void TestAirGroup::counterShowsTheLastTenthOfAGroupMessage()

@@ -2038,9 +2038,9 @@
         <translation>例如：读书会</translation>
     </message>
     <message>
-        <source>Everyone you invite sees it. Later the topic can change, the name cannot.</source>
+        <source>Everyone you invite sees it. You can change it later in the group dossier.</source>
         <comment>New group: under the name</comment>
-        <translation>所有受邀者都会看到。之后可以修改主题，但不能修改名称。</translation>
+        <translation>你邀请的每个人都会看到它。之后可以在群组资料中更改。</translation>
     </message>
     <message>
         <source>Who can join</source>
@@ -3997,6 +3997,11 @@
         <translation>无法更改你在群组中的名字</translation>
     </message>
     <message>
+        <source>Couldn&apos;t change the name</source>
+        <comment>title of the error when the group refused its new name</comment>
+        <translation>无法更改名称</translation>
+    </message>
+    <message>
         <source>Couldn&apos;t invite to the group</source>
         <comment>title of the error when no invitation went</comment>
         <translation>无法邀请加入群组</translation>
@@ -5383,8 +5388,8 @@ Opening it can run a program on your computer. Links in messages come from other
         <translation>%1 现在叫 %2</translation>
     </message>
     <message>
-        <source>%1 has set the title to %2</source>
-        <translation>%1 已将标题设置为 %2</translation>
+        <source>%1 renamed the group to %2</source>
+        <translation>%1 将群组名称改为 %2</translation>
     </message>
     <message>
         <source>Cleared</source>

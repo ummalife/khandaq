@@ -127,6 +127,17 @@ public:
     bool isGroupPeerPresent(int groupId, const ToxPk& peerPk) const;
     QStringList getGroupPeerNames(int groupId) const override;
     QString getGroupName(int groupId) const;
+    /**
+     * KHANDAQ (inbox #13, 27.11): the topic of the group, which a rename sets (changeGroupTitle);
+     * empty while it has none, or when the group is unknown.
+     */
+    QString getGroupTopic(int groupId) const;
+    /**
+     * KHANDAQ (inbox #13, 27.11): the title the group goes by, as on iOS and Android: its topic
+     * while it has one, else its name in the group state; empty while toxcore has neither.
+     * Khandaq Community keeps its own over both (Group::setTitle).
+     */
+    QString getGroupTitle(int groupId) const;
     bool getGroupAvEnabled(int groupId) const override;
     // What the group screens ask toxcore before they act (E13 to E15).
     /** Our own peer number in the group; UINT32_MAX when toxcore does not know it. */
@@ -143,6 +154,11 @@ public:
     int getGroupConnection(int groupId) const;
     Tox_Group_Voice_State getGroupVoiceState(int groupId) const;
     Tox_Group_Privacy_State getGroupPrivacyState(int groupId) const;
+    /**
+     * KHANDAQ (inbox #13, 27.11): whether the founder and the moderators alone may set the topic,
+     * so rename the group (Air::canRenameGroup). Unknown leaves a rename to toxcore, as on Android.
+     */
+    Tox_Group_Topic_Lock getGroupTopicLock(int groupId) const;
     /** The longest group message toxcore takes, in bytes: it refuses a longer one. */
     static uint32_t getMaxGroupMessageSize();
     ToxPk getFriendPublicKey(uint32_t friendNumber) const;
@@ -307,6 +323,11 @@ public slots:
                               const QString& fileName, const QString& localPath, qint64 size);
     /** KHANDAQ (0.2.60): the history keeps no file of ours with that id that can go again. */
     void sentGroupFileUnknown(const QByteArray& fileId);
+    /**
+     * KHANDAQ (inbox #13, 27.11): sets the topic, which the group goes by (getGroupTitle):
+     * groupTitleChanged under our name in the group once toxcore took it, groupTitleChangeFailed
+     * when it refused.
+     */
     void changeGroupTitle(int groupId, const QString& title);
     bool sendAction(uint32_t friendId, const QString& action, const QByteArray& msgV3Id,
                     quint32 msgV3Time, ReceiptNum& receipt) override;
@@ -422,6 +443,11 @@ signals:
     void groupPeerlistChanged(int groupnumber);
     void groupPeerNameChanged(int groupnumber, const ToxPk& peerPk, const QString& newName);
     void groupTitleChanged(int groupnumber, const QString& author, const QString& title);
+    /**
+     * KHANDAQ (inbox #13, 27.11): toxcore refused the new name of changeGroupTitle (our role, the
+     * topic lock, no connection): the group keeps the title it has.
+     */
+    void groupTitleChangeFailed(int groupnumber);
     void groupPeerAudioPlaying(int groupnumber, ToxPk peerPk);
     void groupSentFailed(int groupId);
     void groupJoined(int groupnumber, GroupId groupId);
@@ -438,7 +464,10 @@ signals:
      * keeps its chat id, and the next start joins it by its ID again (rejoinStoredGroups).
      */
     void groupRejoinFailed(const QByteArray& chatId, uint32_t groupNumber);
-    /** A role in the group changed, someone was removed, or the voice or privacy state changed. */
+    /**
+     * A role in the group changed, someone was removed, or the voice or privacy state changed;
+     * KHANDAQ (inbox #13, 27.11): or the topic lock, which says who may rename the group.
+     */
     void groupModerationChanged(int groupnumber);
     /** A peer of the group wrote to us alone. */
     void groupPrivateMessageReceived(int groupnumber, const ToxPk& peerPk, const QString& message,
@@ -535,6 +564,8 @@ private:
                                   void* vCore);
     static void onGroupPrivacyState(Tox* tox, uint32_t groupId,
                                     Tox_Group_Privacy_State privacyState, void* vCore);
+    static void onGroupTopicLock(Tox* tox, uint32_t groupId, Tox_Group_Topic_Lock topicLock,
+                                 void* vCore);
     static void onGroupPrivateMessage(Tox* tox, uint32_t groupId, uint32_t peerId,
                                       Tox_Message_Type type, const uint8_t* message, size_t length,
                                       void* vCore);

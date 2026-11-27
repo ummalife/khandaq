@@ -65,7 +65,9 @@ struct SystemMessage
         case SystemMessageType::peerNameChanged:
             return QObject::tr("%1 is now known as %2").arg(args[0]).arg(args[1]);
         case SystemMessageType::titleChanged:
-            return QObject::tr("%1 has set the title to %2").arg(args[0]).arg(args[1]);
+            // KHANDAQ (inbox #13, 27.11): a group has one name, and this line says it was renamed.
+            // Both at once: a "%1" in the member's name stays as it is.
+            return QObject::tr("%1 renamed the group to %2").arg(args[0], args[1]);
         case SystemMessageType::cleared:
             return QObject::tr("Cleared");
         case SystemMessageType::unexpectedCallEnd:

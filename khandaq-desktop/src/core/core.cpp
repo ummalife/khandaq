@@ -209,6 +209,7 @@ void Core::registerCallbacks(Tox* tox)
     tox_callback_group_moderation(tox, onGroupModeration);
     tox_callback_group_voice_state(tox, onGroupVoiceState);
     tox_callback_group_privacy_state(tox, onGroupPrivacyState);
+    tox_callback_group_topic_lock(tox, onGroupTopicLock);
     tox_callback_group_private_message(tox, onGroupPrivateMessage);
     tox_callback_group_join_fail(tox, onGroupJoinFail);
     tox_callback_group_custom_packet(tox, onGroupCustomPacket);
@@ -898,9 +899,11 @@ void Core::onGroupPeerJoin(Tox* tox, uint32_t groupId, uint32_t peerId, void* vC
     emit core->groupPeerlistChanged(groupId);
     // first peers bring the synced shared state — refresh the real group name
     // (Group::setTitle ignores identical titles, so re-emitting is cheap)
-    const QString groupName = core->getGroupName(static_cast<int>(groupId));
-    if (!groupName.isEmpty()) {
-        emit core->groupTitleChanged(static_cast<int>(groupId), QString(), groupName);
+    // KHANDAQ (inbox #13, 27.11): the title the group goes by: its topic, else that name. The name
+    // covered a topic here, which the start of the app shows (loadGroups).
+    const QString groupTitle = core->getGroupTitle(static_cast<int>(groupId));
+    if (!groupTitle.isEmpty()) {
+        emit core->groupTitleChanged(static_cast<int>(groupId), QString(), groupTitle);
     }
 }
 
@@ -950,9 +953,11 @@ void Core::onGroupSelfJoin(Tox* tox, uint32_t groupId, void* vCore)
     // KHANDAQ (0.2.63): what was written while we were away is asked of the members.
     core->requestGroupHistoryLater(groupId, ToxPk());
     // shared state (incl. the real group name) has just been synced
-    const QString groupName = core->getGroupName(static_cast<int>(groupId));
-    if (!groupName.isEmpty()) {
-        emit core->groupTitleChanged(static_cast<int>(groupId), QString(), groupName);
+    // KHANDAQ (inbox #13, 27.11): and its topic, which toxcore does not call back before we are
+    // connected: the group goes by it, else by that name.
+    const QString groupTitle = core->getGroupTitle(static_cast<int>(groupId));
+    if (!groupTitle.isEmpty()) {
+        emit core->groupTitleChanged(static_cast<int>(groupId), QString(), groupTitle);
     }
 }
 
@@ -992,6 +997,18 @@ void Core::onGroupPrivacyState(Tox* tox, uint32_t groupId, Tox_Group_Privacy_Sta
     if (core->ignoresGroup(groupId)) {
         return;
     }
+    emit core->groupModerationChanged(static_cast<int>(groupId));
+}
+
+void Core::onGroupTopicLock(Tox* tox, uint32_t groupId, Tox_Group_Topic_Lock topicLock, void* vCore)
+{
+    std::ignore = tox;
+    std::ignore = topicLock;
+    auto* const core = static_cast<Core*>(vCore);
+    if (core->ignoresGroup(groupId)) {
+        return;
+    }
+    // KHANDAQ (inbox #13, 27.11): who may rename the group changed (Air::canRenameGroup).
     emit core->groupModerationChanged(static_cast<int>(groupId));
 }
 
@@ -1121,21 +1138,27 @@ void Core::onGroupTopicChange(Tox* tox, uint32_t groupId, uint32_t peerId, const
                               size_t length, void* vCore)
 {
     std::ignore = tox;
+    // toxcore holds the new topic already: getGroupTitle reads it.
+    std::ignore = topic;
+    std::ignore = length;
     Core* core = static_cast<Core*>(vCore);
     if (core->ignoresGroup(groupId)) {
         return;
     }
     emit core->saveRequest();
-    // The NGC group NAME (shared state) is the authoritative display title,
-    // matching the Android client. The topic must not hijack the title.
-    if (!core->getGroupName(static_cast<int>(groupId)).isEmpty()) {
+    // KHANDAQ (inbox #13, 27.11): the topic is the title of the group, as on iOS and Android,
+    // whose rename sets it; an empty one gives the group its name in the group state again. The
+    // name hid every topic here, renames included. Group::setTitle writes the line of the rename
+    // once, under the member who set it when toxcore knows them.
+    const QString groupTitle = core->getGroupTitle(static_cast<int>(groupId));
+    if (groupTitle.isEmpty()) {
         return;
     }
     QString author;
     if (peerId != 0) {
         author = core->getGroupPeerName(groupId, static_cast<int>(peerId));
     }
-    emit core->groupTitleChanged(groupId, author, ToxString(topic, length).getQString());
+    emit core->groupTitleChanged(groupId, author, groupTitle);
 }
 
 /**
@@ -1461,10 +1484,18 @@ void Core::changeGroupTitle(int groupId, const QString& title)
     ToxString cTitle(title);
     Tox_Err_Group_Topic_Set error;
     tox_group_set_topic(tox.get(), groupId, cTitle.data(), cTitle.size(), &error);
-    if (PARSE_ERR(error)) {
-        emit saveRequest();
-        emit groupTitleChanged(groupId, getUsername(), title);
+    if (!PARSE_ERR(error)) {
+        // KHANDAQ (inbox #13, 27.11): the title stayed locally while toxcore kept the topic it
+        // had. The group keeps its title now, and the window says it was not changed.
+        emit groupTitleChangeFailed(groupId);
+        return;
     }
+    emit saveRequest();
+    // KHANDAQ (inbox #13, 27.11): the title changes now (Group::setName waits for it), with the
+    // line of the rename under our name in the group, as its members see it.
+    const QString selfName = getGroupSelfName(groupId);
+    emit groupTitleChanged(groupId, selfName.isEmpty() ? getUsername() : selfName,
+                           getGroupTitle(groupId));
 }
 
 void Core::removeFriend(uint32_t friendId)
@@ -2224,6 +2255,33 @@ QString Core::getGroupName(int groupId) const
     return ToxString(nameBuf.data(), nameSize).getQString().trimmed();
 }
 
+QString Core::getGroupTopic(int groupId) const
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    const uint32_t groupNumber = static_cast<uint32_t>(groupId);
+    Tox_Err_Group_State_Queries error;
+    const size_t topicSize = tox_group_get_topic_size(tox.get(), groupNumber, &error);
+    if (error != TOX_ERR_GROUP_STATE_QUERIES_OK || topicSize == 0) {
+        return QString{};
+    }
+    std::vector<uint8_t> topicBuf(topicSize);
+    if (!tox_group_get_topic(tox.get(), groupNumber, topicBuf.data(), &error)
+        || error != TOX_ERR_GROUP_STATE_QUERIES_OK) {
+        return QString{};
+    }
+    // As the start of the app reads it (loadGroups).
+    return ToxString(topicBuf.data(), topicSize).getQString();
+}
+
+QString Core::getGroupTitle(int groupId) const
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    const QString topic = getGroupTopic(groupId);
+    return topic.isEmpty() ? getGroupName(groupId) : topic;
+}
+
 /**
  * @brief Get the name of a peer of a group
  */
@@ -2414,6 +2472,16 @@ Tox_Group_Privacy_State Core::getGroupPrivacyState(int groupId) const
     const Tox_Group_Privacy_State privacy =
         tox_group_get_privacy_state(tox.get(), static_cast<uint32_t>(groupId), &error);
     return error == TOX_ERR_GROUP_STATE_QUERIES_OK ? privacy : TOX_GROUP_PRIVACY_STATE_PUBLIC;
+}
+
+Tox_Group_Topic_Lock Core::getGroupTopicLock(int groupId) const
+{
+    QMutexLocker ml{&coreLoopLock};
+
+    Tox_Err_Group_State_Queries error;
+    const Tox_Group_Topic_Lock lock =
+        tox_group_get_topic_lock(tox.get(), static_cast<uint32_t>(groupId), &error);
+    return error == TOX_ERR_GROUP_STATE_QUERIES_OK ? lock : TOX_GROUP_TOPIC_LOCK_DISABLED;
 }
 
 uint32_t Core::getMaxGroupMessageSize()

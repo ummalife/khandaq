@@ -70,9 +70,14 @@ enum ErrorHandlerType: CaseIterable {
     case leaveGroup
     case setGroupPeerRole
     case setGroupTopic
+    /// KHANDAQ (inbox #13, 27.11): the topic of a group other than Khandaq Community, which is the group's name
+    /// there (AirGroupTopicWords).
+    case renameGroup
     case setGroupSelfPeerName
     case setGroupPassword
     case setGroupTopicLock
+    /// KHANDAQ (inbox #13, 27.11): the founder's switch of who changes that name.
+    case setGroupNameLock
     case setGroupPrivacy
     case setGroupVoice
     case setGroupPeerLimit
@@ -131,9 +136,11 @@ enum ErrorHandlerType: CaseIterable {
                 return String(localized: "error_failed_role")
             case .setGroupTopic:
                 return String(localized: "error_failed_topic")
+            case .renameGroup:
+                return String(localized: "error_failed_rename_group")
             case .setGroupSelfPeerName:
                 return String(localized: "error_failed_group_name")
-            case .setGroupPassword, .setGroupTopicLock, .setGroupPrivacy, .setGroupVoice, .setGroupPeerLimit:
+            case .setGroupPassword, .setGroupTopicLock, .setGroupNameLock, .setGroupPrivacy, .setGroupVoice, .setGroupPeerLimit:
                 return String(localized: "error_failed_group_settings")
             case .sendFileToFriend:
                 return String(localized: "error_failed_send_file")
@@ -279,6 +286,11 @@ private func errorWords(for type: ErrorHandlerType, error: NSError?) -> (title: 
         case .setGroupTopic:
             return code.flatMap { OCTToxErrorGroupTopicSet(rawValue: $0) }?.strings()
                 ?? (String(localized: "group_topic_set_failed"), nil)
+        case .renameGroup:
+            let failed = String(localized: "error_failed_rename_group")
+            return code.flatMap { OCTToxErrorGroupTopicSet(rawValue: $0) }?.strings(failed: failed,
+                                                                                    tooLong: String(localized: "group_name_too_long"))
+                ?? (failed, nil)
         case .setGroupSelfPeerName:
             return (String(localized: "group_my_peer_name_set_failed"), nil)
         case .setGroupPassword:
@@ -287,6 +299,9 @@ private func errorWords(for type: ErrorHandlerType, error: NSError?) -> (title: 
         case .setGroupTopicLock:
             return code.flatMap { OCTToxErrorGroupFounderSetTopicLock(rawValue: $0) }?.strings()
                 ?? (String(localized: "group_topic_lock_set_failed"), nil)
+        case .setGroupNameLock:
+            let failed = String(localized: "error_failed_group_settings")
+            return code.flatMap { OCTToxErrorGroupFounderSetTopicLock(rawValue: $0) }?.strings(failed: failed) ?? (failed, nil)
         case .setGroupPrivacy:
             return code.flatMap { OCTToxErrorGroupFounderSetPrivacyState(rawValue: $0) }?.strings()
                 ?? (String(localized: "group_privacy_set_failed"), nil)
@@ -701,19 +716,25 @@ extension OCTToxErrorGroupSetRole {
 
 extension OCTToxErrorGroupTopicSet {
     func strings() -> (title: String, message: String) {
+        return strings(failed: String(localized: "group_topic_set_failed"), tooLong: String(localized: "group_topic_too_long"))
+    }
+
+    /// KHANDAQ (inbox #13, 27.11): `failed` titles the words, `tooLong` says the value is too long, so that a group
+    /// whose topic is its name says "name" (ErrorHandlerType.renameGroup).
+    func strings(failed: String, tooLong: String) -> (title: String, message: String) {
         switch self {
             case .groupNotFound:
-                return (String(localized: "group_topic_set_failed"), String(localized: "group_error_not_found"))
+                return (failed, String(localized: "group_error_not_found"))
             case .tooLong:
-                return (String(localized: "group_topic_set_failed"), String(localized: "group_topic_too_long"))
+                return (failed, tooLong)
             case .permissions:
-                return (String(localized: "group_topic_set_failed"), String(localized: "group_error_permissions"))
+                return (failed, String(localized: "group_error_permissions"))
             case .failCreate, .failSend:
-                return (String(localized: "group_topic_set_failed"), String(localized: "group_error_send_failed"))
+                return (failed, String(localized: "group_error_send_failed"))
             case .disconnected:
-                return (String(localized: "group_topic_set_failed"), String(localized: "group_error_disconnected"))
+                return (failed, String(localized: "group_error_disconnected"))
             case .unknown:
-                return (String(localized: "group_topic_set_failed"), String(localized: "error_internal_message"))
+                return (failed, String(localized: "error_internal_message"))
             @unknown default:
                 return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }
@@ -743,19 +764,24 @@ extension OCTToxErrorGroupFounderSetPassword {
 
 extension OCTToxErrorGroupFounderSetTopicLock {
     func strings() -> (title: String, message: String) {
+        return strings(failed: String(localized: "group_topic_lock_set_failed"))
+    }
+
+    /// KHANDAQ (inbox #13, 27.11): `failed` titles the words (ErrorHandlerType.setGroupNameLock: no "topic lock").
+    func strings(failed: String) -> (title: String, message: String) {
         switch self {
             case .groupNotFound:
-                return (String(localized: "group_topic_lock_set_failed"), String(localized: "group_error_not_found"))
+                return (failed, String(localized: "group_error_not_found"))
             case .invalid:
-                return (String(localized: "group_topic_lock_set_failed"), String(localized: "error_internal_message"))
+                return (failed, String(localized: "error_internal_message"))
             case .permissions:
-                return (String(localized: "group_topic_lock_set_failed"), String(localized: "group_error_permissions"))
+                return (failed, String(localized: "group_error_permissions"))
             case .failSet, .failSend:
-                return (String(localized: "group_topic_lock_set_failed"), String(localized: "group_error_send_failed"))
+                return (failed, String(localized: "group_error_send_failed"))
             case .disconnected:
-                return (String(localized: "group_topic_lock_set_failed"), String(localized: "group_error_disconnected"))
+                return (failed, String(localized: "group_error_disconnected"))
             case .unknown:
-                return (String(localized: "group_topic_lock_set_failed"), String(localized: "error_internal_message"))
+                return (failed, String(localized: "error_internal_message"))
             @unknown default:
                 return (String(localized: "error_title"), String(localized: "error_internal_message"))
         }

@@ -70,6 +70,13 @@ import org.khandaq.messenger.R;
  * too, never from an observer, so its row opens only where toxcore would take it. Reads and writes run
  * on a worker, never on the main thread, and nothing changes by leaving the screen: only Save, a choice
  * or the switch change a setting. The members stay in the dossier.
+ *
+ * <p>KHANDAQ (inbox #13, 27.11): a group's topic is its name here. Since #46 the topic, while there is one, is the
+ * title the group shows in the list and at its top, so it is the name that can change; called "Topic", it read as
+ * a second name. Its row, page, notes and lock say the group's name now, the row shows the title the group goes by
+ * (the topic, else the name it was created with) and its field starts with it; Save still sets the topic. Khandaq
+ * Community, whose name is its own whatever its topic says, keeps its topic row as it was
+ * (AirGroupSettingsModel.TopicWords).
  */
 public class GroupInfoActivity extends AirScreenActivity
 {
@@ -103,6 +110,7 @@ public class GroupInfoActivity extends AirScreenActivity
     private enum Field
     {
         SELF_NAME(R.string.air_gs_self_name, R.id.air_gs_self_name_row),
+        // KHANDAQ (inbox #13, 27.11): its title is the group's words (fieldTitle); this one is Khandaq Community's.
         TOPIC(R.string.air_gs_topic, R.id.air_gs_topic_row),
         PASSWORD(R.string.air_gs_password, R.id.air_gs_password_row),
         PEER_LIMIT(R.string.air_gs_limit, R.id.air_gs_limit_row);
@@ -131,6 +139,11 @@ public class GroupInfoActivity extends AirScreenActivity
         String selfName = "";
         /** The topic; empty when there is none. */
         String topic = "";
+        /**
+         * KHANDAQ (inbox #13, 27.11): the name the group was created with, toxcore's, else the stored one; empty while
+         * neither says. A group without a topic goes by it.
+         */
+        String name = "";
         /** TOPIC_LOCK_ENABLED or TOPIC_LOCK_DISABLED, -1 while toxcore does not say. */
         int topicLock = -1;
         /** Who can join (AirGroupModel.privacyToShow): toxcore's or the stored state; -1 when neither says. */
@@ -160,7 +173,8 @@ public class GroupInfoActivity extends AirScreenActivity
         boolean sameAs(@Nullable final State other)
         {
             return other != null && live == other.live && extended == other.extended && selfRole == other.selfRole
-                   && selfName.equals(other.selfName) && topic.equals(other.topic) && topicLock == other.topicLock
+                   && selfName.equals(other.selfName) && topic.equals(other.topic) && name.equals(other.name)
+                   && topicLock == other.topicLock
                    && privacy == other.privacy && voice == other.voice && peerLimit == other.peerLimit
                    && full() == other.full();
         }
@@ -230,6 +244,8 @@ public class GroupInfoActivity extends AirScreenActivity
     };
 
     private String groupId = "";
+    /** KHANDAQ (inbox #13, 27.11): the words of the group's topic: its name, or Khandaq Community's topic. */
+    private AirGroupSettingsModel.TopicWords words = AirGroupSettingsModel.GROUP_NAME_WORDS;
     private boolean destroyed = false;
     /** A change is on its way to toxcore: further taps wait for it. */
     private boolean busy = false;
@@ -293,6 +309,7 @@ public class GroupInfoActivity extends AirScreenActivity
             return;
         }
         groupId = id;
+        words = AirGroupSettingsModel.topicWords(id);
         getOnBackPressedDispatcher().addCallback(this, fieldBack);
         if (savedInstanceState != null)
         {
@@ -413,6 +430,7 @@ public class GroupInfoActivity extends AirScreenActivity
         s.live = num >= 0;
         s.extended = Boolean.TRUE.equals(ask("extended", HelperGroup::is_tox_group_extended_state_jni_supported));
         String topic = null;
+        String groupName = null;
         int toxPrivacy = AirGroupModel.PRIVACY_UNKNOWN;
         boolean connected = false;
         if (s.live)
@@ -422,6 +440,7 @@ public class GroupInfoActivity extends AirScreenActivity
             final String name = ask("name", () -> MainActivity.tox_group_self_get_name(num));
             s.selfName = isKnown(name) ? name : "";
             topic = ask("topic", () -> MainActivity.tox_group_get_topic(num));
+            groupName = ask("group name", () -> MainActivity.tox_group_get_name(num));
             if (s.extended)
             {
                 final Integer lock = ask("lock", () -> HelperGroup.tox_group_get_topic_lock__wrapper(num));
@@ -446,6 +465,13 @@ public class GroupInfoActivity extends AirScreenActivity
             topic = row.topic;
         }
         s.topic = isKnown(topic) ? topic : "";
+        // KHANDAQ (inbox #13, 27.11): and the group's name, as the list falls back to it (get_effective_group_title): a
+        // group joined by its ID keeps the invitation's name while toxcore does not know one yet.
+        if ((!isKnown(groupName) || groupName.isEmpty()) && row != null)
+        {
+            groupName = row.name;
+        }
+        s.name = isKnown(groupName) ? groupName : "";
         // KHANDAQ (0.2.56): as the dossier says it; toxcore's state of a group it has not synced is not the group's.
         s.privacy = AirGroupModel.privacyToShow(toxPrivacy, connected,
                                                 row != null ? row.privacy_state : AirGroupModel.PRIVACY_UNKNOWN);
@@ -572,10 +598,12 @@ public class GroupInfoActivity extends AirScreenActivity
         }
         AirScreenKit.addSection(column, null, getString(R.string.air_gs_self_name_note), AirScreenKit.plateOf(this, name));
 
-        final String topicTitle = getString(R.string.air_gs_topic);
-        final String topicWords = s.topic.isEmpty() ? getString(R.string.air_gs_topic_none) : s.topic;
+        // KHANDAQ (inbox #13, 27.11): a group's row is its name, with the title it goes by now, never "No topic".
+        final String topicTitle = getString(words.title);
+        final String topicValue = AirGroupSettingsModel.topicRowValue(words, s.topic, s.name, groupId,
+                                                                      getString(R.string.air_gs_topic_none));
         final boolean topicOpens = s.topicOpens();
-        final AirSettingRow topic = new AirSettingRow(this, topicTitle, topicOpens).detail(topicWords);
+        final AirSettingRow topic = new AirSettingRow(this, topicTitle, topicOpens).detail(topicValue);
         topic.setId(R.id.air_gs_topic_row);
         if (topicOpens)
         {
@@ -583,21 +611,10 @@ public class GroupInfoActivity extends AirScreenActivity
         }
         else
         {
-            staticRow(topic, topicTitle, topicWords);
+            staticRow(topic, topicTitle, topicValue);
         }
-        AirScreenKit.addSection(column, null, getString(topicNote(s)), AirScreenKit.plateOf(this, topic));
-    }
-
-    @StringRes
-    private static int topicNote(final State s)
-    {
-        if (!s.live || s.topicOpens())
-        {
-            return R.string.air_gs_topic_note;
-        }
-        // An observer never changes it; while the topic is not locked everyone else may.
-        return s.topicLock == AirGroupSettingsModel.TOPIC_LOCK_ENABLED ? R.string.air_gs_topic_locked
-                                                                        : R.string.air_gs_topic_not_observers;
+        final int note = AirGroupSettingsModel.topicNote(words, !s.live || topicOpens, s.topicLock);
+        AirScreenKit.addSection(column, null, getString(note), AirScreenKit.plateOf(this, topic));
     }
 
     /** Who can join; for the founder also the password and the member limit. */
@@ -685,7 +702,7 @@ public class GroupInfoActivity extends AirScreenActivity
         // The old screen showed the switch only while toxcore answered for the lock.
         if (s.extended && isLock(s.topicLock))
         {
-            final AirSettingRow lock = new AirSettingRow(this, getString(R.string.air_gs_topic_lock), false);
+            final AirSettingRow lock = new AirSettingRow(this, getString(words.lock), false);
             lock.setId(R.id.air_gs_topic_lock_row);
             lockSwitch = lock.withSwitch(s.topicLock == AirGroupSettingsModel.TOPIC_LOCK_ENABLED,
                                          (button, checked) -> setTopicLock(checked));
@@ -949,10 +966,10 @@ public class GroupInfoActivity extends AirScreenActivity
         }
         open = f;
         fieldBack.setEnabled(true);
-        setBarTitle(f.title);
+        setBarTitle(fieldTitle(f));
         column.removeAllViews();
 
-        final AirStepKit.LineField line = new AirStepKit.LineField(this, getString(f.title), f == Field.PASSWORD);
+        final AirStepKit.LineField line = new AirStepKit.LineField(this, getString(fieldTitle(f)), f == Field.PASSWORD);
         final EditText edit = line.edit;
         edit.setId(R.id.air_gs_field);
         // A group's name, topic or password is no account: password managers leave these alone, and what
@@ -1067,14 +1084,22 @@ public class GroupInfoActivity extends AirScreenActivity
         }
     }
 
-    private static String initialValue(final State s, final Field f)
+    /** KHANDAQ (inbox #13, 27.11): the title of a value's page and the hint of its field; the topic's are its words. */
+    @StringRes
+    private int fieldTitle(final Field f)
+    {
+        return f == Field.TOPIC ? words.title : f.title;
+    }
+
+    private String initialValue(final State s, final Field f)
     {
         switch (f)
         {
             case SELF_NAME:
                 return s.selfName;
             case TOPIC:
-                return s.topic;
+                // KHANDAQ (inbox #13, 27.11): a group's field starts with the name it goes by now.
+                return AirGroupSettingsModel.topicFieldValue(words, s.topic, s.name);
             case PEER_LIMIT:
                 // Digits as iOS puts them in the field; any script's digits are read back.
                 return String.valueOf(s.peerLimit);
@@ -1091,7 +1116,7 @@ public class GroupInfoActivity extends AirScreenActivity
             case SELF_NAME:
                 return getString(R.string.air_gs_self_name_note);
             case TOPIC:
-                return getString(R.string.air_gs_topic_note);
+                return getString(words.note);
             case PASSWORD:
                 return getString(R.string.air_gs_password_note);
             default:
@@ -1135,7 +1160,7 @@ public class GroupInfoActivity extends AirScreenActivity
                 final String topic = AirGroupModel.cleanName(text);
                 if (topic.isEmpty())
                 {
-                    refuse(getString(R.string.air_gs_topic_empty));
+                    refuse(getString(words.empty));
                     return;
                 }
                 final String sent = HelperGroup.sanitize_group_topic(topic);

@@ -4,6 +4,7 @@
     <string name="air_gs_self_name">Ваше имя в группе</string>
     <string name="air_gs_self_name_note">Его видят участники этой группы. Имя профиля остаётся прежним.</string>
     <string name="air_gs_name_empty">Имя не может быть пустым.</string>
+    <!-- KHANDAQ (inbox #13, 27.11): the topic of Khandaq Community only (AirGroupSettingsModel.COMMUNITY_TOPIC_WORDS) -->
     <string name="air_gs_topic">Тема</string>
     <string name="air_gs_topic_none">Нет темы</string>
     <string name="air_gs_topic_note">Тему видят все участники: в списке и в шапке группы она стоит вместо названия.</string>
@@ -11,6 +12,13 @@
     <string name="air_gs_topic_not_observers">Тему меняют все, кроме наблюдателей.</string>
     <string name="air_gs_topic_empty">Тема не может быть пустой.</string>
     <string name="air_gs_topic_lock">Тему меняют только основатель и модераторы</string>
+    <!-- KHANDAQ (inbox #13, 27.11): every other group's topic is its name (AirGroupSettingsModel.GROUP_NAME_WORDS) -->
+    <string name="air_gs_group_name">Название группы</string>
+    <string name="air_gs_group_name_note">Его видят все участники: в списке чатов и в шапке группы.</string>
+    <string name="air_gs_group_name_locked">Название меняют только основатель и модераторы.</string>
+    <string name="air_gs_group_name_not_observers">Название меняют все, кроме наблюдателей.</string>
+    <string name="air_gs_group_name_empty">Название не может быть пустым.</string>
+    <string name="air_gs_group_name_lock">Название меняют только основатель и модераторы</string>
     <string name="air_gs_join">Кто может войти</string>
     <string name="air_gs_password">Пароль группы</string>
     <string name="air_gs_password_note">Пароль понадобится новым участникам. Кто уже в группе, останется в ней.</string>

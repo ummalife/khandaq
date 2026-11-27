@@ -205,6 +205,14 @@ enum class ComposeRight
 
 ComposeRight composeRight(GroupRole self, GroupVoice voice);
 
+/**
+ * KHANDAQ (inbox #13, 27.11): whether you may rename the group, which sets its topic, as toxcore
+ * decides it (gc_set_topic): an observer never; while the topic lock is on, as toxcore makes a
+ * group, the founder and the moderators only; while it is off, everyone else. The rule of Android
+ * (AirGroupSettingsModel.canEditTopic).
+ */
+bool canRenameGroup(GroupRole self, bool topicLocked);
+
 /** What the founder or a moderator can do to one member, in the order of the menu. */
 enum class MemberAction
 {

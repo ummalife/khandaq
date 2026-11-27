@@ -2098,9 +2098,9 @@
         <translation>مثلًا: نادي الكتاب</translation>
     </message>
     <message>
-        <source>Everyone you invite sees it. Later the topic can change, the name cannot.</source>
+        <source>Everyone you invite sees it. You can change it later in the group dossier.</source>
         <comment>New group: under the name</comment>
-        <translation>سيراه كل من تدعوهم. يمكن لاحقًا تغيير الموضوع، أما الاسم فلا.</translation>
+        <translation>سيراه كل من تدعوهم. يمكنك تغييره لاحقًا من ملف المجموعة.</translation>
     </message>
     <message>
         <source>Who can join</source>
@@ -4117,6 +4117,11 @@
         <translation>تعذّر تغيير اسمك في المجموعة</translation>
     </message>
     <message>
+        <source>Couldn&apos;t change the name</source>
+        <comment>title of the error when the group refused its new name</comment>
+        <translation>تعذّر تغيير الاسم</translation>
+    </message>
+    <message>
         <source>Couldn&apos;t invite to the group</source>
         <comment>title of the error when no invitation went</comment>
         <translation>تعذّرت الدعوة إلى المجموعة</translation>
@@ -5513,8 +5518,8 @@ Opening it can run a program on your computer. Links in messages come from other
         <translation>أصبح اسم %1 الآن %2</translation>
     </message>
     <message>
-        <source>%1 has set the title to %2</source>
-        <translation>غيّر %1 العنوان إلى %2</translation>
+        <source>%1 renamed the group to %2</source>
+        <translation>%1 غيّر اسم المجموعة إلى %2</translation>
     </message>
     <message>
         <source>Cleared</source>

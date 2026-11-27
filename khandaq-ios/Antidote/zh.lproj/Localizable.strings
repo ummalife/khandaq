@@ -732,6 +732,7 @@
 "group_private_message_unread_action_format" = "私聊（%d 条未读）";
 "group_topic_set_failed" = "无法更新群主题。";
 "group_topic_too_long" = "主题太长了。";
+"group_name_too_long" = "名称太长了。";
 "group_password_header" = "群密码";
 "group_password_placeholder" = "设置或修改密码";
 "group_password_footer" = "仅限创建者。留空即可取消密码。";
@@ -1054,6 +1055,7 @@
 "air_group_member_you_format" = "%@（你）";
 "air_group_member_hint" = "打开对该成员的操作";
 "air_group_dossier_title" = "群组";
+"air_group_dossier_original_name_format" = "原名“%@”";
 "air_group_your_role" = "你的角色";
 "air_group_who_gets_now" = "谁会立即收到消息";
 "air_group_who_gets_now_note_format" = "当前在线 %1$d 人（共 %2$d 人），其他人上线后会收到消息。";
@@ -1078,6 +1080,7 @@
 "air_group_clear_history_message" = "消息只会从本设备删除，成员那里仍会保留。";
 "air_group_settings" = "群组设置";
 "air_group_settings_detail" = "你在群组中的名字、主题、谁能加入、谁能发言";
+"air_group_settings_detail_group_name" = "你在群组中的名字、群组名称、谁能加入、谁能发言";
 "air_group_leave" = "退出群组";
 "air_group_leave_note" = "将不再收到群组消息，历史记录会从本设备删除。";
 "air_group_leave_title_format" = "退出 %@？";
@@ -1126,7 +1129,7 @@
 "air_new_group_title" = "新建群组";
 "air_new_group_name" = "名称";
 "air_new_group_name_placeholder" = "例如：读书会";
-"air_new_group_name_note" = "所有受邀者都会看到。之后可以修改主题，但不能修改名称。";
+"air_new_group_name_note" = "你邀请的每个人都会看到它。之后可以在群组设置中更改。";
 "air_new_group_privacy" = "谁可以加入";
 "air_group_privacy_invite_only" = "仅限邀请";
 "air_group_privacy_invite_only_note" = "只有成员邀请的人才能加入。凭群组密钥无法加入。";
@@ -1310,6 +1313,7 @@
 "error_failed_leave_group" = "无法退出群组";
 "error_failed_role" = "无法更改角色";
 "error_failed_topic" = "无法更改话题";
+"error_failed_rename_group" = "无法更改名称";
 "error_failed_group_name" = "无法更改你在群组中的名字";
 "error_failed_group_settings" = "无法更改群组设置";
 "error_failed_send_file" = "文件未发送";
@@ -1442,6 +1446,12 @@
 "air_group_settings_topic_locked" = "只有创建者和管理员可以更改主题。";
 "air_group_settings_topic_not_observers" = "除观察者外，所有成员都可以更改主题。";
 "air_group_settings_topic_lock" = "仅创建者和管理员可更改主题";
+"air_group_settings_group_name" = "群组名称";
+"air_group_settings_group_name_note" = "所有成员都会在聊天列表和群组顶部看到它。";
+"air_group_settings_group_name_locked" = "只有创建者和管理员可以更改名称。";
+"air_group_settings_group_name_not_observers" = "除观察者外，所有人都可以更改名称。";
+"air_group_settings_group_name_lock" = "只有创建者和管理员可以更改名称";
+"air_group_settings_group_name_empty" = "名称不能为空。";
 "air_group_settings_join" = "谁可以加入";
 "air_group_settings_password_set" = "已设置";
 "air_group_settings_password_none" = "无";

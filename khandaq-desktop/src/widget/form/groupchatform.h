@@ -83,6 +83,11 @@ public:
     /** Whether the private messages with this member are unfolded now. */
     bool isPrivateOpen(const QString& peerKey) const;
     /**
+     * KHANDAQ (inbox #13, 27.11): whether our role may rename the group now, as toxcore has it
+     * (Air::canRenameGroup): the list's menu offers Rename then, as the dossier does.
+     */
+    bool offersRename() const;
+    /**
      * KHANDAQ (0.2.60): invites the chosen contacts to the group; the invitation of a contact
      * offline now is kept in local, which sends it once they are online (Widget::sendOutgoingInvites).
      */

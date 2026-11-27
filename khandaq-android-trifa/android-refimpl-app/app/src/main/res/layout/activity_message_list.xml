@@ -399,10 +399,14 @@
                 android:paddingTop="@dimen/kq_space_4"
                 android:paddingEnd="@dimen/kq_space_4">
 
+                <!-- KHANDAQ (inbox #20, 27.11): not baseline-aligned. None of the row's views has a baseline, and
+                     to look for one the row measured the input field a second time at the width its text wants:
+                     each change of a long text in the field laid the whole text out twice. -->
                 <LinearLayout
                     android:id="@+id/emoji_bar_input"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:baselineAligned="false"
                     android:gravity="bottom"
                     android:orientation="horizontal">
 

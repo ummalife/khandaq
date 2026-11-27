@@ -572,6 +572,8 @@ public class GroupMessageListActivity extends AppCompatActivity
         // do NOT pre-focus the input: with SOFT_INPUT_STATE_HIDDEN a tap on an
         // already-focused field is not a focus change and some IMEs never open.
         ChatInputBarHelper.ensureImeOpensOnTap(ml_new_group_message);
+        // KHANDAQ (inbox #20, 27.11): before a draft or a shared text comes in.
+        ChatInputBarHelper.keepEmojiCompatToShortTexts(ml_new_group_message);
         // KHANDAQ (0.2.56): text shared into a group (ShareActivity, show_messagelist_for_id) fills the field
         // as it does in a chat with one person. It was put in the intent and never read, so it was lost.
         boolean restored_shared_text = false;

@@ -120,10 +120,24 @@ public class EmojiTextViewLinks extends com.vanniktech.emoji.EmojiTextView
         super.setHighlightColor(Color.TRANSPARENT);
     }
 
+    /**
+     * KHANDAQ (inbox #20, 27.11): the size of the emoji pictures of the texts set from now on, without setting the
+     * current text again. EmojiTextView.setEmojiSize(int) did, and that searched all of it for emoji and laid it
+     * out anew for nothing: EmojiTextView.setText keeps the pictures the text has, so the current ones kept their
+     * size either way.
+     */
+    public void applyEmojiSize(final int pixels)
+    {
+        setEmojiSize(pixels, false);
+    }
+
     public void setAutoLinkText(String text)
     {
         SpannableString spannableString = makeSpannableString(text);
-        setText(spannableString);
+        // KHANDAQ (inbox #20, 27.11): a text with links is set as a Spannable. TextView.setMovementMethod sets a
+        // text that is not one again, and each setting searched the whole text for emoji and laid it out anew: a
+        // long bubble with links took two of them here. A text without links is set as before.
+        setText(spannableString, lastTextHadLinks ? BufferType.SPANNABLE : BufferType.NORMAL);
         // KHANDAQ: install the link movement method ONLY when the text has tappable links;
         // on plain text it swallows long-press (message selection) — the cause of long
         // incoming bubbles not being selectable.

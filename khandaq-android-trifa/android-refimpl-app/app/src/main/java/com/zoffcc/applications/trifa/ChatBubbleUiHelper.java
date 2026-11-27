@@ -449,7 +449,8 @@ final class ChatBubbleUiHelper
         final int emojiSizeDp = forceLargeEmojiOnly || is_sticker_style_emoji_message(displayText)
                 ? MESSAGE_EMOJI_ONLY_EMOJI_SIZE[fontSizePrefIndex]
                 : MESSAGE_EMOJI_SIZE[fontSizePrefIndex];
-        textView.setEmojiSize((int) dp2px(emojiSizeDp));
+        // KHANDAQ (inbox #20, 27.11): without setting the text again (EmojiTextViewLinks.applyEmojiSize).
+        textView.applyEmojiSize((int) dp2px(emojiSizeDp));
     }
 
     /**

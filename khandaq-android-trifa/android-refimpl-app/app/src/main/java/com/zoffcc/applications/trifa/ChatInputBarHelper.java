@@ -16,6 +16,8 @@ import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
+import androidx.appcompat.widget.AppCompatEditText;
+
 import org.khandaq.messenger.R;
 
 /**
@@ -105,6 +107,70 @@ final class ChatInputBarHelper
                 return false; // never consume — let the Editor handle selection/caret/paste
             }
         });
+    }
+
+    /** The longest text with which the input field keeps EmojiCompat on (keepEmojiCompatToShortTexts). */
+    static final int EMOJI_COMPAT_UP_TO = 1024;
+
+    /**
+     * KHANDAQ (inbox #20, 27.11): EmojiCompat (androidx.emoji2, which AppCompatEditText turns on) is off in the
+     * input field while it holds a long text. For each typed char it looks for emoji where the text changed and
+     * then tells the field's layout that all of the text changed (SpannableBuilder.endBatchEdit), so the layout
+     * laid all of it out again: with a long draft, every key took that long on the main thread. It goes off before
+     * a long text comes in and on again once the text is short. The set's pictures come either way
+     * (EmojiEditText); only an emoji that neither the set nor the system font has waits for a short text.
+     */
+    static void keepEmojiCompatToShortTexts(final AppCompatEditText inputField)
+    {
+        if (inputField == null)
+        {
+            return;
+        }
+        if (inputField.length() > EMOJI_COMPAT_UP_TO)
+        {
+            inputField.setEmojiCompatEnabled(false);
+        }
+        inputField.addTextChangedListener(new TextWatcher()
+        {
+            @Override
+            public void beforeTextChanged(final CharSequence text, final int start, final int count, final int after)
+            {
+                // Before the change: EmojiCompat's own watcher is the field's first, and it looks at the change.
+                if (text.length() - count + after > EMOJI_COMPAT_UP_TO && inputField.isEmojiCompatEnabled())
+                {
+                    inputField.setEmojiCompatEnabled(false);
+                }
+            }
+
+            @Override
+            public void onTextChanged(final CharSequence text, final int start, final int before, final int count)
+            {
+            }
+
+            @Override
+            public void afterTextChanged(final Editable text)
+            {
+                // On again, it looks for the emoji of the whole text, short now.
+                if (text.length() <= EMOJI_COMPAT_UP_TO && !inputField.isEmojiCompatEnabled())
+                {
+                    turnEmojiCompatOn(inputField);
+                }
+            }
+        });
+    }
+
+    private static void turnEmojiCompatOn(final AppCompatEditText inputField)
+    {
+        try
+        {
+            inputField.setEmojiCompatEnabled(true);
+        }
+        catch (IllegalStateException notSetUp)
+        {
+            // AppCompat asks EmojiCompat for its state when it turns it on, and that throws where EmojiCompat is not
+            // set up. EmojiCompatInitializer sets it up as the app starts; where it has not, the field is on
+            // already and EmojiCompat's watcher leaves the text alone, as it does with EmojiCompat off.
+        }
     }
 
     /**

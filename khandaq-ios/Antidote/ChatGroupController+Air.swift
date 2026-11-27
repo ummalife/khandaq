@@ -456,22 +456,10 @@ extension ChatGroupController {
     private func groupRunKey(forDisplayIndex row: Int) -> AirRunKey {
         let entry = messageEntry(atDisplayIndex: row)
         let message = entry.message
-        let author: String
-        if message.isOutgoing() {
-            author = ""
-        }
-        else {
-            // KHANDAQ (0.2.63): by the key the entry kept, as its tone (AirGroupTranscript.runAuthor).
-            let attributed = !message.groupHistorySync || submanagerGroups.isGroupMessageAttributable(message, in: chat)
-            author = AirGroupTranscript.runAuthor(of: message,
-                                                  attributed: attributed,
-                                                  name: peerName(for: message) ?? "peer\(message.groupSenderPeerId)")
-        }
         // A caption drawn inside its photo is not a text entry of its own.
         let merged = messageSearchQuery.isEmpty && isMergedCaptionRow(storageIndex: entry.storageIndex)
         let isText = message.messageText != nil && !message.groupSystemMessage && !merged
-        // KHANDAQ (26.11.2026): a private message starts a run of its own and ends one, so its author stands over it.
-        return AirRunKey(author: message.groupPrivateMessage ? "private:" + author : author, date: message.date(), isText: isText)
+        return AirGroupTranscript.runKey(of: message, in: chat, groups: submanagerGroups, isText: isText)
     }
 }
 

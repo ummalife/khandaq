@@ -629,6 +629,53 @@ enum AirGroupTranscript {
         return (attributed ? "history:" : "unattributed:") + key
     }
 
+    /// KHANDAQ (#42): the name of an entry's author: the name the entry kept when it came (resolved then by the
+    /// author's key), else the name of the member who has its peer number now, else "Peer N"; nil for an entry with
+    /// neither a name nor a peer number. The live lookup by number is the last resort: after a restart the members
+    /// are not there yet, and toxcore gives a freed number to the next member who comes. The conversation
+    /// (ChatGroupController.peerName) and the long-press preview of the list (inbox #24) name authors by it.
+    static func peerName(of message: OCTMessageAbstract, in chat: OCTChat, groups: OCTSubmanagerGroups) -> String? {
+        if let stored = authorName(of: message) {
+            return stored
+        }
+
+        guard message.groupSenderPeerId > 0 else {
+            return nil
+        }
+
+        if let peers = groups.peers(for: chat) {
+            for i in 0..<peers.count {
+                guard let peer = peers[UInt(i)] as? OCTGroupPeer else {
+                    continue
+                }
+
+                if peer.peerId == message.groupSenderPeerId, let name = peer.peerName, !name.isEmpty {
+                    return name
+                }
+            }
+        }
+
+        return String(localized: "group_peer_fallback_format", message.groupSenderPeerId)
+    }
+
+    /// The run an entry belongs to (runAuthor): yours, or its author's, by the key it kept; a private message is a
+    /// run of its own. isText says whether the entry may share a run with the entries around it.
+    static func runKey(of message: OCTMessageAbstract, in chat: OCTChat, groups: OCTSubmanagerGroups, isText: Bool) -> AirRunKey {
+        let author: String
+        if message.isOutgoing() {
+            author = ""
+        }
+        else {
+            // KHANDAQ (0.2.63): by the key the entry kept, as its tone (runAuthor).
+            let attributed = !message.groupHistorySync || groups.isGroupMessageAttributable(message, in: chat)
+            author = runAuthor(of: message,
+                               attributed: attributed,
+                               name: peerName(of: message, in: chat, groups: groups) ?? "peer\(message.groupSenderPeerId)")
+        }
+        // KHANDAQ (26.11.2026): a private message starts a run of its own and ends one, so its author stands over it.
+        return AirRunKey(author: message.groupPrivateMessage ? "private:" + author : author, date: message.date(), isText: isText)
+    }
+
     /// KHANDAQ (0.2.63): what the label over an entry takes from the members (authorRole, authorLabel): who the
     /// founders and moderators are, by number, key and name, in no order, and not who is online. The rows drawn
     /// before it changed carry a role that is no longer their author's, or none at all when they were drawn before

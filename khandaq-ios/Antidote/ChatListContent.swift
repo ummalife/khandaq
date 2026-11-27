@@ -175,36 +175,47 @@ enum ChatListContent {
         }
     }
 
+    /// The tile a chat has in the list: the bookmark of Saved Messages, the logo of the app for Khandaq Community, the
+    /// initials of a group or a person in their tone. A person's photo, when there is one, goes over it.
+    static func tileStyle(for chat: OCTChat, title: String) -> AirTileView.Style {
+        if chat.isSavedMessages {
+            return .saved
+        }
+        if chat.isGroup {
+            if KhandaqCommunity.isCommunity(chat) {
+                return .community
+            }
+            return .group(initials: AirInitials.from(title), tone: AirTone.index(for: chat.uniqueIdentifier))
+        }
+        let friend = chat.friends.lastObject() as? OCTFriend
+        let key: String = friend?.publicKey ?? chat.uniqueIdentifier ?? ""
+        return .person(initials: AirInitials.from(title), tone: AirTone.index(for: key))
+    }
+
     /// The read-only conversation shown when a row is pressed and held. It has no side effects and
     /// does not mark anything read (KHANDAQ #13).
+    /// KHANDAQ (inbox #24, 27.11): with the tile of the row (tileStyle), and in a group with the authors over the
+    /// entries; a group's preview had letters in a circle instead of the logo of Khandaq Community, and bubbles
+    /// without names, as the talk of two.
     static func previewController(for chat: OCTChat,
                                   theme: Theme,
-                                  avatarManager: AvatarManager,
+                                  submanagerGroups: OCTSubmanagerGroups,
                                   submanagerObjects: OCTSubmanagerObjects) -> ChatPreviewController {
         let title: String
-        let avatar: UIImage?
-        let diameter = CGFloat(ChatListCell.Constants.AvatarSize)
+        var photo: UIImage?
 
         if chat.isSavedMessages {
             // KHANDAQ (#109/#110): the long-press peek of Saved Messages shows its own title and the
             // bookmark, not the 1:1 fallback "deleted contact" (Saved Messages has no friend).
             title = String(localized: "saved_messages_title")
-            let icon = UIImage(systemName: "bookmark.fill")?.withTintColor(theme.colorForType(.LinkText), renderingMode: .alwaysOriginal)
-            avatar = icon ?? avatarManager.avatarFromString(title, diameter: diameter)
         }
         else if chat.isGroup {
             title = groupTitle(for: chat)
-            avatar = avatarManager.avatarFromString(title, diameter: diameter)
         }
         else {
             let friend = chat.friends.lastObject() as? OCTFriend
             title = friend?.nickname ?? String(localized: "contact_deleted")
-            if let data = friend?.avatarData {
-                avatar = UIImage(data: data)
-            }
-            else {
-                avatar = avatarManager.avatarFromString(title, diameter: diameter)
-            }
+            photo = friend?.avatarData.flatMap { UIImage(data: $0) }
         }
 
         // KHANDAQ (0.2.56): in the conversation's order (OCTMessageAbstract.chatOrderSortDescriptors), so the
@@ -220,7 +231,11 @@ enum ChatListContent {
             index += 1
         }
 
-        return ChatPreviewController(theme: theme, title: title, avatar: avatar, messages: recent)
+        return ChatPreviewController(theme: theme,
+                                     title: title,
+                                     tile: tileStyle(for: chat, title: title),
+                                     photo: photo,
+                                     entries: ChatPreviewController.entries(of: recent, in: chat, groups: submanagerGroups))
     }
 
     private static func leaveAndRemove(_ chat: OCTChat, submanagerGroups: OCTSubmanagerGroups) {

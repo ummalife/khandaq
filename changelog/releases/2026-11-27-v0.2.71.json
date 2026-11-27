@@ -1,0 +1,17 @@
+{
+  "version": "0.2.71",
+  "date": "2026-11-27",
+  "title": "Groups open at once",
+  "summary": "On Android a group no longer stands still for a moment as it opens, and its name and picture are there with the screen. Only the Android app changes in this release: the iPhone app stays at 1.4.34 (143012) and the desktop at 0.2.70.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "medium",
+      "title": "Android: a group opens at once",
+      "description": "Opening a group read the list of its members for the side panel before the screen could appear, and read it again at every member event, so in a big group the screen stood still for half a second to a second each time, as a tester wrote, and the group's name and picture filled in after it. The list is now read aside and shown once it is ready, the name and picture come with the screen, and a group opened again shows its member count at once too. With a group of 251 members on a test phone, the screen appeared after 1.1 to 1.7 s before and after 0.14 to 0.27 s now.",
+      "platforms": [
+        "android"
+      ]
+    }
+  ]
+}

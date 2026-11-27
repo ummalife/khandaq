@@ -765,6 +765,7 @@
     <string name="MainActivity_notification_new_message2">new Message</string>
     <string name="notification_media_file">📎 File</string>
     <string name="notification_media_photo">📷 Photo</string>
+    <string name="notification_media_location">📍 Location</string>
     <string name="notification_media_video">🎬 Video</string>
     <string name="notification_media_voice">🎤 Voice message</string>
     <string name="notification_media_generic">📎 Attachment</string>
@@ -777,6 +778,7 @@
     <string name="push_preview_reaction_voice">Reacted %1$s to your voice message</string>
     <string name="push_preview_reaction_video">Reacted %1$s to your video</string>
     <string name="push_preview_reaction_photo">Reacted %1$s to your photo</string>
+    <string name="push_preview_reaction_location">Reacted %1$s to your location</string>
     <string name="push_preview_reaction_file">Reacted %1$s to your file</string>
     <string name="push_preview_reaction_message">Reacted %1$s to your message</string>
     <string name="chat_react_action">React</string>
@@ -1067,6 +1069,7 @@
     <string name="attach_option_file">File</string>
     <string name="attach_location">Location</string>
     <string name="location_share_failed">Couldn\'t get your location. Turn on location and try again.</string>
+    <string name="chat_location_title">Location</string>
     <string name="location_open_in_maps">Open in Maps</string>
     <string name="forward_source_you">You</string>
     <string name="attach_send_selected">Send (%1$d)</string>

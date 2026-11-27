@@ -528,6 +528,7 @@
     <string name="MainActivity_notification_new_message2">новое сообщение</string>
     <string name="notification_media_file">📎 Файл</string>
     <string name="notification_media_photo">📷 Фото</string>
+    <string name="notification_media_location">📍 Геопозиция</string>
     <string name="notification_media_video">🎬 Видео</string>
     <string name="notification_media_voice">🎤 Голосовое сообщение</string>
     <string name="notification_media_generic">📎 Вложение</string>
@@ -537,6 +538,7 @@
     <string name="push_preview_reaction_voice">Реакция %1$s на ваше голосовое сообщение</string>
     <string name="push_preview_reaction_video">Реакция %1$s на ваше видео</string>
     <string name="push_preview_reaction_photo">Реакция %1$s на ваше фото</string>
+    <string name="push_preview_reaction_location">Реакция %1$s на вашу геопозицию</string>
     <string name="push_preview_reaction_file">Реакция %1$s на ваш файл</string>
     <string name="push_preview_reaction_message">Реакция %1$s на ваше сообщение</string>
     <string name="chat_react_action">Реакция</string>
@@ -648,6 +650,7 @@
     <string name="attach_option_file">Файл</string>
     <string name="attach_location">Геолокация</string>
     <string name="location_share_failed">Не удалось определить местоположение. Включите геолокацию и попробуйте снова.</string>
+    <string name="chat_location_title">Геопозиция</string>
     <string name="location_open_in_maps">Открыть в картах</string>
     <string name="forward_source_you">Вы</string>
     <string name="attach_send_selected">Отправить (%1$d)</string>

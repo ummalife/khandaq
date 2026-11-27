@@ -2145,7 +2145,9 @@ public class MessageListActivity extends AppCompatActivity
     // message (wire-compatible with iOS). Requests the location permission on first use.
     void share_current_location()
     {
-        if (!ShareLocationHelper.hasPermission(this))
+        // KHANDAQ (owner, 28.11): with only the approximate location allowed, the place sent is kilometres off; a share
+        // asks once in a run for the exact one (ShareLocationHelper.shouldAskForPrecise), and its answer comes back here.
+        if (!ShareLocationHelper.hasPermission(this) || ShareLocationHelper.shouldAskForPrecise(this))
         {
             ShareLocationHelper.requestPermission(this);
             return;

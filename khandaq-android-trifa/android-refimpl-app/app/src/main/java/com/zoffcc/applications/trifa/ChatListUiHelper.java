@@ -584,7 +584,8 @@ final class ChatListUiHelper
             final String media = media_kind_label(context, filename, received);
             return truncate_preview(media != null ? media : received);
         }
-        String body = sanitize_preview_body(text);
+        // KHANDAQ (owner, 28.11): a place is named, not shown as its wire text "khandaq-location:…".
+        String body = HelperLocationMessage.previewText(context, sanitize_preview_body(text));
         if (TextUtils.isEmpty(body))
         {
             if (!TextUtils.isEmpty(filename))

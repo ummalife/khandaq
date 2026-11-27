@@ -7,21 +7,38 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 /**
  * KHANDAQ (#T2): one-shot current-location fetch for "share my location". Uses the platform
- * LocationManager (no Google Play Services dependency): fast last-known first, then a single fresh
- * update with a timeout fallback. User-initiated only.
+ * LocationManager (no Google Play Services dependency). User-initiated only.
+ * <p>
+ * KHANDAQ (owner, 28.11: "it sends another place, not where I am"): the place sent is where the person is now. The
+ * share took the newest fix the system had, from whichever radio and however rough, and after 15 seconds without a
+ * fix any fix at all, however old; now it listens to every radio that is on and sends the most accurate fresh fix
+ * (LocationFixPicker), and asks once to allow the exact location where only the approximate one is allowed.
  */
 final class ShareLocationHelper
 {
     static final int PERMISSION_REQUEST_CODE = 3084;
+    /** How long a share waits for a fix of where the person is now. GPS alone, indoors, takes a while. */
+    static final long MAX_WAIT_MS = 15_000L;
+    /** With no fresh fix when the wait ends, a fix the system had from this recently still goes. */
+    static final long FALLBACK_MAX_AGE_MS = 120_000L;
+
+    /** The exact location was asked for in this run already (shouldAskForPrecise). */
+    private static boolean askedForPrecise = false;
 
     interface Callback
     {
@@ -38,15 +55,33 @@ final class ShareLocationHelper
                 == PackageManager.PERMISSION_GRANTED;
     }
 
+    /**
+     * KHANDAQ (owner, 28.11): only the approximate location is allowed (Android 12+), so a place sent is kilometres
+     * off. A share asks once in a run to allow the exact one; after a "no" it sends the approximate one, as allowed.
+     */
+    static boolean shouldAskForPrecise(final Context c)
+    {
+        if (askedForPrecise || Build.VERSION.SDK_INT < Build.VERSION_CODES.S)
+        {
+            return false;
+        }
+        return ContextCompat.checkSelfPermission(c, Manifest.permission.ACCESS_FINE_LOCATION)
+               != PackageManager.PERMISSION_GRANTED
+               && ContextCompat.checkSelfPermission(c, Manifest.permission.ACCESS_COARSE_LOCATION)
+                  == PackageManager.PERMISSION_GRANTED;
+    }
+
     static void requestPermission(final Activity a)
     {
+        // Asking for both shows the system's choice of the exact or the approximate location, and to one who allowed
+        // the approximate one, the offer of the exact one. Once in a run: the answer comes back to the share.
+        askedForPrecise = true;
         ActivityCompat.requestPermissions(a, new String[]{
                 Manifest.permission.ACCESS_FINE_LOCATION,
                 Manifest.permission.ACCESS_COARSE_LOCATION
         }, PERMISSION_REQUEST_CODE);
     }
 
-    @SuppressWarnings("MissingPermission")
     static void fetchOnce(final Context c, final Callback cb)
     {
         if (!hasPermission(c))
@@ -60,109 +95,186 @@ final class ShareLocationHelper
             cb.onError("no_location_manager");
             return;
         }
+        new Fix(lm, cb).start();
+    }
 
-        // 1) fast path: freshest recent last-known fix across providers
-        Location best = null;
-        try
+    /** How old a fix is, by the clock that does not jump (the fix's own time may come from another clock). */
+    static long ageMs(final Location l)
+    {
+        final long nanos = l.getElapsedRealtimeNanos();
+        if (nanos > 0L)
         {
-            for (final String p : lm.getProviders(true))
+            return Math.max(0L, (SystemClock.elapsedRealtimeNanos() - nanos) / 1_000_000L);
+        }
+        return Math.max(0L, System.currentTimeMillis() - l.getTime());
+    }
+
+    /**
+     * One share's wait for a fix: the fixes the system already has, then fresh ones from every radio that is on, on
+     * the main looper. Delivers once: the fix, or the reason there is none.
+     */
+    private static final class Fix implements LocationListener
+    {
+        private final LocationManager lm;
+        private final Callback cb;
+        private final Handler handler = new Handler(Looper.getMainLooper());
+        private final LocationFixPicker fresh = new LocationFixPicker();
+        private final LocationFixPicker recent = new LocationFixPicker(FALLBACK_MAX_AGE_MS);
+        private final Runnable patience = this::finishIfSettled;
+        private final Runnable end = () -> finish("timeout");
+        private long startedAt;
+        private boolean listening = false;
+        private boolean done = false;
+
+        Fix(final LocationManager lm, final Callback cb)
+        {
+            this.lm = lm;
+            this.cb = cb;
+        }
+
+        @SuppressWarnings("MissingPermission")
+        void start()
+        {
+            startedAt = SystemClock.elapsedRealtime();
+            try
             {
-                final Location l = lm.getLastKnownLocation(p);
-                if (l != null && (best == null || l.getTime() > best.getTime()))
+                for (final String p : lm.getProviders(true))
                 {
-                    best = l;
+                    final Location l = lm.getLastKnownLocation(p);
+                    if (l != null)
+                    {
+                        consider(l);
+                    }
                 }
             }
-        }
-        catch (Exception ignored)
-        {
-        }
-        if (best != null && (System.currentTimeMillis() - best.getTime()) < 120_000L)
-        {
-            cb.onLocation(best.getLatitude(), best.getLongitude());
-            return;
-        }
-
-        // 2) request one fresh update, with a timeout that falls back to any last-known fix
-        final String provider = lm.isProviderEnabled(LocationManager.GPS_PROVIDER)
-                ? LocationManager.GPS_PROVIDER
-                : (lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-                        ? LocationManager.NETWORK_PROVIDER : null);
-        if (provider == null)
-        {
-            if (best != null)
+            catch (Exception ignored)
             {
-                cb.onLocation(best.getLatitude(), best.getLongitude());
             }
-            else
+            if (fresh.isSettled(0L))
             {
-                cb.onError("location_off");
+                finish("timeout");
+                return;
             }
-            return;
-        }
 
-        final Location fallback = best;
-        final Handler handler = new Handler(Looper.getMainLooper());
-        final boolean[] done = {false};
-        // KHANDAQ (#T2): keep a handle to the 15s timeout so a successful fix can cancel it — otherwise
-        // the posted Runnable (and the captured Activity context) is retained on the main looper for 15s.
-        final Runnable[] timeout = new Runnable[1];
-        final LocationListener listener = new LocationListener()
-        {
-            @Override
-            public void onLocationChanged(final Location location)
+            for (final String p : radios())
             {
-                if (done[0])
+                try
                 {
-                    return;
+                    lm.requestLocationUpdates(p, 0L, 0f, this, Looper.getMainLooper());
+                    listening = true;
                 }
-                done[0] = true;
-                try { lm.removeUpdates(this); } catch (Exception ignored) {}
-                if (timeout[0] != null)
+                catch (Exception ignored)
                 {
-                    handler.removeCallbacks(timeout[0]);
                 }
-                cb.onLocation(location.getLatitude(), location.getLongitude());
             }
+            if (!listening)
+            {
+                // Location is off: a fix the system had from just now still goes, else the chat says none came.
+                finish("location_off");
+                return;
+            }
+            handler.postDelayed(patience, LocationFixPicker.PATIENCE_MS);
+            handler.postDelayed(end, MAX_WAIT_MS);
+        }
 
-            @Override public void onStatusChanged(String p, int s, Bundle e) { }
-            @Override public void onProviderEnabled(String p) { }
-            @Override public void onProviderDisabled(String p) { }
-        };
-        try
+        /** The radios that are on: the fused one (Android 12+, GPS and Wi-Fi together), GPS, the network one. */
+        private List<String> radios()
         {
-            lm.requestSingleUpdate(provider, listener, Looper.getMainLooper());
+            final List<String> wanted = new ArrayList<>(3);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+            {
+                wanted.add(LocationManager.FUSED_PROVIDER);
+            }
+            wanted.add(LocationManager.GPS_PROVIDER);
+            wanted.add(LocationManager.NETWORK_PROVIDER);
+            final List<String> on = new ArrayList<>(3);
+            for (final String p : wanted)
+            {
+                try
+                {
+                    if (lm.isProviderEnabled(p))
+                    {
+                        on.add(p);
+                    }
+                }
+                catch (Exception ignored)
+                {
+                }
+            }
+            return on;
         }
-        catch (Exception e)
+
+        private void consider(final Location l)
         {
-            if (fallback != null)
-            {
-                cb.onLocation(fallback.getLatitude(), fallback.getLongitude());
-            }
-            else
-            {
-                cb.onError("request_failed");
-            }
-            return;
+            final long age = ageMs(l);
+            fresh.consider(l.getLatitude(), l.getLongitude(), l.hasAccuracy(), l.getAccuracy(), age);
+            recent.consider(l.getLatitude(), l.getLongitude(), l.hasAccuracy(), l.getAccuracy(), age);
         }
-        // 15s timeout → use whatever last-known we had, else error
-        timeout[0] = () -> {
-            if (done[0])
+
+        private void finishIfSettled()
+        {
+            if (fresh.isSettled(SystemClock.elapsedRealtime() - startedAt))
+            {
+                finish("timeout");
+            }
+        }
+
+        private void finish(final String reasonIfNone)
+        {
+            if (done)
             {
                 return;
             }
-            done[0] = true;
-            try { lm.removeUpdates(listener); } catch (Exception ignored) {}
-            if (fallback != null)
+            done = true;
+            handler.removeCallbacks(patience);
+            handler.removeCallbacks(end);
+            if (listening)
             {
-                cb.onLocation(fallback.getLatitude(), fallback.getLongitude());
+                try
+                {
+                    lm.removeUpdates(this);
+                }
+                catch (Exception ignored)
+                {
+                }
+            }
+            final LocationFixPicker pick = fresh.hasFix() ? fresh : recent;
+            if (pick.hasFix())
+            {
+                cb.onLocation(pick.latitude(), pick.longitude());
             }
             else
             {
-                cb.onError("timeout");
+                cb.onError(reasonIfNone);
             }
-        };
-        handler.postDelayed(timeout[0], 15_000L);
+        }
+
+        @Override
+        public void onLocationChanged(@NonNull final Location location)
+        {
+            if (done)
+            {
+                return;
+            }
+            consider(location);
+            finishIfSettled();
+        }
+
+        // Abstract before Android 11: a provider calls them there.
+        @Override
+        public void onStatusChanged(final String provider, final int status, final Bundle extras)
+        {
+        }
+
+        @Override
+        public void onProviderEnabled(@NonNull final String provider)
+        {
+        }
+
+        @Override
+        public void onProviderDisabled(@NonNull final String provider)
+        {
+        }
     }
 
     private ShareLocationHelper()

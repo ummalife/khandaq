@@ -384,6 +384,18 @@ public final class PushPreviewReceiver
             {
                 return context.getString(R.string.push_preview_reaction_message, emoji);
             }
+
+            @Override
+            public String location()
+            {
+                return context.getString(R.string.notification_media_location);
+            }
+
+            @Override
+            public String reactionToLocation(final String emoji)
+            {
+                return context.getString(R.string.push_preview_reaction_location, emoji);
+            }
         };
     }
 }

@@ -103,7 +103,33 @@ public class PushPreviewTextTest
         {
             return "Reacted " + emoji + " to your message";
         }
+
+        @Override
+        public String location()
+        {
+            return "\uD83D\uDCCD Location";
+        }
+
+        @Override
+        public String reactionToLocation(final String emoji)
+        {
+            return "Reacted " + emoji + " to your location";
+        }
     };
+
+    /** KHANDAQ (owner, 28.11): a place is named, not shown as its wire text "khandaq-location:...". */
+    @Test
+    public void a_place_and_a_reaction_to_it_are_named()
+    {
+        final String place = HelperLocationMessage.encode(41.0082, 28.9784);
+        final PushPreviewText.Shown shown = show(PushPreviewPayload.text(place, null, "Isa", NOW));
+        assertEquals("\uD83D\uDCCD Location", shown.body);
+        assertFalse(shown.messageText);
+        assertEquals("Reacted " + THUMBS_UP + " to your location",
+                     show(reaction(PushPreviewPayload.KIND_TEXT, place)).body);
+        assertFalse(PushPreviewText.isLocation("Meet me at the khandaq-location: gate"));
+        assertTrue(PushPreviewText.isLocation("  KHANDAQ-LOCATION:1.00000,2.00000"));
+    }
 
     @Test
     public void a_text_shows_its_sender_and_its_words()

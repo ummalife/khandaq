@@ -9,6 +9,8 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import org.khandaq.messenger.R;
+
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -32,6 +34,43 @@ public final class HelperLocationMessage
     public static String encode(final double latitude, final double longitude)
     {
         return String.format(Locale.US, "khandaq-location:%.5f,%.5f", latitude, longitude);
+    }
+
+    /**
+     * KHANDAQ (owner, 28.11): what a place sent as a message is called in the list of chats, in a notification and in
+     * the quote of a reply to it, where its wire text "khandaq-location:…" showed as it is (iOS: LocationMessage.title).
+     */
+    static String title(final Context context)
+    {
+        return context.getString(R.string.chat_location_title);
+    }
+
+    /** The coordinates as every client shows them: five decimals, a point for the decimal mark in any language. */
+    static String coordinatesText(final double latitude, final double longitude)
+    {
+        return String.format(Locale.ROOT, "%.5f, %.5f", latitude, longitude);
+    }
+
+    /** A place in one line: "Location · 41.00824, 28.97836" (iOS: LocationMessage.caption). */
+    static String caption(final String title, final double latitude, final double longitude)
+    {
+        return title + " \u00B7 " + coordinatesText(latitude, longitude);
+    }
+
+    /**
+     * The quote of a reply to a place, its caption; any other text as it is. Only the screen: the header that travels
+     * keeps the wire text, so each reader names the place in its own language.
+     */
+    static String quoteText(final Context context, final String shown)
+    {
+        final double[] place = parse(shown);
+        return place == null ? shown : caption(title(context), place[0], place[1]);
+    }
+
+    /** The line of a list or a notification: the title for a place, any other text as it is. */
+    static String previewText(final Context context, final String text)
+    {
+        return parse(text) == null ? text : title(context);
     }
 
     public static double[] parse(String text)

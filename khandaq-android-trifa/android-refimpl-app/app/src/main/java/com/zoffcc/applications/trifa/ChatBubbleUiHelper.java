@@ -1410,7 +1410,7 @@ final class ChatBubbleUiHelper
         quoteName.setTextColor(ContextCompat.getColor(context, R.color.tg_reply_quote_name));
         // KHANDAQ (inbox #10, 27.11): the quote of a message deleted here says so, not what the message said.
         quoteText.setText(replyMeta.targetDeleted ? context.getString(R.string.chat_reply_deleted)
-                          : MessageReplyHelper.previewForDisplay(context, replyMeta.previewText, 160));
+                          : MessageReplyHelper.quoteForDisplay(context, replyMeta.previewText, 160));
         quoteText.setTextColor(ContextCompat.getColor(context, R.color.tg_reply_quote_text));
         quoteBlock.setBackground(ContextCompat.getDrawable(context, R.drawable.bg_chat_reply_quote));
         if (replyMeta.targetDeleted)

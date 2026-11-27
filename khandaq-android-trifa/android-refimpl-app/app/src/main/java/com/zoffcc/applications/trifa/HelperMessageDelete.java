@@ -252,6 +252,8 @@ public class HelperMessageDelete
 
     private static void deleteLocalFriendMessage(final Message m)
     {
+        // KHANDAQ (inbox #10, 27.11): a reply to it says it was deleted, here as on the device it was deleted on.
+        HelperReply.rememberDeletedReplyTarget(m);
         try
         {
             orma.deleteFromMessage().idEq(m.id).execute();
@@ -593,6 +595,8 @@ public class HelperMessageDelete
 
             // KHANDAQ (tester 21.11, 8256/8261): and it stays deleted when a member that missed the delete serves it.
             GROUP_TOMBSTONES.record(gm, GroupMessageTombstones.Origin.REMOTE, System.currentTimeMillis());
+            // KHANDAQ (inbox #10, 27.11): and a reply to it says it was deleted.
+            HelperReply.rememberDeletedReplyTarget(gm);
             try
             {
                 orma.deleteFromGroupMessage().idEq(gm.id).execute();
@@ -627,37 +631,39 @@ public class HelperMessageDelete
     // NGC groups: what was deleted here (tester 21.11, 8256/8261, GroupMessageTombstones)
     // =============================================================================================
 
+    /** The open profile's g_opts rows, where the tombstones of its chats are kept. */
+    static final GroupMessageTombstones.Rows G_OPTS_ROWS = new GroupMessageTombstones.Rows()
+    {
+        @Override
+        public boolean ready()
+        {
+            return orma != null;
+        }
+
+        @Override
+        public String get(final String key)
+        {
+            return HelperGeneric.get_g_opts(key);
+        }
+
+        @Override
+        public void put(final String key, final String value)
+        {
+            HelperGeneric.set_g_opts(key, value);
+        }
+
+        @Override
+        public void remove(final String key)
+        {
+            HelperGeneric.del_g_opts(key);
+        }
+    };
+
     /**
      * The tombstones of the open profile's groups, in its g_opts rows. Not final only so that a unit test, which has
      * no database, can put a store of its own here.
      */
-    static volatile GroupMessageTombstones.Store GROUP_TOMBSTONES = new GroupMessageTombstones.Store(
-            new GroupMessageTombstones.Rows()
-            {
-                @Override
-                public boolean ready()
-                {
-                    return orma != null;
-                }
-
-                @Override
-                public String get(final String key)
-                {
-                    return HelperGeneric.get_g_opts(key);
-                }
-
-                @Override
-                public void put(final String key, final String value)
-                {
-                    HelperGeneric.set_g_opts(key, value);
-                }
-
-                @Override
-                public void remove(final String key)
-                {
-                    HelperGeneric.del_g_opts(key);
-                }
-            });
+    static volatile GroupMessageTombstones.Store GROUP_TOMBSTONES = new GroupMessageTombstones.Store(G_OPTS_ROWS);
 
     /** Groups whose deletes of ours are due to go again: one pass per group at a time. */
     private static final java.util.Set<String> group_delete_resend_due =

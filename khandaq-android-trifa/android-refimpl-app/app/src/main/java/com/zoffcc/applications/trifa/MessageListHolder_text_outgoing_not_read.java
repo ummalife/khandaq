@@ -160,6 +160,8 @@ public class MessageListHolder_text_outgoing_not_read extends RecyclerView.ViewH
 
         // KHANDAQ (redesign, E9): a call entry is said in the app's language now, not the one it was written in.
         final MessageReplyHelper.ParsedMessage parsedMessage = MessageReplyHelper.parse(HelperCall.shownText(context, m));
+        // KHANDAQ (inbox #10, 27.11): the quote of a message deleted here says so.
+        HelperReply.markDeletedTarget(parsedMessage.reply, m);
         final boolean locationBound = HelperLocationMessage.bind(itemView, textView, parsedMessage.bodyText);
         if (!locationBound)
         {

@@ -26,6 +26,10 @@
 // (BOOL, defaults NO). All additive auto-migrations (existing rows get nil/0); no enumerate block.
 static const uint64_t kCurrentSchemeVersion = 44; // 44: +OCTMessageFile.transferredBytes (0.2.57 transfers that resume after the connection comes back; additive, 0 on existing files, nothing to rewrite); 43: +OCTFriend.seenWatermark/seenReportedDateInterval/seenPendingPacket (0.2.57 read receipts; additive, 0 and nil on existing friends, nothing to rewrite); 42: +OCTMessageText.groupSenderPubkey (nullable string, additive — the author a signature is checked against, mirroring OCTMessageFile.groupSenderPubkey from 36); 41: +OCTNgcKeyValue table (audit#2 finding 1 — new CLASS, no existing row touched); 40: +OCTMessageAbstract.sortTimestamp (#H5 stable cross-device chat order) w/ backfill; 39: +edited/editedTimestamp/editPending (#208); 38: +OCTMessageFile.fileIdHex
 static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrimaryKey";
+/// KHANDAQ (inbox #10, 27.11): the OCTNgcKeyValue row of a chat's removed messages that replies may quote.
+static NSString *const kOCTDeletedReplyTargetsKeyPrefix = @"kq_reply_deleted:";
+/// The newest removals a chat keeps; a reply to an older one shows its quote again.
+static const NSUInteger kOCTDeletedReplyTargetsPerChat = 500;
 
 @interface OCTRealmManager ()
 
@@ -993,6 +997,8 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
             [changedChats addObject:message.chatUniqueIdentifier];
         }
 
+        // KHANDAQ (inbox #10, 27.11): in the same write, so that the chat redraws its replies knowing it.
+        [self recordDeletedReplyTargetsOfMessages:messages];
         [self removeMessagesWithSubmessages:messages];
 
         for (NSString *chatUniqueIdentifier in changedChats) {
@@ -1015,9 +1021,16 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
 
     dispatch_sync(self.queue, ^{
         RLMResults *messages = [OCTMessageAbstract objectsInRealm:self.realm where:@"chatUniqueIdentifier == %@", chat.uniqueIdentifier];
+        // KHANDAQ (inbox #10, 27.11): every reply goes, and what they quoted with them.
+        OCTNgcKeyValue *deletedReplyTargets =
+            [OCTNgcKeyValue objectInRealm:self.realm
+                            forPrimaryKey:[kOCTDeletedReplyTargetsKeyPrefix stringByAppendingString:chat.uniqueIdentifier]];
 
         [self.realm beginWriteTransaction];
 
+        if (deletedReplyTargets) {
+            [self.realm deleteObject:deletedReplyTargets];
+        }
         [self removeMessagesWithSubmessages:messages];
         if (removeChat) {
             [self.realm deleteObject:chat];
@@ -2705,6 +2718,68 @@ NSString *OCTGroupFileBaseName(NSString *fileName)
     }];
 
     return messageAbstract;
+}
+
+#pragma mark -  Deleted messages that replies quote (inbox #10, 27.11)
+
+- (NSArray<NSString *> *)deletedReplyTargetsInChatWithUniqueIdentifier:(NSString *)chatUniqueIdentifier
+{
+    if (chatUniqueIdentifier.length == 0) {
+        return @[];
+    }
+    NSString *value = [self ngcValueForKey:[kOCTDeletedReplyTargetsKeyPrefix stringByAppendingString:chatUniqueIdentifier]];
+    if (value.length == 0) {
+        return @[];
+    }
+    return [value componentsSeparatedByString:@"\n"];
+}
+
+/// Inside a write transaction, while the messages are still there: each one's date in milliseconds, as a reply to
+/// it carries it (Int64(dateInterval * 1000), ChatReplyController.replyMeta), and its uniqueIdentifier, which a reply
+/// written here names it by (MessageReplyHelper.stableLocalId), go into its chat's row.
+- (void)recordDeletedReplyTargetsOfMessages:(id)messages
+{
+    NSMutableDictionary<NSString *, NSMutableArray<NSString *> *> *byChat = [NSMutableDictionary new];
+    for (OCTMessageAbstract *message in messages) {
+        if (message.isInvalidated || message.chatUniqueIdentifier.length == 0 || message.uniqueIdentifier.length == 0) {
+            continue;
+        }
+        long long dateMs = (long long)(message.dateInterval * 1000);
+        if (dateMs <= 0) {
+            continue;
+        }
+        NSMutableArray<NSString *> *lines = byChat[message.chatUniqueIdentifier];
+        if (! lines) {
+            lines = [NSMutableArray new];
+            byChat[message.chatUniqueIdentifier] = lines;
+        }
+        [lines addObject:[NSString stringWithFormat:@"%lld %@", dateMs, message.uniqueIdentifier]];
+    }
+
+    [byChat enumerateKeysAndObjectsUsingBlock:^(NSString *chatUniqueIdentifier, NSMutableArray<NSString *> *added, BOOL *stop) {
+        NSString *key = [kOCTDeletedReplyTargetsKeyPrefix stringByAppendingString:chatUniqueIdentifier];
+        OCTNgcKeyValue *row = [OCTNgcKeyValue objectInRealm:self.realm forPrimaryKey:key];
+
+        NSMutableOrderedSet<NSString *> *lines = [NSMutableOrderedSet new];
+        if (row.value.length > 0) {
+            [lines addObjectsFromArray:[row.value componentsSeparatedByString:@"\n"]];
+        }
+        [lines addObjectsFromArray:added];
+        if (lines.count > kOCTDeletedReplyTargetsPerChat) {
+            [lines removeObjectsInRange:NSMakeRange(0, lines.count - kOCTDeletedReplyTargetsPerChat)];
+        }
+
+        NSString *value = [lines.array componentsJoinedByString:@"\n"];
+        if (row) {
+            row.value = value;
+        }
+        else {
+            row = [OCTNgcKeyValue new];
+            row.uniqueIdentifier = key;
+            row.value = value;
+            [self.realm addObject:row];
+        }
+    }];
 }
 
 // Delete an NSArray, RLMArray, or RLMResults of messages from this Realm.

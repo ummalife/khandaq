@@ -62,6 +62,7 @@
 		113F031B1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113F031A1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift */; };
 		B2SWIPET000000000000001 /* ChatListSwipeNavigationTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2SWIPET000000000000002 /* ChatListSwipeNavigationTest.swift */; };
 		B2RSWIPET000000000000001 /* ChatReplySwipeGeometryTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2RSWIPET000000000000002 /* ChatReplySwipeGeometryTest.swift */; };
+		KQ10RTDT0000000000000001 /* ReplyTargetDeletionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQ10RTDT0000000000000002 /* ReplyTargetDeletionTests.swift */; };
 		B2FLICKBT000000000000001 /* ChatFlickBackTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FLICKBT000000000000002 /* ChatFlickBackTest.swift */; };
 		B2PINSTT0000000000000001 /* ChatPinStoreTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2PINSTT0000000000000002 /* ChatPinStoreTest.swift */; };
 		KHLOCTEST000000000000001 /* LocalizationTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = KHLOCTEST000000000000002 /* LocalizationTest.swift */; };
@@ -593,6 +594,7 @@
 		113F031A1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListCellSnapshotTest.swift; sourceTree = "<group>"; };
 		B2SWIPET000000000000002 /* ChatListSwipeNavigationTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatListSwipeNavigationTest.swift; sourceTree = "<group>"; };
 		B2RSWIPET000000000000002 /* ChatReplySwipeGeometryTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatReplySwipeGeometryTest.swift; sourceTree = "<group>"; };
+		KQ10RTDT0000000000000002 /* ReplyTargetDeletionTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ReplyTargetDeletionTests.swift; sourceTree = "<group>"; };
 		B2FLICKBT000000000000002 /* ChatFlickBackTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatFlickBackTest.swift; sourceTree = "<group>"; };
 		B2PINSTT0000000000000002 /* ChatPinStoreTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ChatPinStoreTest.swift; sourceTree = "<group>"; };
 		KHLOCTEST000000000000002 /* LocalizationTest.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LocalizationTest.swift; sourceTree = "<group>"; };
@@ -1042,6 +1044,7 @@
 				113F031A1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift */,
 				B2SWIPET000000000000002 /* ChatListSwipeNavigationTest.swift */,
 				B2RSWIPET000000000000002 /* ChatReplySwipeGeometryTest.swift */,
+				KQ10RTDT0000000000000002 /* ReplyTargetDeletionTests.swift */,
 				B2FLICKBT000000000000002 /* ChatFlickBackTest.swift */,
 				B2PINSTT0000000000000002 /* ChatPinStoreTest.swift */,
 				B2BAIR050611000000000001 /* AirListModelTests.swift */,
@@ -2407,6 +2410,7 @@
 				113F031B1CAFDBF70009ABE1 /* ChatListCellSnapshotTest.swift in Sources */,
 				B2SWIPET000000000000001 /* ChatListSwipeNavigationTest.swift in Sources */,
 				B2RSWIPET000000000000001 /* ChatReplySwipeGeometryTest.swift in Sources */,
+				KQ10RTDT0000000000000001 /* ReplyTargetDeletionTests.swift in Sources */,
 				B2FLICKBT000000000000001 /* ChatFlickBackTest.swift in Sources */,
 				B2PINSTT0000000000000001 /* ChatPinStoreTest.swift in Sources */,
 				B2BAIR060611000000000001 /* AirListModelTests.swift in Sources */,

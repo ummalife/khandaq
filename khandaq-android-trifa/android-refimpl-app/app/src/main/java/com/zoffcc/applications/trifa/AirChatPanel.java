@@ -1874,6 +1874,8 @@ final class AirChatPanel implements AirDossier.Listener, AirContactMarks.Listene
                         {
                             HelperMessageDelete.sendOwnFriendDelete(m);
                         }
+                        // KHANDAQ (inbox #10, 27.11): a reply to it says it was deleted.
+                        HelperReply.rememberDeletedReplyTarget(m);
                         TrifaToxService.orma.deleteFromMessage().idEq(id).execute();
                         removed = m;
                     }

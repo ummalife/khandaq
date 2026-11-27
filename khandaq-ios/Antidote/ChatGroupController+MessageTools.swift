@@ -130,7 +130,8 @@ extension ChatGroupController {
     }
 
     func attachReplyQuoteHandler(to model: ChatBaseTextCellModel, messages: Results<OCTMessageAbstract>) {
-        guard let meta = model.replyMeta else {
+        // KHANDAQ (inbox #10, 27.11): a quote of a deleted message leads nowhere; the nearest one of its time is another.
+        guard let meta = model.replyMeta, !meta.targetDeleted else {
             model.onReplyQuoteTap = nil
             return
         }

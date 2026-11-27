@@ -23,7 +23,25 @@ enum MessageReplyHelper {
         /// otherwise: "You" over a reply to your own message, whose header names you as the others know
         /// you. It never goes on the wire; nil for a reply that arrived.
         var localSenderName: String?
+        /// KHANDAQ (inbox #10, 27.11): the message this reply quotes was deleted on this device, so the quote says
+        /// so instead of its words. It goes neither on the wire nor into a kept draft (CodingKeys); set where the
+        /// reply is shown (ChatDeletedReplyTargets).
+        var targetDeleted = false
+
+        private enum CodingKeys: String, CodingKey {
+            case localMessageId, senderPubkeyTail, sortTimestampMs, senderName, previewText, legacyQuote, localSenderName
+        }
     }
+
+    /// KHANDAQ (inbox #10, 27.11): a message deleted on this device as a reply names it: by the local id a reply
+    /// written here carries (stableLocalId of its uniqueIdentifier) and by its date in milliseconds.
+    struct ReplyTargetMark: Equatable {
+        let localId: Int64
+        let dateMs: Int64
+    }
+
+    /// How far apart two devices may date one message: the slack scrollToReplyTarget allows.
+    static let replyTargetWindowMs: Int64 = 5000
 
     struct ParsedMessage {
         var reply: ReplyMeta?
@@ -163,7 +181,82 @@ enum MessageReplyHelper {
             return nil
         }
         let name = meta.senderName.isEmpty ? String(localized: "chat_reply_unknown_sender") : meta.senderName
-        return String(localized: "chat_reply_header", name) + ", " + preview
+        // KHANDAQ (inbox #10, 27.11): as the quote shows it, of a message deleted here.
+        let quoted = meta.targetDeleted ? String(localized: "chat_reply_deleted") : preview
+        return String(localized: "chat_reply_header", name) + ", " + quoted
+    }
+
+    /// KHANDAQ (inbox #10, 27.11): a message's date in milliseconds as a reply carries it (Int64(dateInterval * 1000)),
+    /// nil for one that is no time at all.
+    static func replyDateMs(_ dateInterval: TimeInterval) -> Int64? {
+        let ms = dateInterval * 1000
+        guard ms.isFinite, ms >= 1, ms < 9.0e18 else {
+            return nil
+        }
+        return Int64(ms)
+    }
+
+    /// KHANDAQ (inbox #10, 27.11): the marks objcTox keeps of a chat's deleted messages
+    /// (OCTSubmanagerChats.deletedReplyTargets), "<date in ms> <uniqueIdentifier>" lines; one it cannot read is left out.
+    static func replyTargetMarks(fromLines lines: [String]) -> [ReplyTargetMark] {
+        return lines.compactMap { line in
+            let field = line.split(separator: " ", maxSplits: 1)
+            guard field.count == 2, let dateMs = Int64(field[0]), dateMs > 0 else {
+                return nil
+            }
+            let uniqueIdentifier = field[1].trimmingCharacters(in: .whitespaces)
+            guard !uniqueIdentifier.isEmpty else {
+                return nil
+            }
+            return ReplyTargetMark(localId: stableLocalId(uniqueIdentifier), dateMs: dateMs)
+        }
+    }
+
+    /// KHANDAQ (inbox #10, 27.11): whether the message a reply quotes was deleted on this device. The header names it
+    /// by a local id, ours only when the reply was written here, and by its date, which the devices of a chat set a
+    /// little apart. So the quote is of a deleted message when a deletion here bears the reply's id, or lies nearer the
+    /// date than every message still here; a message still here that bears the id is the one quoted. The reply's own
+    /// row is no candidate, nor a row a deletion is taking away right now. With the live messages unknown (nil), only
+    /// the id tells. The same rule as Android's ReplyTargetTombstones.isDeleted.
+    static func isTargetDeleted(_ meta: ReplyMeta,
+                                deleted: [ReplyTargetMark],
+                                replyLocalId: Int64,
+                                live: (Int64) -> [ReplyTargetMark]?) -> Bool {
+        guard !meta.legacyQuote, meta.sortTimestampMs > 0, !deleted.isEmpty else {
+            return false
+        }
+        let date = meta.sortTimestampMs
+        let ours = meta.localMessageId > 0
+        var deletedIds = Set<Int64>()
+        var byId = false
+        var nearestDeleted = Int64.max
+        for mark in deleted where mark.dateMs > 0 {
+            deletedIds.insert(mark.localId)
+            let apart = abs(mark.dateMs - date)
+            guard apart <= replyTargetWindowMs else {
+                continue
+            }
+            byId = byId || (ours && mark.localId == meta.localMessageId)
+            nearestDeleted = min(nearestDeleted, apart)
+        }
+        guard nearestDeleted != Int64.max else {
+            return false
+        }
+        guard let rows = live(date) else {
+            return byId
+        }
+        var nearestLive = Int64.max
+        for row in rows where row.dateMs > 0 && row.localId != replyLocalId && !deletedIds.contains(row.localId) {
+            let apart = abs(row.dateMs - date)
+            guard apart <= replyTargetWindowMs else {
+                continue
+            }
+            if ours && row.localId == meta.localMessageId {
+                return false
+            }
+            nearestLive = min(nearestLive, apart)
+        }
+        return byId || nearestDeleted < nearestLive
     }
 
     static func pubkeyTail(_ pubkey: String?) -> String {

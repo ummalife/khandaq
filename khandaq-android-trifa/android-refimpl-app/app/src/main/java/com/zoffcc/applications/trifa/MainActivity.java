@@ -11177,6 +11177,9 @@ public class MainActivity extends AppCompatActivity
                 {
                     long mid = (Long) i.next();
                     final Message m_to_delete = (Message) orma.selectFromMessage().idEq(mid).get(0);
+                    // KHANDAQ (inbox #10, 27.11): a reply to it says it was deleted. Before the list lets it go,
+                    // which redraws the replies on screen.
+                    HelperReply.rememberDeletedReplyTarget(m_to_delete);
 
                     // KHANDAQ (#179/#205): retract own messages on the peer too (KQ delete packet;
                     // old clients drop it silently → local-only against them). Must run BEFORE the
@@ -11936,6 +11939,9 @@ public class MainActivity extends AppCompatActivity
                 {
                     long mid = (Long) i.next();
                     final GroupMessage m_to_delete = (GroupMessage) orma.selectFromGroupMessage().idEq(mid).get(0);
+                    // KHANDAQ (inbox #10, 27.11): a reply to it says it was deleted. Before the list lets it go,
+                    // which redraws the replies on screen.
+                    HelperReply.rememberDeletedReplyTarget(m_to_delete);
 
                     // KHANDAQ (tester 21.11, 8256/8261): a member's message deleted here stays deleted when the
                     // history sync or its sender brings it again (GroupMessageTombstones).

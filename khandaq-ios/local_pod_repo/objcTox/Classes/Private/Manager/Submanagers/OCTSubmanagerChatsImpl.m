@@ -282,6 +282,14 @@ static const NSTimeInterval kOCTSeenReportedMaxLeadSec = 300.0;
     [self.dataSource.managerGetNotificationCenter postNotificationName:kOCTScheduleFileTransferCleanupNotification object:nil];
 }
 
+- (NSArray<NSString *> *)deletedReplyTargetsInChat:(OCTChat *)chat
+{
+    if (! chat || chat.isInvalidated) {
+        return @[];
+    }
+    return [[self.dataSource managerGetRealmManager] deletedReplyTargetsInChatWithUniqueIdentifier:chat.uniqueIdentifier];
+}
+
 - (void)removeAllMessagesInChat:(OCTChat *)chat removeChat:(BOOL)removeChat
 {
     [[self.dataSource managerGetRealmManager] removeAllMessagesInChat:chat removeChat:removeChat];

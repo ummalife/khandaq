@@ -218,3 +218,81 @@ final class ChatReplyController {
         return friend.publicKey
     }
 }
+
+/// KHANDAQ (inbox #10, 27.11): what the replies of one chat need to know of its deleted messages. A reply carries the
+/// words it quotes, so a deleted message stayed readable in every reply to it; objcTox keeps a mark of each message it
+/// removes (OCTSubmanagerChats.deletedReplyTargets), read here once until the chat's messages change (reset), and a
+/// reply to one of them says it was deleted (MessageReplyHelper.isTargetDeleted).
+final class ChatDeletedReplyTargets {
+    /// The chat's marks as objcTox keeps them, "<date in ms> <uniqueIdentifier>" lines.
+    private let readLines: () -> [String]
+    private var marks: [MessageReplyHelper.ReplyTargetMark]?
+
+    init(readLines: @escaping () -> [String]) {
+        self.readLines = readLines
+    }
+
+    convenience init(chat: OCTChat, submanagerChats: OCTSubmanagerChats?) {
+        self.init { [weak submanagerChats] in
+            guard !chat.isInvalidated else {
+                return []
+            }
+            return submanagerChats?.deletedReplyTargets(in: chat) ?? []
+        }
+    }
+
+    /// The chat's messages changed: a removal among them is read again before the rows are drawn.
+    func reset() {
+        marks = nil
+    }
+
+    /// The reply of `message`, marked when the message it quotes was deleted here; `messages` are the chat's.
+    func marked(_ reply: MessageReplyHelper.ReplyMeta?,
+                of message: OCTMessageAbstract,
+                in messages: Results<OCTMessageAbstract>) -> MessageReplyHelper.ReplyMeta? {
+        guard var reply = reply else {
+            return nil
+        }
+        let deleted = deletedMarks()
+        guard !deleted.isEmpty, !message.isInvalidated else {
+            return reply
+        }
+        reply.targetDeleted = MessageReplyHelper.isTargetDeleted(
+            reply,
+            deleted: deleted,
+            replyLocalId: MessageReplyHelper.stableLocalId(message.uniqueIdentifier)) { dateMs in
+                ChatDeletedReplyTargets.messages(near: dateMs, in: messages)
+            }
+        return reply
+    }
+
+    /// The chat's messages dated within the window of `dateMs`, as replies name them.
+    static func messages(near dateMs: Int64,
+                         in messages: Results<OCTMessageAbstract>) -> [MessageReplyHelper.ReplyTargetMark] {
+        let window = Double(MessageReplyHelper.replyTargetWindowMs)
+        let from = (Double(dateMs) - window) / 1000
+        let to = (Double(dateMs) + window) / 1000
+        // NSNumber: with %f NSPredicate takes a float, which dates today to 128 s.
+        let near = messages.objects(with: NSPredicate(format: "dateInterval >= %@ AND dateInterval <= %@",
+                                                      NSNumber(value: from), NSNumber(value: to)))
+        var marks = [MessageReplyHelper.ReplyTargetMark]()
+        for index in 0..<near.count {
+            guard let row = near.object(at: index), !row.isInvalidated,
+                  let rowMs = MessageReplyHelper.replyDateMs(row.dateInterval) else {
+                continue
+            }
+            marks.append(MessageReplyHelper.ReplyTargetMark(localId: MessageReplyHelper.stableLocalId(row.uniqueIdentifier),
+                                                            dateMs: rowMs))
+        }
+        return marks
+    }
+
+    private func deletedMarks() -> [MessageReplyHelper.ReplyTargetMark] {
+        if let marks = marks {
+            return marks
+        }
+        let read = MessageReplyHelper.replyTargetMarks(fromLines: readLines())
+        marks = read
+        return read
+    }
+}

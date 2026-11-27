@@ -257,6 +257,8 @@ public class MessageListHolder_text_incoming_not_read extends RecyclerView.ViewH
                                  AutoLinkMode.MODE_MENTION, AutoLinkMode.MODE_CUSTOM);
 
         final MessageReplyHelper.ParsedMessage parsedMessage = MessageReplyHelper.parse(m.text);
+        // KHANDAQ (inbox #10, 27.11): the quote of a message deleted here says so.
+        HelperReply.markDeletedTarget(parsedMessage.reply, m);
         final boolean locationBound = HelperLocationMessage.bind(itemView, textView, parsedMessage.bodyText, true);
         if (!locationBound)
         {

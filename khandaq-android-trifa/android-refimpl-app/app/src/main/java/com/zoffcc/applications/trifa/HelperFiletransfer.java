@@ -2840,6 +2840,8 @@ public class HelperFiletransfer
             {
                 delete_filetransfers_from_id(m.filetransfer_id);
             }
+            // KHANDAQ (inbox #10, 27.11): a reply to it says it was deleted.
+            HelperReply.rememberDeletedReplyTarget(m);
             orma.deleteFromMessage().idEq(m.id).execute();
         }
         catch (Exception e)

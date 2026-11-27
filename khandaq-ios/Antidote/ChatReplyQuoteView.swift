@@ -75,7 +75,10 @@ final class ChatReplyQuoteView: UIControl {
             : meta.senderName
         nameLabel.text = name
         previewLabel.textColor = isTranscript ? KQColor.ink2 : theme.colorForType(.ChatListCellMessage)
-        previewLabel.text = MessageReplyHelper.previewForDisplay(meta.previewText, maxLen: 160)
+        // KHANDAQ (inbox #10, 27.11): the quote of a message deleted here says so, not what the message said.
+        previewLabel.text = meta.targetDeleted
+            ? String(localized: "chat_reply_deleted")
+            : MessageReplyHelper.previewForDisplay(meta.previewText, maxLen: 160)
         isHidden = false
     }
 

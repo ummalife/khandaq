@@ -624,6 +624,7 @@
 "chat_reply_self_name" = "Вы";
 "chat_reply_header_self" = "В ответ себе";
 "chat_reply_unknown_sender" = "Неизвестно";
+"chat_reply_deleted" = "Удалённое сообщение";
 "group_messages_select_action" = "Выбрать сообщения";
 "group_messages_copy_action" = "Копировать";
 "network_connections_title" = "Сетевые подключения";

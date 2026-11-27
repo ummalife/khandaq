@@ -40,6 +40,10 @@ public class AirSpokenReplyTest
                 {
                     return "Unknown";
                 }
+                if (id == R.string.chat_reply_deleted)
+                {
+                    return "Deleted message";
+                }
                 return super.getString(id);
             }
 
@@ -92,6 +96,15 @@ public class AirSpokenReplyTest
         assertEquals("In reply to QA A, " + MessageReplyHelper.previewForDisplay(context(), words.toString(), 160),
                      spoken);
         assertEquals('…', spoken.charAt(spoken.length() - 1));
+    }
+
+    /** KHANDAQ (inbox #10, 27.11): a quote of a message deleted here is heard as it is shown, without its words. */
+    @Test
+    public void theQuoteOfADeletedMessageSaysItWasDeleted()
+    {
+        final MessageReplyHelper.ReplyMeta deleted = reply("QA A", "Lunch at one?");
+        deleted.targetDeleted = true;
+        assertEquals("In reply to QA A, Deleted message", AirTranscript.spokenQuote(context(), deleted));
     }
 
     @Test

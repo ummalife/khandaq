@@ -141,6 +141,14 @@ FOUNDATION_EXTERN NSString *OCTGroupFileBaseName(NSString *fileName);
 - (OCTCall *)getCurrentCallForChat:(OCTChat *)chat;
 
 - (void)removeMessages:(NSArray<OCTMessageAbstract *> *)messages;
+
+/**
+ * KHANDAQ (inbox #10, 27.11): the messages of the chat removed on this device (removeMessages:) that a reply may still
+ * quote, oldest first, each as "<date in ms> <uniqueIdentifier>", the marks a reply header names its message by. The
+ * newest 500 of a chat; empty when there are none. A removal of all of a chat's messages takes them away.
+ */
+- (NSArray<NSString *> *)deletedReplyTargetsInChatWithUniqueIdentifier:(NSString *)chatUniqueIdentifier
+    NS_SWIFT_NAME(deletedReplyTargets(inChatWithUniqueIdentifier:));
 - (void)removeAllMessagesInChat:(OCTChat *)chat removeChat:(BOOL)removeChat;
 
 /**

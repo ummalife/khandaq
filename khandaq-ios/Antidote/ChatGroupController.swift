@@ -35,6 +35,8 @@ class ChatGroupController: PortraitChatController {
     weak var submanagerChats: OCTSubmanagerChats!
 
     var messages: Results<OCTMessageAbstract>
+    /// KHANDAQ (inbox #10, 27.11): a reply to a message deleted here says so.
+    lazy var deletedReplyTargets = ChatDeletedReplyTargets(chat: chat, submanagerChats: submanagerChats)
     fileprivate var messagesToken: RLMNotificationToken?
     // KHANDAQ (#119): id of the newest own-outgoing message we already auto-scrolled to (so status-only
     // updates don't re-scroll the list).
@@ -1077,7 +1079,7 @@ extension ChatGroupController: UITableViewDataSource {
             // KHANDAQ (#iOS forward): clean stacked/legacy forward headers at display (no-op otherwise).
             model.message = MessageReplyHelper.normalizeForwardedHeader(body)
         }
-        model.replyMeta = parsed.reply
+        model.replyMeta = deletedReplyTargets.marked(parsed.reply, of: message, in: messages)
         attachReplyQuoteHandler(to: model, messages: messages)
         model.searchHighlight = highlight
         model.dateString = dateText
@@ -1155,6 +1157,8 @@ extension ChatGroupController: UITableViewDelegate {
 
     // KHANDAQ (#119): reload + jump to the newest message when WE just sent it (Telegram-style).
     func handleMessagesChange() {
+        // KHANDAQ (inbox #10, 27.11): a removal among them may be quoted by a reply on screen.
+        deletedReplyTargets.reset()
         tableView?.reloadData()
         scrollToNewestIfOwnOutgoing()
     }

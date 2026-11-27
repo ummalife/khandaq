@@ -118,6 +118,7 @@
     <string name="chat_reply_self_name">Вы</string>
     <string name="chat_reply_header_self">В ответ себе</string>
     <string name="chat_reply_unknown_sender">Неизвестно</string>
+    <string name="chat_reply_deleted">Удалённое сообщение</string>
     <string name="add_friend_activity_name">Добавить друга</string>
     <string name="message_list_activity_name">Разговор</string>
     <string name="conference_message_list_activity_name">Текстовая конференция</string>

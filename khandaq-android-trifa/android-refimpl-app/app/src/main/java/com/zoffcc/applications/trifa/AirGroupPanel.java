@@ -24,7 +24,10 @@ import org.khandaq.messenger.R;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 /**
  * KHANDAQ (redesign, stage 3, E13): the group conversation's parts of the design, over the activity that
@@ -67,6 +70,23 @@ final class AirGroupPanel
 
     private Snapshot shown;
     private int tileKeysHash;
+
+    /**
+     * KHANDAQ (inbox #5, 27.11): what the last groups opened here showed, by group, main thread only. A group
+     * opened again shows it at once ({@link #showFirst}) while its new read is under way, as the conversation
+     * with one person shows its first read before the first frame (AirChatPanel.start). Before, the name and
+     * the picture filled in a moment after the screen, each time it opened.
+     */
+    private static final int REMEMBERED_GROUPS = 8;
+    private static final Map<String, Snapshot> LAST_SHOWN = new LinkedHashMap<String, Snapshot>(REMEMBERED_GROUPS,
+                                                                                                0.75f, true)
+    {
+        @Override
+        protected boolean removeEldestEntry(final Map.Entry<String, Snapshot> eldest)
+        {
+            return size() > REMEMBERED_GROUPS;
+        }
+    };
 
     private final TextWatcher fieldWatcher = new TextWatcher()
     {
@@ -209,12 +229,7 @@ final class AirGroupPanel
     static Snapshot read(final String groupId)
     {
         final long groupNum = HelperGroup.tox_group_by_groupid__wrapper(groupId);
-        String title = HelperGroup.get_effective_group_title(groupNum, groupId);
-        if (TextUtils.isEmpty(title))
-        {
-            // As the group's row in the list (AirRepository.groupEntry) names it.
-            title = groupId.substring(0, Math.min(8, groupId.length()));
-        }
+        final String title = title(groupId, groupNum);
         boolean connected = false;
         int selfRole = -1;
         int voice = AirGroupModel.VOICE_ALL;
@@ -278,6 +293,18 @@ final class AirGroupPanel
         final AirGroupModel.ComposeRight right = selfRole < 0 ? AirGroupModel.ComposeRight.WRITE
                                                               : AirGroupModel.ComposeRight.make(selfRole, voice);
         return new Snapshot(groupId, title, reach, AirGroupModel.sorted(members), right);
+    }
+
+    /** The group's name as the panel shows it: toxcore's title, else the stored one, else the start of its ID. */
+    private static String title(final String groupId, final long groupNum)
+    {
+        final String title = HelperGroup.get_effective_group_title(groupNum, groupId);
+        if (TextUtils.isEmpty(title))
+        {
+            // As the group's row in the list (AirRepository.groupEntry) names it.
+            return groupId.substring(0, Math.min(8, groupId.length()));
+        }
+        return title;
     }
 
     /**
@@ -382,6 +409,29 @@ final class AirGroupPanel
 
     // ---- drawing ----
 
+    /**
+     * KHANDAQ (inbox #5, 27.11): before the first read comes back, what the group showed the last time it was
+     * open here, else its name and picture, so the header does not fill in a moment after the screen. The
+     * read that follows (show) puts what is true now in their place. Main thread.
+     */
+    void showFirst(final String groupId)
+    {
+        if (TextUtils.isEmpty(groupId))
+        {
+            return;
+        }
+        final Snapshot last = LAST_SHOWN.get(groupId.toLowerCase(Locale.ROOT));
+        if (last != null)
+        {
+            show(last);
+            return;
+        }
+        // Two quick questions to toxcore, or one row of the database when it does not know the group.
+        final String title = title(groupId, HelperGroup.tox_group_by_groupid__wrapper(groupId));
+        setText(name, title);
+        bindTile(groupId, title);
+    }
+
     void show(final Snapshot s)
     {
         if (s == null)
@@ -389,12 +439,9 @@ final class AirGroupPanel
             return;
         }
         shown = s;
+        LAST_SHOWN.put(s.groupId.toLowerCase(Locale.ROOT), s);
         setText(name, s.title);
-        tile.bind(AirTileView.Kind.GROUP, s.title, AirModel.Tone.index(s.groupId));
-        if (KhandaqCommunity.isCommunity(s.groupId))
-        {
-            tile.showCommunityLogo(); // KHANDAQ (0.2.60)
-        }
+        bindTile(s.groupId, s.title);
 
         final String header = headerText(activity, s.reach);
         setText(counts, header);
@@ -796,6 +843,16 @@ final class AirGroupPanel
     private static int utf8Length(final String text)
     {
         return text == null ? 0 : text.getBytes(StandardCharsets.UTF_8).length;
+    }
+
+    /** The group's picture in the header: its letters on its tone, Khandaq Community's logo for it. */
+    private void bindTile(final String groupId, final String title)
+    {
+        tile.bind(AirTileView.Kind.GROUP, title, AirModel.Tone.index(groupId));
+        if (KhandaqCommunity.isCommunity(groupId))
+        {
+            tile.showCommunityLogo(); // KHANDAQ (0.2.60)
+        }
     }
 
     /** Sets a text only when it differs, so an unchanged read neither lays out nor speaks. */

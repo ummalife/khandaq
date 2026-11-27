@@ -106,6 +106,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.Px;
@@ -130,7 +131,6 @@ import static com.zoffcc.applications.trifa.GroupMessageListFragment.group_searc
 import static com.zoffcc.applications.trifa.HelperFiletransfer.copy_outgoing_file_to_sdcard_dir;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.resolve_uri_file_size;
 import static com.zoffcc.applications.trifa.HelperFriend.format_group_peer_list_display_name;
-import static com.zoffcc.applications.trifa.HelperFriend.friendlist_has_avatar_for_pubkey;
 import static com.zoffcc.applications.trifa.HelperFriend.tox_friend_by_public_key__wrapper;
 import static com.zoffcc.applications.trifa.HelperGeneric.bytebuffer_to_hexstring;
 import static com.zoffcc.applications.trifa.HelperGeneric.do_fade_anim_on_fab;
@@ -336,8 +336,10 @@ public class GroupMessageListActivity extends AppCompatActivity
     static boolean oncreate_finished = false;
     SearchView messageSearchView = null;
     private static long update_group_all_users_last_trigger_ts = 0;
-    private String last_drawer_peers_fingerprint = "";
-    private String last_drawer_status_fingerprint = "";
+    // KHANDAQ (inbox #5, 27.11): volatile, the member reader (GROUP_MEMBER_READER) compares and sets them while the
+    // main thread clears them (onResume, remove_group_user) to have the next read rebuild the side panel.
+    private volatile String last_drawer_peers_fingerprint = "";
+    private volatile String last_drawer_status_fingerprint = "";
     //
     static long last_processed_camera_frame = -1;
 
@@ -1286,6 +1288,8 @@ public class GroupMessageListActivity extends AppCompatActivity
         if (airPanel != null)
         {
             airPanel.start();
+            // KHANDAQ (inbox #5, 27.11): the name and the picture at once, not when the first read comes back.
+            airPanel.showFirst(group_id);
         }
 
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
@@ -1415,12 +1419,60 @@ public class GroupMessageListActivity extends AppCompatActivity
         long last_seen_ms;
     }
 
-    synchronized void set_peer_names_and_avatars()
+    /**
+     * KHANDAQ (inbox #5, 27.11): one thread reads the members of the side panel, so its callers never wait for
+     * it. The group's opening (onCreate, then onResume) and every member event called this on the main thread,
+     * which asked the database for the group's members and once more for every member, and then built the
+     * panel's rows with two more lookups each (create_group_drawer_peer_item): in a big group the screen stood
+     * still for half a second to a second each time it opened. Only the finished list goes to the main thread
+     * (sync_group_drawer_peers). A call while a read waits to start is answered by that read, which takes the
+     * state of the moment it starts.
+     */
+    private static final ExecutorService GROUP_MEMBER_READER = Executors.newSingleThreadExecutor(runnable ->
+    {
+        final Thread thread = new Thread(runnable, "grp-members-read");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final AtomicBoolean member_read_queued = new AtomicBoolean(false);
+
+    void set_peer_names_and_avatars()
     {
         if (com.zoffcc.applications.trifa.MainActivity.INSANE_TRACE_LOGGING) { com.zoffcc.applications.trifa.HelperGeneric.log_source_line(); }
+        if (!member_read_queued.compareAndSet(false, true))
+        {
+            return;
+        }
+        GROUP_MEMBER_READER.execute(() ->
+        {
+            member_read_queued.set(false);
+            // "-1" while the screen is paused: nothing to read, onResume reads again.
+            final String read_group_id = group_id;
+            if ((read_group_id == null) || "-1".equals(read_group_id))
+            {
+                return;
+            }
+            try
+            {
+                final List<group_list_peer> all_peers = read_group_drawer_peers(read_group_id);
+                // Paused or showing another group by now: the panel is not this read's any more.
+                if (read_group_id.equalsIgnoreCase(group_id))
+                {
+                    sync_group_drawer_peers(all_peers);
+                }
+            }
+            catch (Exception e)
+            {
+                HelperGeneric.logI(TAG, "set_peer_names_and_avatars:EE:" + e.getMessage());
+            }
+        });
+    }
 
-        final List<GroupMemberDisplay> members = collect_group_members_for_display(group_id);
-        final long conference_num = tox_group_by_groupid__wrapper(group_id);
+    /** The members of the side panel, from the database and toxcore: on GROUP_MEMBER_READER only. */
+    private static List<group_list_peer> read_group_drawer_peers(final String read_group_id)
+    {
+        final List<GroupMemberDisplay> members = collect_group_members_for_display(read_group_id);
+        final long conference_num = tox_group_by_groupid__wrapper(read_group_id);
         final java.util.HashMap<String, Long> online_peer_nums = new java.util.HashMap<>();
         final java.util.HashMap<String, Integer> online_connection_status = new java.util.HashMap<>();
 
@@ -1481,12 +1533,12 @@ public class GroupMessageListActivity extends AppCompatActivity
                 glp.peer_num = 0L;
             }
 
-            final GroupPeerDB peer_from_db = lookup_group_peer_by_pubkey(group_id, member.pubkey);
+            final GroupPeerDB peer_from_db = lookup_group_peer_by_pubkey(read_group_id, member.pubkey);
             glp.notification_silent = peer_from_db != null && peer_from_db.notification_silent;
             all_peers.add(glp);
         }
 
-        sync_group_drawer_peers(all_peers);
+        return all_peers;
     }
 
     private void start_group_connect_header_refresh()
@@ -3842,12 +3894,15 @@ public class GroupMessageListActivity extends AppCompatActivity
 
     private ConferenceCustomDrawerPeerItem create_group_drawer_peer_item(final group_list_peer peer)
     {
-        final boolean have_avatar_for_pubkey = friendlist_has_avatar_for_pubkey(peer.peer_pubkey);
         final String status_line = format_group_member_status_line(GroupMessageListActivity.this, peer.online,
                                                                    peer.last_seen_ms);
 
+        // KHANDAQ (inbox #5, 27.11): false, not friendlist_has_avatar_for_pubkey. The row draws its picture
+        // itself when it is shown (ChatBubbleUiHelper.fill_drawer_peer_icon) and nothing reads the flag, so
+        // asking the database and the encrypted files for it, for every member on the main thread, only held
+        // up the group's opening.
         ConferenceCustomDrawerPeerItem new_item = new ConferenceCustomDrawerPeerItem(
-                have_avatar_for_pubkey, peer.peer_pubkey, group_id, peer.peer_name).
+                false, peer.peer_pubkey, group_id, peer.peer_name).
                 withIdentifier(peer.peer_num).
                 withName(peer.peer_name).
                 withDescription(status_line).

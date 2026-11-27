@@ -178,7 +178,11 @@ void applyScreenFactors()
                            << qgetenv(screenFactorsVariable);
         return;
     }
-    const QByteArray factors = screenFactors(windowsScreens());
+    const QVector<ScreenDpi> screens = windowsScreens();
+    for (const ScreenDpi& screen : screens) {
+        qDebug().nospace() << "Screen " << screen.name << ": " << screen.dpi << " dpi";
+    }
+    const QByteArray factors = screenFactors(screens);
     putEnvironment(screenFactorsVariable, !factors.isEmpty(), factors);
     putEnvironment(ownScreenFactorsVariable, !factors.isEmpty(), QByteArrayLiteral("1"));
     if (!factors.isEmpty()) {
@@ -303,6 +307,30 @@ double screenCorrection(int dpi)
     // As QWindowsScreen::pixelDensity of Qt 5.12 rounds it.
     const int given = qMax(1, qRound(asked));
     return asked / given;
+}
+
+QRect windowWithin(const QRect& window, const QRect& available, int titleBar)
+{
+    const QRect room = available.adjusted(0, qMax(0, titleBar), 0, 0);
+    if (!window.isValid() || !room.isValid()) {
+        return window;
+    }
+    QRect within = window;
+    within.setWidth(qMin(window.width(), room.width()));
+    within.setHeight(qMin(window.height(), room.height()));
+    if (within.right() > room.right()) {
+        within.moveRight(room.right());
+    }
+    if (within.bottom() > room.bottom()) {
+        within.moveBottom(room.bottom());
+    }
+    if (within.left() < room.left()) {
+        within.moveLeft(room.left());
+    }
+    if (within.top() < room.top()) {
+        within.moveTop(room.top());
+    }
+    return within;
 }
 
 QByteArray screenFactors(const QVector<ScreenDpi>& screens)

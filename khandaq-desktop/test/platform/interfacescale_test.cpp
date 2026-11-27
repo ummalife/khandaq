@@ -38,6 +38,7 @@ private slots:
     void decideFromAFactorQtIgnores();
     void sizesTheScreenHasRoomFor();
     void screensAtTheirOwnScale();
+    void aWindowWithinItsScreen();
 
 private:
     static void writeIni(const QString& path, const QString& group, const QString& key,
@@ -268,6 +269,39 @@ void TestInterfaceScale::screensAtTheirOwnScale()
     QCOMPARE(InterfaceScale::screenFactors(QVector<InterfaceScale::ScreenDpi>()), QByteArray());
     const QVector<InterfaceScale::ScreenDpi> unnamed{{QString(), 120}};
     QCOMPARE(InterfaceScale::screenFactors(unnamed), QByteArray());
+}
+
+void TestInterfaceScale::aWindowWithinItsScreen()
+{
+    // A screen of 1920 x 1080 at 125 % with a taskbar of 48: its free area in the pixels of 125 %.
+    const QRect available(0, 0, 1536, 826);
+    const int titleBar = 32;
+
+    // A window that fits stays as it was.
+    const QRect fits(100, 80, 1000, 700);
+    QCOMPARE(InterfaceScale::windowWithin(fits, available, titleBar), fits);
+
+    // Left at nearly the whole screen at 100 % (the first frame: the screen less 64 above and below): as large as
+    // the room under the title bar, in the screen.
+    QCOMPARE(InterfaceScale::windowWithin(QRect(0, 64, 1200, 888), available, titleBar),
+             QRect(0, 32, 1200, 794));
+
+    // Larger than the screen both ways: the whole room.
+    QCOMPARE(InterfaceScale::windowWithin(QRect(-40, 10, 1900, 1000), available, titleBar),
+             QRect(0, 32, 1536, 794));
+
+    // Past the right edge: moved in, not shrunk.
+    QCOMPARE(InterfaceScale::windowWithin(QRect(900, 100, 800, 600), available, titleBar),
+             QRect(736, 100, 800, 600));
+
+    // A screen to the left of the main one has negative coordinates.
+    const QRect leftScreen(-1280, 0, 1280, 984);
+    QCOMPARE(InterfaceScale::windowWithin(QRect(-1300, 40, 900, 600), leftScreen, titleBar),
+             QRect(-1280, 40, 900, 600));
+
+    // Nothing to fit into, or nothing to fit: as it was.
+    QCOMPARE(InterfaceScale::windowWithin(fits, QRect(), titleBar), fits);
+    QCOMPARE(InterfaceScale::windowWithin(QRect(), available, titleBar), QRect());
 }
 
 QTEST_GUILESS_MAIN(TestInterfaceScale)

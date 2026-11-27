@@ -20,6 +20,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QRect>
 #include <QSize>
 #include <QString>
 #include <QVector>
@@ -115,5 +116,13 @@ double screenCorrection(int dpi);
  * with ";"; empty when no screen needs one.
  */
 QByteArray screenFactors(const QVector<ScreenDpi>& screens);
+
+/**
+ * KHANDAQ (inbox #27, 27.11): window, the frame of a window as it was saved, moved and shrunk by as little as it
+ * takes to lie within available with room for a title bar of titleBar above it. A frame is saved in the pixels of
+ * the scale its screen had: since screenFactors, Windows at 125 % is drawn at 125 %, and a window left at nearly
+ * the whole of such a screen would come back larger than it, its foot under the taskbar.
+ */
+QRect windowWithin(const QRect& window, const QRect& available, int titleBar);
 
 } // namespace InterfaceScale

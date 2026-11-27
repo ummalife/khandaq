@@ -103,6 +103,27 @@ public class CallAudioService extends Service
         return START_NOT_STICKY;
     }
 
+    /**
+     * KHANDAQ (calls, 27.11): the types the service of a call runs as. With the microphone among them, Android 11 and
+     * later go on giving the call the microphone when the app goes to the background (the power button, another
+     * app); as a special use service only, the call recorded silence there and the other side stopped hearing you.
+     * The microphone type needs the microphone permission (Android 14 refuses the service without it), so without
+     * it the service stays what it was.
+     */
+    static int foregroundServiceTypes(final int sdk, final boolean microphoneGranted)
+    {
+        int type = 0;
+        if (sdk >= Build.VERSION_CODES.Q)
+        {
+            type = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE;
+        }
+        if ((sdk >= Build.VERSION_CODES.R) && microphoneGranted)
+        {
+            type |= ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE;
+        }
+        return type;
+    }
+
     @Override
     public void onCreate()
     {
@@ -118,15 +139,24 @@ public class CallAudioService extends Service
 
         nm3 = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         noti_and_builder = buildNotification(global_gas_status);
-        int type = 0;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+        final int types = foregroundServiceTypes(Build.VERSION.SDK_INT, HelperCall.hasMicrophonePermission(this));
+        final int typesWithoutMicrophone = foregroundServiceTypes(Build.VERSION.SDK_INT, false);
+        try
         {
-            type = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE;
+            ServiceCompat.startForeground(this, ONGOING_CALL_AUDIO_NOTIFICATION_ID, noti_and_builder.n, types);
         }
-        ServiceCompat.startForeground(this,
-                                      ONGOING_CALL_AUDIO_NOTIFICATION_ID,
-                                      noti_and_builder.n,
-                                      type);
+        catch (RuntimeException e)
+        {
+            if (types == typesWithoutMicrophone)
+            {
+                throw e;
+            }
+            // KHANDAQ (calls, 27.11): Android 14 refuses the microphone type when the app may not take the
+            // microphone at this moment; the call goes on with the service it had before.
+            Log.i(TAG, "onCreate:startForeground:microphone type refused:" + e);
+            ServiceCompat.startForeground(this, ONGOING_CALL_AUDIO_NOTIFICATION_ID, noti_and_builder.n,
+                                          typesWithoutMicrophone);
+        }
 
         Log.i(TAG, "onCreate:thread:1");
 

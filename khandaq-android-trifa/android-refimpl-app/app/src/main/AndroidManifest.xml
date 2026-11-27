@@ -83,6 +83,9 @@
     <!-- Staying connected: the Tox service is a foreground service, and restarts with the device. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+    <!-- KHANDAQ (calls, 27.11): the call's service runs as a microphone service as well (CallAudioService), so
+         Android 11+ keeps the microphone of a call that goes to the background. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- The keepalive that re-bootstraps the DHT. Inexact alarms are batched by Doze into windows
          of up to 15 minutes, which is longer than a peer waits before treating us as offline. -->
@@ -580,7 +583,7 @@
         <service
             android:name="com.zoffcc.applications.trifa.CallAudioService"
             android:enabled="true"
-            android:foregroundServiceType="specialUse"
+            android:foregroundServiceType="specialUse|microphone"
             android:exported="false">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"

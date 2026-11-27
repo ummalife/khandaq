@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    KHANDAQ (inbox #26, 27.11): the whole text of a long message (AirLongTextActivity). The header and the
+    bottom bar of air_screen, and between them a list of the text's pieces in place of the scrolling column:
+    only the pieces on the screen are laid out, however long the text.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/air_screen_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/kq_bg"
+    android:orientation="vertical">
+
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/air_screen_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/kq_bg"
+        android:minHeight="?attr/actionBarSize"
+        app:popupTheme="@style/KhandaqPopupOverlay"
+        app:theme="@style/ThemeOverlay.AppCompat.DayNight.ActionBar" />
+
+    <View
+        android:id="@+id/air_screen_rule"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/kq_stroke_hairline"
+        android:background="@color/kq_line" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/air_long_text_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingStart="@dimen/kq_space_16"
+        android:paddingTop="@dimen/kq_space_16"
+        android:paddingEnd="@dimen/kq_space_16"
+        android:paddingBottom="@dimen/kq_space_32"
+        android:scrollbars="vertical" />
+
+    <LinearLayout
+        android:id="@+id/air_screen_bottom"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/air_bg_screen_bar"
+        android:orientation="vertical"
+        android:paddingStart="@dimen/kq_space_16"
+        android:paddingTop="@dimen/kq_space_12"
+        android:paddingEnd="@dimen/kq_space_16"
+        android:paddingBottom="@dimen/kq_space_12"
+        android:visibility="gone" />
+</LinearLayout>

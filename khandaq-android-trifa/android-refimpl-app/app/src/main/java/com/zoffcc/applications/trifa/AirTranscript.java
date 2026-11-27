@@ -3,6 +3,7 @@ package com.zoffcc.applications.trifa;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.res.Resources;
+import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.os.SystemClock;
@@ -231,6 +232,8 @@ final class AirTranscript
         final ViewGroup meta;
         final TextView edited;
         final TextView retry;
+        /** Read more, under an entry that shows only the start of its text (AirLongText). */
+        final TextView more;
         final ImageView mark;
         final EmojiTextViewLinks text;
         /** Group entries only: the private-message line over the text and the unverified-sender line. */
@@ -249,6 +252,12 @@ final class AirTranscript
             meta = itemView.findViewById(R.id.air_entry_meta);
             edited = itemView.findViewById(R.id.air_entry_edited);
             retry = itemView.findViewById(R.id.air_entry_retry);
+            more = itemView.findViewById(R.id.air_entry_more);
+            if (more != null)
+            {
+                more.setPaintFlags(more.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
+                AirUi.markAsButton(more, more.getContext().getString(R.string.air_entry_read_more_hint));
+            }
             mark = itemView.findViewById(R.id.m_icon);
             text = itemView.findViewById(R.id.m_text);
             note = itemView.findViewById(R.id.air_entry_note);
@@ -351,8 +360,11 @@ final class AirTranscript
         final Resources res = context.getResources();
         final boolean outgoing = m.direction == 1;
         final boolean callNote = HelperMessageEdit.isLocalCallLogRow(m);
+        final boolean cut = !locationBound && parsed != null && AirLongText.isCut(parsed.bodyText);
 
-        bodySize(views.text, (parsed != null && parsed.reply == null && !locationBound) ? parsed.bodyText : null);
+        // A text cut for the entry is never an emoji sticker: it is not probed, which reads all of it.
+        bodySize(views.text, (parsed != null && parsed.reply == null && !locationBound && !cut) ? parsed.bodyText
+                                                                                               : null);
         views.text.setTextColor(AirUi.color(context, callNote ? R.color.kq_ink_2 : R.color.kq_ink));
         // KHANDAQ (redesign, E9): a call is an entry with the phone glyph before its words.
         TextViewCompat.setCompoundDrawablesRelative(views.text, callNote ? callGlyph(context) : null, null,
@@ -374,9 +386,31 @@ final class AirTranscript
             views.edited.setText(R.string.message_edited_marker);
             views.edited.setVisibility(m.edited ? View.VISIBLE : View.GONE);
         }
+        bindMore(views, cut, AirLongTextActivity.KIND_DIRECT, m.id);
 
         bindState(views, m, position);
         applyArrival(views.container, m.id);
+    }
+
+    /**
+     * KHANDAQ (inbox #26, 27.11): Read more under an entry that shows only the start of its text (AirLongText); it
+     * opens the whole text. Gone, and no button, under every other entry.
+     */
+    private static void bindMore(final Views views, final boolean cut, final int kind, final long messageId)
+    {
+        if (views.more == null)
+        {
+            return;
+        }
+        views.more.setVisibility(cut ? View.VISIBLE : View.GONE);
+        views.more.setOnClickListener(cut ? v -> AirLongTextActivity.open(v.getContext(), kind, messageId) : null);
+        views.more.setClickable(cut);
+    }
+
+    /** Whether the entry offers Read more; the line under the text stands while it does. */
+    private static boolean showsMore(final Views views)
+    {
+        return views.more != null && views.more.getVisibility() == View.VISIBLE;
     }
 
     /** The time column, widened for the text size, and the day mark lined up with the text after it. */
@@ -495,7 +529,7 @@ final class AirTranscript
         }
         if (views.meta != null)
         {
-            views.meta.setVisibility(failed || m.edited ? View.VISIBLE : View.GONE);
+            views.meta.setVisibility(failed || m.edited || showsMore(views) ? View.VISIBLE : View.GONE);
         }
 
         if (views.container != null)
@@ -744,14 +778,16 @@ final class AirTranscript
         final Context context = itemView.getContext();
         final Resources res = context.getResources();
         final boolean outgoing = m.direction == 1;
+        final boolean cut = !locationBound && parsed != null && AirLongText.isCut(parsed.bodyText);
 
         final float factor = textFactor();
         views.text.setTextSize(TypedValue.COMPLEX_UNIT_PX, res.getDimension(R.dimen.kq_text_body) * factor);
         views.text.setLineSpacing(0f, 1f);
         TextViewCompat.setLineHeight(views.text, Math.round(res.getDimension(R.dimen.kq_line_body) * factor));
         ChatBubbleUiHelper.configure_message_emoji_size(views.text,
-                                                        (parsed != null && parsed.reply == null && !locationBound)
-                                                        ? parsed.bodyText : null, PREF__global_font_size, false);
+                                                        (parsed != null && parsed.reply == null && !locationBound
+                                                         && !cut) ? parsed.bodyText : null,
+                                                        PREF__global_font_size, false);
         views.text.setTextColor(AirUi.color(context, entry.system ? R.color.kq_ink_2 : R.color.kq_ink));
         TextViewCompat.setCompoundDrawablesRelative(views.text, null, null, null, null);
         views.text.setCompoundDrawablePadding(0);
@@ -766,9 +802,10 @@ final class AirTranscript
             views.edited.setText(R.string.message_edited_marker);
             views.edited.setVisibility(m.edited ? View.VISIBLE : View.GONE);
         }
+        bindMore(views, cut, AirLongTextActivity.KIND_GROUP, m.id);
         if (views.meta != null)
         {
-            views.meta.setVisibility(m.edited ? View.VISIBLE : View.GONE);
+            views.meta.setVisibility(m.edited || showsMore(views) ? View.VISIBLE : View.GONE);
         }
         if (views.retry != null)
         {

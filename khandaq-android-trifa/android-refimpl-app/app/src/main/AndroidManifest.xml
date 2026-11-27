@@ -252,6 +252,12 @@
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
             android:exported="false"
             android:theme="@style/AppTheme" />
+        <!-- KHANDAQ (inbox #26, 27.11): the whole text of a long message, from Read more under its entry. -->
+        <activity
+            android:name="com.zoffcc.applications.trifa.AirLongTextActivity"
+            android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
         <activity
             android:name="com.zoffcc.applications.trifa.AirNewContactActivity"
             android:configChanges="screenSize|locale|touchscreen|navigation|orientation|keyboard|keyboardHidden"

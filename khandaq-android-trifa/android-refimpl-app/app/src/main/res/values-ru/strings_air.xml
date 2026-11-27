@@ -178,6 +178,10 @@
     <string name="air_tray_already_left">Уже ушло, здесь его не изменить</string>
     <string name="air_failed_retry">Не отправлено. Повторить</string>
     <string name="air_failed_retry_hint">Отправляет сообщение ещё раз</string>
+    <!-- KHANDAQ (inbox #26, 27.11): an entry that shows only the start of a long text (AirLongText). -->
+    <string name="air_entry_read_more">Читать полностью</string>
+    <string name="air_entry_read_more_hint">Открывает сообщение целиком</string>
+    <string name="air_long_text_title">Сообщение</string>
     <string name="air_chat_dossier_hint">Открывает досье: связь, сутки, ключ</string>
     <string name="air_dossier_close_hint">Закрывает досье</string>
     <string name="air_dossier_link_title">Связь</string>

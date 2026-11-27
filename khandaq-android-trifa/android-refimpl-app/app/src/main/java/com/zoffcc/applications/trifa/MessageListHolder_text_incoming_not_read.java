@@ -262,13 +262,15 @@ public class MessageListHolder_text_incoming_not_read extends RecyclerView.ViewH
         final boolean locationBound = HelperLocationMessage.bind(itemView, textView, parsedMessage.bodyText, true);
         if (!locationBound)
         {
+            // KHANDAQ (inbox #26, 27.11): the entry lays out at most the start of a long text (AirLongText).
             if ((search_messages_text == null) || (search_messages_text.length() == 0))
             {
-                textView.setAutoLinkText(parsedMessage.bodyText);
+                textView.setAutoLinkText(AirLongText.shown(parsedMessage.bodyText, null));
             }
             else
             {
-                textView.setAutoLinkTextHighlight(parsedMessage.bodyText, search_messages_text);
+                textView.setAutoLinkTextHighlight(AirLongText.shown(parsedMessage.bodyText, search_messages_text),
+                                                  search_messages_text);
             }
         }
 

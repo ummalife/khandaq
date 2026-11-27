@@ -6,6 +6,7 @@ import android.view.View;
 import android.view.Window;
 import android.widget.LinearLayout;
 
+import androidx.annotation.LayoutRes;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 import androidx.appcompat.app.ActionBar;
@@ -31,11 +32,21 @@ abstract class AirScreenActivity extends AppCompatActivity
     @StringRes
     protected abstract int screenTitle();
 
+    /**
+     * The layout of the screen: air_screen, or for a screen that is one list (AirLongTextActivity) a layout with
+     * the same root, header and bottom bar around the list in place of the column.
+     */
+    @LayoutRes
+    protected int screenLayout()
+    {
+        return R.layout.air_screen;
+    }
+
     @Override
     protected void onCreate(@Nullable final Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.air_screen);
+        setContentView(screenLayout());
         // Edge to edge (targetSdk 35 and later): the header clears the status bar and the bottom bar
         // the keyboard, as in the conversation.
         ViewUtil.applyImeBottomInsets(this);
@@ -92,7 +103,7 @@ abstract class AirScreenActivity extends AppCompatActivity
      * the design (kq_size_text_measure) in the middle of the window instead of running edge to edge;
      * a window narrower than the measure keeps its 16dp sides.
      */
-    private static void keepTextMeasure(final View host, final View... columns)
+    protected static void keepTextMeasure(final View host, final View... columns)
     {
         final int measure = host.getResources().getDimensionPixelSize(R.dimen.kq_size_text_measure);
         final int least = host.getResources().getDimensionPixelSize(R.dimen.kq_space_16);

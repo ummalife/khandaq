@@ -138,6 +138,22 @@
                 android:orientation="horizontal"
                 android:visibility="gone">
 
+                <!-- KHANDAQ (inbox #26, 27.11): under an entry that shows only the start of its text
+                     (AirLongText), the whole text. Underlined in the second ink, as Details. -->
+                <TextView
+                    android:id="@+id/air_entry_more"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="@dimen/kq_space_8"
+                    android:background="@drawable/air_bg_icon_button"
+                    android:gravity="center_vertical"
+                    android:minHeight="@dimen/kq_size_control"
+                    android:paddingEnd="@dimen/kq_space_4"
+                    android:text="@string/air_entry_read_more"
+                    android:textAppearance="@style/TextAppearance.KQ.Label"
+                    android:textColor="@color/kq_ink_2"
+                    android:visibility="gone" />
+
                 <TextView
                     android:id="@+id/air_entry_edited"
                     android:layout_width="wrap_content"

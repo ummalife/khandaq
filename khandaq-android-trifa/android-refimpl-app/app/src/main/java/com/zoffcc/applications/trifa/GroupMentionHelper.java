@@ -449,7 +449,9 @@ final class GroupMentionHelper
             return;
         }
 
-        final String body = parsed.bodyText == null ? "" : parsed.bodyText;
+        // KHANDAQ (inbox #26, 27.11): the entry lays out at most the start of a long text (AirLongText); the
+        // mentions are found in what it shows.
+        final String body = AirLongText.shown(parsed.bodyText == null ? "" : parsed.bodyText, searchHighlight);
         textView.setCustomRegex(TOXURL_PATTERN);
         // KHANDAQ (redesign, stage 5): a mention in ink, bold, as iOS draws it (link-text is ink there); the old
         // dark green vanished on the dark theme, on the selected ground of a message that mentions you.

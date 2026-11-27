@@ -3966,7 +3966,15 @@ public class MessageListActivity extends AppCompatActivity
                                 try
                                 {
                                     CallingActivity.top_text_line_str2 = "0s";
-                                    update_top_text_line();
+                                    try
+                                    {
+                                        update_top_text_line();
+                                    }
+                                    catch (Exception e)
+                                    {
+                                        // KHANDAQ (27.11): the call screen's text never stops the call itself.
+                                        HelperGeneric.logI(TAG, "CALL_OUT:top_text:EE:" + e.getMessage());
+                                    }
                                     HelperGeneric.logI(TAG, "CALL_OUT:001:friendnum=" + fn + " f_audio_enabled=" + f_audio_enabled +
                                                " f_video_enabled=" + f_video_enabled);
 

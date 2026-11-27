@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import AVFoundation
 import XCTest
 @testable import Antidote
 
@@ -114,6 +115,21 @@ class AirCallTests: XCTestCase {
     private func use(_ language: String) {
         AppLanguage.set(language)
         XCTAssertEqual(AppLanguage.current, language)
+    }
+}
+
+/**
+ KHANDAQ (calls, 27.11): the sizes a call's camera is asked for, first the one it can give. iOS has no plain 960x540
+ preset, so the first is the iFrame 960x540, then the 1280x720 the front camera had before, then 640x480. The list is
+ built in the simulator too, so a preset iOS does not have stops this test build, not only the release archive.
+ */
+class CapturePresetTests: XCTestCase {
+    func testACameraIsAskedFor960x540FirstThen1280x720Then640x480() {
+        XCTAssertEqual(OCTVideoEngine.capturePresetsInOrder(), [
+            AVCaptureSession.Preset.iFrame960x540.rawValue,
+            AVCaptureSession.Preset.hd1280x720.rawValue,
+            AVCaptureSession.Preset.vga640x480.rawValue,
+        ])
     }
 }
 

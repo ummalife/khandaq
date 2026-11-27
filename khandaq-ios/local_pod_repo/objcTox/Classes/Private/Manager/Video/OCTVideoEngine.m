@@ -183,6 +183,16 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
     return YES;
 }
 
+// KHANDAQ (calls, 27.11): the sizes a call's camera is asked for, first the one it can give. iOS has no plain 960x540
+// preset: AVCaptureSessionPreset960x540 is macOS only, and the device build did not compile with it. The iOS 960x540
+// is the iFrame preset, which the video data output gets at 960x540 as well. A camera without it keeps the 1280x720
+// the front camera had before, then 640x480. Outside the #if below on purpose: the simulator build, the one the tests
+// run on, compiles these names too, so a name iOS does not have stops the tests and not only the release archive.
++ (NSArray<AVCaptureSessionPreset> *)capturePresetsInOrder
+{
+    return @[AVCaptureSessionPresetiFrame960x540, AVCaptureSessionPreset1280x720, AVCaptureSessionPreset640x480];
+}
+
 - (void)applyCapturePresetForPosition:(AVCaptureDevicePosition)position
 {
 #if ! TARGET_OS_SIMULATOR
@@ -190,12 +200,11 @@ static const OSType kPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRan
     // A call sends its video at 150 to 1200 kbit/s (OCTVideoBitRateAdapter), and at those rates the smaller picture
     // is the clearer one: measured offline with this VP8 encoder, 600 kbit/s give quantizer 26 at 960x540 and 31 at
     // 1280x720, 300 kbit/s 37 against 50. The picture keeps its 16:9.
-    NSString *preset = AVCaptureSessionPreset960x540;
-    if (! [self.captureSession canSetSessionPreset:preset]) {
-        preset = AVCaptureSessionPreset640x480;
-    }
-    if ([self.captureSession canSetSessionPreset:preset]) {
-        self.captureSession.sessionPreset = preset;
+    for (AVCaptureSessionPreset preset in [OCTVideoEngine capturePresetsInOrder]) {
+        if ([self.captureSession canSetSessionPreset:preset]) {
+            self.captureSession.sessionPreset = preset;
+            return;
+        }
     }
 #endif
 }

@@ -409,6 +409,8 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
 
         final String displayText = GroupMessageLayoutHelper.displayTextForMessage(context, m);
         final GroupMentionHelper.ParsedGroupText parsedGroup = GroupMentionHelper.parse(displayText);
+        // KHANDAQ (inbox #10, 27.11): the quote of a message deleted here says so.
+        HelperReply.markDeletedTarget(parsedGroup.reply, m);
         ChatBubbleUiHelper.apply_peer_name_style(peer_name_text, message__tox_peerpubkey);
         ChatBubbleUiHelper.bind_bubble_time(ChatBubbleUiHelper.find_bubble_time(itemView), date_time,
                 HelperGeneric.format_group_message_time(m, false), false, m.edited);
@@ -630,6 +632,8 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
         textView.setCustomRegex(TOXURL_PATTERN);
         final String displayText = GroupMessageLayoutHelper.displayTextForMessage(context, m);
         final GroupMentionHelper.ParsedGroupText parsedGroup = GroupMentionHelper.parse(displayText);
+        // KHANDAQ (inbox #10, 27.11): the quote of a message deleted here says so.
+        HelperReply.markDeletedTarget(parsedGroup.reply, m);
         entry.mentionsYou = !is_system_message && mentionsSelf(parsedGroup, m);
         final boolean locationBound = HelperLocationMessage.bind(itemView, textView, parsedGroup.bodyText, true);
         if (!locationBound)

@@ -1061,6 +1061,8 @@ public class HelperFriend
                 try
                 {
                     orma.deleteFromMessage().tox_friendpubkeyEq(friend_pubkey).execute();
+                    // KHANDAQ (inbox #10, 27.11): every reply goes too, and what they quoted with them.
+                    HelperReply.forgetDeletedReplyTargets(ReplyTargetTombstones.direct(friend_pubkey));
                 }
                 catch (Exception e)
                 {

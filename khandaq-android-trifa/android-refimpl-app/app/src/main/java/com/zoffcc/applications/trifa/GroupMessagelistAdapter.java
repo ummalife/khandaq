@@ -501,6 +501,22 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
     }
 
     /** Same as MessagelistAdapter.notify_caption_state: a media row and its caption depend on each other. */
+    /**
+     * KHANDAQ (inbox #10, 27.11): the replies draw their quotes again, as one of them may quote the row just removed,
+     * which a delete remembered first (HelperReply.rememberDeletedReplyTarget). Only rows that open with a reply.
+     */
+    private void notify_reply_rows()
+    {
+        for (int i = 0; i < this.messagelistitems.size(); i++)
+        {
+            final com.zoffcc.applications.sorm.GroupMessage row = this.messagelistitems.get(i);
+            if ((row != null) && (row.text != null) && row.text.startsWith(MessageReplyHelper.HEADER_PREFIX))
+            {
+                this.notifyItemChanged(i);
+            }
+        }
+    }
+
     private void notify_caption_state(final int pos)
     {
         if ((pos >= 0) && (pos < this.messagelistitems.size()))
@@ -675,6 +691,8 @@ public class GroupMessagelistAdapter extends RecyclerView.Adapter implements Fas
                     // the rows now meeting at pos may pair up (or lose their pair) as media + caption
                     notify_caption_state(pos - 1);
                     notify_caption_state(pos);
+                    // KHANDAQ (inbox #10, 27.11): and a reply may quote the row that went.
+                    notify_reply_rows();
                     break;
                 }
             }

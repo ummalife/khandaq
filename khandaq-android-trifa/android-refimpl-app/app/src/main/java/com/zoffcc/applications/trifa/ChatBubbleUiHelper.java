@@ -1407,10 +1407,18 @@ final class ChatBubbleUiHelper
                 ? context.getString(R.string.chat_reply_unknown_sender) : replyMeta.senderName;
         quoteName.setText(name);
         quoteName.setTextColor(ContextCompat.getColor(context, R.color.tg_reply_quote_name));
-        quoteText.setText(MessageReplyHelper.previewForDisplay(context, replyMeta.previewText, 160));
+        // KHANDAQ (inbox #10, 27.11): the quote of a message deleted here says so, not what the message said.
+        quoteText.setText(replyMeta.targetDeleted ? context.getString(R.string.chat_reply_deleted)
+                          : MessageReplyHelper.previewForDisplay(context, replyMeta.previewText, 160));
         quoteText.setTextColor(ContextCompat.getColor(context, R.color.tg_reply_quote_text));
         quoteBlock.setBackground(ContextCompat.getDrawable(context, R.drawable.bg_chat_reply_quote));
-        if (clickListener != null && !replyMeta.legacyQuote)
+        if (replyMeta.targetDeleted)
+        {
+            // Nothing to scroll to: the nearest message of that time would be another one.
+            quoteBlock.setOnClickListener(null);
+            quoteBlock.setClickable(false);
+        }
+        else if (clickListener != null && !replyMeta.legacyQuote)
         {
             quoteBlock.setOnClickListener(v -> clickListener.onReplyQuoteClicked(replyMeta));
         }

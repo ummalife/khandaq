@@ -213,6 +213,8 @@ public class GroupMessageListHolder_text_outgoing_read extends RecyclerView.View
         textView.setCustomRegex(TOXURL_PATTERN);
 
         final GroupMentionHelper.ParsedGroupText parsedGroup = GroupMentionHelper.parse(message__text);
+        // KHANDAQ (inbox #10, 27.11): the quote of a message deleted here says so.
+        HelperReply.markDeletedTarget(parsedGroup.reply, m);
         // KHANDAQ (#T2): render a "khandaq-location:LAT,LON" group message as a map bubble.
         final boolean locationBound = HelperLocationMessage.bind(itemView, textView, parsedGroup.bodyText, true);
         if (!locationBound)
@@ -280,6 +282,8 @@ public class GroupMessageListHolder_text_outgoing_read extends RecyclerView.View
 
         textView.setCustomRegex(TOXURL_PATTERN);
         final GroupMentionHelper.ParsedGroupText parsedGroup = GroupMentionHelper.parse(m.text);
+        // KHANDAQ (inbox #10, 27.11): the quote of a message deleted here says so.
+        HelperReply.markDeletedTarget(parsedGroup.reply, m);
         final boolean locationBound = HelperLocationMessage.bind(itemView, textView, parsedGroup.bodyText, true);
         if (!locationBound)
         {

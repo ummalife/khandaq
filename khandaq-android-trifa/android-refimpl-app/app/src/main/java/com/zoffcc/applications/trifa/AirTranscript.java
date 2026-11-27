@@ -684,8 +684,10 @@ final class AirTranscript
         }
         final String name = reply.senderName == null || reply.senderName.isEmpty()
                             ? context.getString(R.string.chat_reply_unknown_sender) : reply.senderName;
+        // KHANDAQ (inbox #10, 27.11): as the quote shows it, of a message deleted here.
         return context.getString(R.string.chat_reply_header, name) + ", "
-               + MessageReplyHelper.previewForDisplay(context, reply.previewText, 160);
+               + (reply.targetDeleted ? context.getString(R.string.chat_reply_deleted)
+                  : MessageReplyHelper.previewForDisplay(context, reply.previewText, 160));
     }
 
     private static void append(final StringBuilder sentence, final String part)

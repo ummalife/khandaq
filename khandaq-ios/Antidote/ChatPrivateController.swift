@@ -58,6 +58,8 @@ class ChatPrivateController: PortraitChatController {
     fileprivate weak var submanagerUser: OCTSubmanagerUser!
 
     fileprivate let messages: Results<OCTMessageAbstract>
+    /// KHANDAQ (inbox #10, 27.11): a reply to a message deleted here says so.
+    fileprivate lazy var deletedReplyTargets = ChatDeletedReplyTargets(chat: chat, submanagerChats: submanagerChats)
     fileprivate var messagesToken: RLMNotificationToken?
     fileprivate var visibleMessages: Int {
         didSet {
@@ -407,9 +409,9 @@ class ChatPrivateController: PortraitChatController {
         LocationSharingCoordinator.shared.stop()
     }
 
-    fileprivate func populateTextModel(_ model: ChatBaseTextCellModel, text: String) {
+    fileprivate func populateTextModel(_ model: ChatBaseTextCellModel, text: String, of message: OCTMessageAbstract) {
         let parsed = MessageReplyHelper.parse(text)
-        model.replyMeta = parsed.reply
+        model.replyMeta = deletedReplyTargets.marked(parsed.reply, of: message, in: messages)
         model.searchHighlight = messageSearchQuery.isEmpty ? nil : messageSearchQuery
         let body = parsed.bodyText
 
@@ -428,7 +430,8 @@ class ChatPrivateController: PortraitChatController {
     }
 
     fileprivate func attachReplyQuoteHandler(to model: ChatBaseTextCellModel) {
-        guard let meta = model.replyMeta else {
+        // KHANDAQ (inbox #10, 27.11): a quote of a deleted message leads nowhere; the nearest one of its time is another.
+        guard let meta = model.replyMeta, !meta.targetDeleted else {
             model.onReplyQuoteTap = nil
             return
         }
@@ -909,7 +912,7 @@ extension ChatPrivateController: UITableViewDataSource {
                 let outgoingModel = AirEntryTextCellModel()
 
                 if (UserDefaultsManager().DebugMode == false) {
-                    populateTextModel(outgoingModel, text: messageText.text ?? "")
+                    populateTextModel(outgoingModel, text: messageText.text ?? "", of: message)
                 } else {
                     let s1 = (messageText.text ?? "")
                     let s2 = (messageText.msgv3HashHex ?? "")
@@ -978,7 +981,7 @@ extension ChatPrivateController: UITableViewDataSource {
                 let incomingModel = AirEntryTextCellModel()
 
                 if (UserDefaultsManager().DebugMode == false) {
-                    populateTextModel(incomingModel, text: messageText.text ?? "")
+                    populateTextModel(incomingModel, text: messageText.text ?? "", of: message)
                 } else {
                     let s1 = (messageText.text ?? "")
                     let s2 = (messageText.msgv3HashHex ?? "")
@@ -2174,6 +2177,8 @@ private extension ChatPrivateController {
                     }
                     self.reportSeenAfterThisChange()
                 case .update(_, let deletions, let insertions, let modifications):
+                    // KHANDAQ (inbox #10, 27.11): a removal among them may be quoted by a reply on screen.
+                    self.deletedReplyTargets.reset()
                     // KHANDAQ (0.2.57): what came in while the person looks at the conversation is seen.
                     self.reportSeenAfterThisChange()
                     // KHANDAQ (redesign stage 2): the rows of the log change with the messages; the

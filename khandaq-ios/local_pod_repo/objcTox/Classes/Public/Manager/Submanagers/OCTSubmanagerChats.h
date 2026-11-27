@@ -46,6 +46,14 @@ FOUNDATION_EXPORT NSString *const kOCTMessageReactionEventKeyKey;
 - (void)removeMessages:(NSArray<OCTMessageAbstract *> *)messages;
 
 /**
+ * KHANDAQ (inbox #10, 27.11): the messages of the chat removed on this device, by any of the removals (yours, for
+ * both, the other side's, in a group too), that a reply may still quote. Oldest first, each as
+ * "<date in ms> <uniqueIdentifier>": the date as a reply carries it, Int64(dateInterval * 1000), and the identifier a
+ * reply written here names its message by. The newest 500 of a chat; empty when there are none.
+ */
+- (NSArray<NSString *> *)deletedReplyTargetsInChat:(OCTChat *)chat NS_SWIFT_NAME(deletedReplyTargets(in:));
+
+/**
  * KHANDAQ (#179): delete an OWN 1:1 text message locally AND retract it on the peer
  * (KQ lossless packet id 187, mirrors Android). Best effort: an offline peer or an old
  * client silently keeps its copy. Falls back to plain local removal for anything that

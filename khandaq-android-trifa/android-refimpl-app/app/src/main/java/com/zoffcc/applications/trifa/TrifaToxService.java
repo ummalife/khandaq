@@ -1041,6 +1041,8 @@ public class TrifaToxService extends Service
                 HelperGroup.forget_group_own_names_read();
                 // KHANDAQ (tester 21.11, 8256/8261): and what was deleted in its groups.
                 HelperMessageDelete.forgetGroupDeletesRead();
+                // KHANDAQ (inbox #10, 27.11): and what was deleted in its chats that replies quote.
+                HelperReply.REPLY_TARGETS.forgetRead();
                 tox_session_number.incrementAndGet();
                 is_tox_started = true;
                 // KHANDAQ (logout crash fix): tox is up again, so we are no longer "logged out". Clearing

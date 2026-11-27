@@ -86,6 +86,11 @@
                                        groupName:(NSString *)groupName
                                     privacyState:(OCTToxGroupPrivacyState)privacyState;
 - (void)removeMessages:(NSArray<OCTMessageAbstract *> *)messages;
+// KHANDAQ (inbox #10, 27.11): what a chat keeps of the messages removed from it, for the replies that quote them, and
+// the removal of a whole conversation, which takes it with the replies.
+- (void)removeAllMessagesInChat:(OCTChat *)chat removeChat:(BOOL)removeChat;
+- (NSArray<NSString *> *)deletedReplyTargetsInChatWithUniqueIdentifier:(NSString *)chatUniqueIdentifier
+    NS_SWIFT_NAME(deletedReplyTargets(inChatWithUniqueIdentifier:));
 // Beta 8253 (an edited note of Saved Messages): the Saved chat and a note in it as the app keeps them, and a text
 // to a friend as objcTox stores one it sent.
 - (OCTChat *)getOrCreateSavedMessagesChat;

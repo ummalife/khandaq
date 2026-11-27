@@ -33,6 +33,11 @@ final class MessageReplyHelper
          */
         @Nullable
         String localSenderName;
+        /**
+         * KHANDAQ (inbox #10, 27.11): the message this reply quotes was deleted here, so the quote says so instead of
+         * its words. It never goes on the wire; set where the reply is shown (HelperReply.markDeletedTarget).
+         */
+        boolean targetDeleted;
     }
 
     static final class ParsedMessage

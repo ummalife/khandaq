@@ -125,6 +125,8 @@
     <string name="chat_reply_self_name">You</string>
     <string name="chat_reply_header_self">In reply to yourself</string>
     <string name="chat_reply_unknown_sender">Unknown</string>
+    <!-- KHANDAQ (inbox #10): the quote of a reply whose message was deleted on this device -->
+    <string name="chat_reply_deleted">Deleted message</string>
     <string name="notification_app_title" translatable="false">Khandaq</string>
     <string name="notification_fgs_title" translatable="false">Khandaq</string>
     <string name="notification_fgs_text">Running in background</string>

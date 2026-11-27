@@ -78,6 +78,11 @@ class OCTSubmanagerChatsMock: NSObject, OCTSubmanagerChats {
         // nop
     }
 
+    func deletedReplyTargets(in chat: OCTChat!) -> [String]! {
+        // The demo world deletes no message a reply quotes.
+        return []
+    }
+
     func editMessage(_ message: OCTMessageAbstract!, newText: String!) {
         guard let realm = realm, let message = message, !message.isInvalidated, let text = message.messageText else {
             return

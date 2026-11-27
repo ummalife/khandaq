@@ -635,6 +635,7 @@
     <string name="chat_reply_self_name">你</string>
     <string name="chat_reply_header_self">回复自己</string>
     <string name="chat_reply_unknown_sender">未知</string>
+    <string name="chat_reply_deleted">已删除的消息</string>
     <string name="notification_fgs_text">正在后台运行</string>
     <string name="notification_status_online">在线</string>
     <string name="network_diag_title">网络诊断</string>

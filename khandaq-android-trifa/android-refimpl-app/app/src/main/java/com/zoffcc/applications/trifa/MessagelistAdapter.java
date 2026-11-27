@@ -708,6 +708,22 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
      * deleting either row left the other one rendered against the old state (the same text shown
      * twice, or a caption that vanished until the chat was reopened).
      */
+    /**
+     * KHANDAQ (inbox #10, 27.11): the replies draw their quotes again, as one of them may quote the row just removed,
+     * which a delete remembered first (HelperReply.rememberDeletedReplyTarget). Only rows that open with a reply.
+     */
+    private void notify_reply_rows()
+    {
+        for (int i = 0; i < this.messagelistitems.size(); i++)
+        {
+            final com.zoffcc.applications.sorm.Message row = this.messagelistitems.get(i);
+            if ((row != null) && (row.text != null) && row.text.startsWith(MessageReplyHelper.HEADER_PREFIX))
+            {
+                this.notifyItemChanged(i);
+            }
+        }
+    }
+
     private void notify_caption_state(final int pos)
     {
         if ((pos >= 0) && (pos < this.messagelistitems.size()))
@@ -879,6 +895,8 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                     // the rows now meeting at pos may pair up (or lose their pair) as media + caption
                     notify_caption_state(pos - 1);
                     notify_caption_state(pos);
+                    // KHANDAQ (inbox #10, 27.11): and a reply may quote the row that went.
+                    notify_reply_rows();
                     break;
                 }
             }

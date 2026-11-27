@@ -4973,6 +4973,8 @@ public class HelperGroup
         set_group_own_name(group_identifier, null);
         // KHANDAQ (tester 21.11, 8256/8261): and what was deleted in it.
         HelperMessageDelete.forgetGroupDeletes(group_identifier);
+        // KHANDAQ (inbox #10, 27.11): and what replies in it quoted.
+        HelperReply.forgetDeletedReplyTargets(ReplyTargetTombstones.group(group_identifier));
     }
 
     static void update_group_in_friendlist(final String group_identifier)

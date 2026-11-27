@@ -623,6 +623,7 @@
 "chat_reply_self_name" = "You";
 "chat_reply_header_self" = "In reply to yourself";
 "chat_reply_unknown_sender" = "Unknown";
+"chat_reply_deleted" = "Deleted message";
 "group_messages_select_action" = "Select messages";
 "group_messages_copy_action" = "Copy";
 "network_connections_title" = "Network connections";

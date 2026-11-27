@@ -637,6 +637,7 @@
 "chat_reply_self_name" = "أنت";
 "chat_reply_header_self" = "ردا على نفسك";
 "chat_reply_unknown_sender" = "غير معروف";
+"chat_reply_deleted" = "رسالة محذوفة";
 "group_messages_select_action" = "تحديد الرسائل";
 "group_messages_copy_action" = "نسخ";
 "network_connections_title" = "اتصالات الشبكة";

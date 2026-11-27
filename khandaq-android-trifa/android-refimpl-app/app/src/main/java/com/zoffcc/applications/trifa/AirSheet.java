@@ -269,9 +269,23 @@ final class AirSheet
         }
     }
 
-    /** Shows the sheet; false when its activity went in the meantime. */
+    /**
+     * KHANDAQ (inbox #7, 27.11): a sheet opens whole. A BottomSheetDialog opens at its automatic peek height, the
+     * screen's height less nine sixteenths of its width: most of a phone held upright, but on a tablet or a phone on
+     * its side little more than the title (160 px of a 2560x1600 tablet in landscape), with the rows and the verbs
+     * below the screen until the sheet was dragged up. Without the collapsed state a drag down still closes it.
+     */
+    static void openWhole(final BottomSheetDialog sheet)
+    {
+        final BottomSheetBehavior<FrameLayout> behavior = sheet.getBehavior();
+        behavior.setSkipCollapsed(true);
+        behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+    }
+
+    /** Shows the sheet whole ({@link #openWhole}); false when its activity went in the meantime. */
     boolean show()
     {
+        openWhole(dialog);
         final Window window = dialog.getWindow();
         if (window != null)
         {

@@ -734,6 +734,11 @@ private:
     bool heldByStart = false;
     /** The start window gave way to this window: the tray does not hide it again at start. */
     bool openedFromStart = false;
+    /**
+     * The frame saved in the settings was restored in init(). Qt 5.12 restores none saved on a screen whose width
+     * changed by more than a quarter, as at a new scale of the screen: such a window opens as the first time.
+     */
+    bool geometryRestored = false;
 #ifdef KHANDAQ_SCREENSHOT_HOOK
     /** The screenshot script waits for the window to show from the start window. */
     QString heldShotScript;

@@ -45,6 +45,71 @@ const char settingsFile[] = "khandaq.ini";
 
 int sizeInForce = 100;
 
+#if defined(Q_OS_WIN)
+const char screenFactorsVariable[] = "QT_SCREEN_SCALE_FACTORS";
+/** Set with the QT_SCREEN_SCALE_FACTORS Khandaq made, so that a Khandaq started from this one makes them anew. */
+const char ownScreenFactorsVariable[] = "KHANDAQ_SCREEN_FACTORS";
+
+// shcore.dll, Windows 8.1 and later, resolved when it runs as Qt 5.12 resolves it
+// (QWindowsContext::shcoredll): Khandaq still starts on a Windows without it.
+using SetProcessDpiAwarenessFunction = HRESULT(WINAPI*)(int);
+using GetDpiForMonitorFunction = HRESULT(WINAPI*)(HMONITOR, int, UINT*, UINT*);
+const int perMonitorDpiAware = 2; // PROCESS_PER_MONITOR_DPI_AWARE
+const int effectiveDpi = 0;       // MDT_EFFECTIVE_DPI
+
+struct ScreenScan
+{
+    GetDpiForMonitorFunction dpiForMonitor;
+    QVector<ScreenDpi> screens;
+};
+
+template <typename Function>
+Function resolve(HMODULE module, const char* name)
+{
+    // Through void (*)(), which GCC's -Wcast-function-type takes for the type of any function.
+    return reinterpret_cast<Function>(reinterpret_cast<void (*)()>(GetProcAddress(module, name)));
+}
+
+BOOL CALLBACK scanScreen(HMONITOR monitor, HDC, LPRECT, LPARAM data)
+{
+    ScreenScan* scan = reinterpret_cast<ScreenScan*>(data);
+    MONITORINFOEXW info;
+    ZeroMemory(&info, sizeof(info));
+    info.cbSize = sizeof(info);
+    UINT dpiX = 0;
+    UINT dpiY = 0;
+    if (GetMonitorInfoW(monitor, &info)
+        && SUCCEEDED(scan->dpiForMonitor(monitor, effectiveDpi, &dpiX, &dpiY))) {
+        ScreenDpi screen;
+        screen.name = QString::fromWCharArray(info.szDevice);
+        screen.dpi = static_cast<int>(dpiX);
+        scan->screens.append(screen);
+    }
+    return TRUE;
+}
+
+/** The screens with the DPI Qt will see on them; none on a Windows without shcore.dll. */
+QVector<ScreenDpi> windowsScreens()
+{
+    const HMODULE shcore = LoadLibraryW(L"shcore.dll");
+    if (shcore == nullptr) {
+        return QVector<ScreenDpi>();
+    }
+    const SetProcessDpiAwarenessFunction setAwareness =
+        resolve<SetProcessDpiAwarenessFunction>(shcore, "SetProcessDpiAwareness");
+    ScreenScan scan;
+    scan.dpiForMonitor = resolve<GetDpiForMonitorFunction>(shcore, "GetDpiForMonitor");
+    if (setAwareness == nullptr || scan.dpiForMonitor == nullptr) {
+        return QVector<ScreenDpi>();
+    }
+    // A process sees the DPI of each screen only once it is aware of DPI per monitor. Qt makes it
+    // so a moment later, its default on Windows, and takes it that it already is.
+    setAwareness(perMonitorDpiAware);
+    EnumDisplayMonitors(nullptr, nullptr, scanScreen, reinterpret_cast<LPARAM>(&scan));
+    return scan.screens;
+}
+#endif
+
 /**
  * The directory of the running program, without the application object that
  * QCoreApplication::applicationDirPath needs, found the way Qt finds it.
@@ -102,6 +167,30 @@ void putEnvironment(const char* name, bool set, const QByteArray& value)
         qunsetenv(name);
     }
 }
+
+#if defined(Q_OS_WIN)
+/** Each screen at its own scale (screenFactors), unless the factors came from outside Khandaq. */
+void applyScreenFactors()
+{
+    if (qEnvironmentVariableIsSet(screenFactorsVariable)
+        && !qEnvironmentVariableIsSet(ownScreenFactorsVariable)) {
+        qDebug().nospace() << screenFactorsVariable << " from outside: "
+                           << qgetenv(screenFactorsVariable);
+        return;
+    }
+    const QVector<ScreenDpi> screens = windowsScreens();
+    for (const ScreenDpi& screen : screens) {
+        qDebug().nospace() << "Screen " << screen.name << ": " << screen.dpi << " dpi";
+    }
+    const QByteArray factors = screenFactors(screens);
+    putEnvironment(screenFactorsVariable, !factors.isEmpty(), factors);
+    putEnvironment(ownScreenFactorsVariable, !factors.isEmpty(), QByteArrayLiteral("1"));
+    if (!factors.isEmpty()) {
+        qDebug().nospace() << "Screens at their own scale: " << screenFactorsVariable << "="
+                           << factors;
+    }
+}
+#endif
 
 } // namespace
 
@@ -182,6 +271,9 @@ Decision decide(int percent, const Environment& found)
 
 void applyBeforeApplication(const char* argv0)
 {
+#if defined(Q_OS_WIN)
+    applyScreenFactors();
+#endif
     const QString file = globalSettingsFile(programDirectory(argv0));
     const int percent = storedPercent(file);
 
@@ -204,6 +296,58 @@ void applyBeforeApplication(const char* argv0)
 int inForce()
 {
     return sizeInForce;
+}
+
+double screenCorrection(int dpi)
+{
+    const double asked = dpi / 96.0;
+    if (asked <= 1.0) {
+        return 1.0;
+    }
+    // As QWindowsScreen::pixelDensity of Qt 5.12 rounds it.
+    const int given = qMax(1, qRound(asked));
+    return asked / given;
+}
+
+QRect windowWithin(const QRect& window, const QRect& available, int titleBar)
+{
+    const QRect room = available.adjusted(0, qMax(0, titleBar), 0, 0);
+    if (!window.isValid() || !room.isValid()) {
+        return window;
+    }
+    QRect within = window;
+    within.setWidth(qMin(window.width(), room.width()));
+    within.setHeight(qMin(window.height(), room.height()));
+    if (within.right() > room.right()) {
+        within.moveRight(room.right());
+    }
+    if (within.bottom() > room.bottom()) {
+        within.moveBottom(room.bottom());
+    }
+    if (within.left() < room.left()) {
+        within.moveLeft(room.left());
+    }
+    if (within.top() < room.top()) {
+        within.moveTop(room.top());
+    }
+    return within;
+}
+
+QByteArray screenFactors(const QVector<ScreenDpi>& screens)
+{
+    QByteArray factors;
+    for (const ScreenDpi& screen : screens) {
+        const double factor = screenCorrection(screen.dpi);
+        if (screen.name.isEmpty() || qFuzzyCompare(factor, 1.0)) {
+            continue;
+        }
+        if (!factors.isEmpty()) {
+            factors += ';';
+        }
+        // Qt reads the name back with QString::fromLocal8Bit.
+        factors += screen.name.toLocal8Bit() + '=' + QByteArray::number(factor, 'g', 6);
+    }
+    return factors;
 }
 
 } // namespace InterfaceScale

@@ -37,6 +37,8 @@ private slots:
     void decideAfterRestart();
     void decideFromAFactorQtIgnores();
     void sizesTheScreenHasRoomFor();
+    void screensAtTheirOwnScale();
+    void aWindowWithinItsScreen();
 
 private:
     static void writeIni(const QString& path, const QString& group, const QString& key,
@@ -239,6 +241,67 @@ void TestInterfaceScale::sizesTheScreenHasRoomFor()
     QVERIFY(InterfaceScale::fits(QSize(100, 100), least, 200, 110));
     QVERIFY(InterfaceScale::fits(QSize(), least, 100, 200));
     QVERIFY(InterfaceScale::fits(QSize(0, 900), least, 100, 200));
+}
+
+void TestInterfaceScale::screensAtTheirOwnScale()
+{
+    // Qt 5.12 gives a screen its DPI rounded to a whole factor (inbox #27: Windows at 125 % was
+    // drawn at 100 %); the correction brings each screen back to its own.
+    QCOMPARE(InterfaceScale::screenCorrection(96), 1.0);
+    QCOMPARE(InterfaceScale::screenCorrection(120), 1.25);
+    QCOMPARE(InterfaceScale::screenCorrection(144), 0.75);
+    QCOMPARE(InterfaceScale::screenCorrection(168), 0.875);
+    QCOMPARE(InterfaceScale::screenCorrection(192), 1.0);
+    QCOMPARE(InterfaceScale::screenCorrection(216), 1.125);
+    QCOMPARE(InterfaceScale::screenCorrection(240), 2.5 / 3.0);
+    // Nothing below 100 %, which Qt does not scale down, and nothing from a DPI not known.
+    QCOMPARE(InterfaceScale::screenCorrection(72), 1.0);
+    QCOMPARE(InterfaceScale::screenCorrection(0), 1.0);
+
+    // Only the screens that need it, by the names Qt 5.12 gives them on Windows.
+    const QVector<InterfaceScale::ScreenDpi> screens{{QStringLiteral("\\\\.\\DISPLAY1"), 120},
+                                                     {QStringLiteral("\\\\.\\DISPLAY2"), 96},
+                                                     {QStringLiteral("\\\\.\\DISPLAY3"), 144}};
+    QCOMPARE(InterfaceScale::screenFactors(screens),
+             QByteArrayLiteral("\\\\.\\DISPLAY1=1.25;\\\\.\\DISPLAY3=0.75"));
+    const QVector<InterfaceScale::ScreenDpi> usual{{QStringLiteral("\\\\.\\DISPLAY1"), 96}};
+    QCOMPARE(InterfaceScale::screenFactors(usual), QByteArray());
+    QCOMPARE(InterfaceScale::screenFactors(QVector<InterfaceScale::ScreenDpi>()), QByteArray());
+    const QVector<InterfaceScale::ScreenDpi> unnamed{{QString(), 120}};
+    QCOMPARE(InterfaceScale::screenFactors(unnamed), QByteArray());
+}
+
+void TestInterfaceScale::aWindowWithinItsScreen()
+{
+    // A screen of 1920 x 1080 at 125 % with a taskbar of 48: its free area in the pixels of 125 %.
+    const QRect available(0, 0, 1536, 826);
+    const int titleBar = 32;
+
+    // A window that fits stays as it was.
+    const QRect fits(100, 80, 1000, 700);
+    QCOMPARE(InterfaceScale::windowWithin(fits, available, titleBar), fits);
+
+    // Left at nearly the whole screen at 100 % (the first frame: the screen less 64 above and below): as large as
+    // the room under the title bar, in the screen.
+    QCOMPARE(InterfaceScale::windowWithin(QRect(0, 64, 1200, 888), available, titleBar),
+             QRect(0, 32, 1200, 794));
+
+    // Larger than the screen both ways: the whole room.
+    QCOMPARE(InterfaceScale::windowWithin(QRect(-40, 10, 1900, 1000), available, titleBar),
+             QRect(0, 32, 1536, 794));
+
+    // Past the right edge: moved in, not shrunk.
+    QCOMPARE(InterfaceScale::windowWithin(QRect(900, 100, 800, 600), available, titleBar),
+             QRect(736, 100, 800, 600));
+
+    // A screen to the left of the main one has negative coordinates.
+    const QRect leftScreen(-1280, 0, 1280, 984);
+    QCOMPARE(InterfaceScale::windowWithin(QRect(-1300, 40, 900, 600), leftScreen, titleBar),
+             QRect(-1280, 40, 900, 600));
+
+    // Nothing to fit into, or nothing to fit: as it was.
+    QCOMPARE(InterfaceScale::windowWithin(fits, QRect(), titleBar), fits);
+    QCOMPARE(InterfaceScale::windowWithin(QRect(), available, titleBar), QRect());
 }
 
 QTEST_GUILESS_MAIN(TestInterfaceScale)

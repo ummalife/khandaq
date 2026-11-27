@@ -113,6 +113,7 @@
 #include "src/persistence/profile.h"
 #include "src/persistence/settings.h"
 #include "src/platform/apprestart.h"
+#include "src/platform/interfacescale.h"
 #include "src/platform/timer.h"
 #include "src/widget/air/airband.h"
 #include "src/widget/air/airchatparts.h"
@@ -719,7 +720,7 @@ void Widget::init()
     }
 
     // restore window state
-    restoreGeometry(settings.getWindowGeometry());
+    geometryRestored = restoreGeometry(settings.getWindowGeometry());
     restoreState(settings.getWindowState());
     SplitterRestorer restorer(ui->mainSplitter);
     restorer.restore(settings.getSplitterState(), size());
@@ -1212,9 +1213,12 @@ QRect Widget::frameForStart(const QRect& startWindow) const
     if (isMaximized()) {
         return available;
     }
-    // As the window was left, restored in init().
-    if (!settings.getWindowGeometry().isEmpty()) {
-        return geometry();
+    // As the window was left, restored in init(), on the screen it was left on and within it: a frame saved at
+    // another scale of the screen can be larger than the screen now (inbox #27). The title bar is not there yet.
+    if (geometryRestored) {
+        const QScreen* const own = QGuiApplication::screenAt(geometry().center());
+        return InterfaceScale::windowWithin(geometry(), own ? own->availableGeometry() : available,
+                                            AirTokens::Space::s32);
     }
     // The first time: room for the list and a conversation at its measure, nearly as tall as the
     // screen, in its middle.

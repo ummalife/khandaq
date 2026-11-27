@@ -2326,7 +2326,24 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                 }
             }
         };
-        callactivity_handler_s.post(myRunnable);
+        post_to_call_screen(myRunnable);
+    }
+
+    /**
+     * KHANDAQ (27.11): posts to the call screen only once it exists. An outgoing audio call's thread updates the
+     * screen right away, and on a slow phone CallingActivity.onCreate has not made the handler yet: posting to no
+     * handler threw, and the throw ended that thread before toxav_call, so the screen said "Calling" while the
+     * other side never rang. The screen reads the same state itself when it is created.
+     */
+    static boolean post_to_call_screen(final Runnable r)
+    {
+        final Handler handler = callactivity_handler_s;
+        if (handler == null)
+        {
+            return false;
+        }
+        handler.post(r);
+        return true;
     }
 
     synchronized public static void update_top_text_line(String text2, int linenum)
@@ -2368,7 +2385,7 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                 }
             }
         };
-        callactivity_handler_s.post(myRunnable);
+        post_to_call_screen(myRunnable);
     }
 
     public static void set_debug_text(final String text)

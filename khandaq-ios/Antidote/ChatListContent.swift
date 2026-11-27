@@ -197,8 +197,11 @@ enum ChatListContent {
     /// KHANDAQ (inbox #24, 27.11): with the tile of the row (tileStyle), and in a group with the authors over the
     /// entries; a group's preview had letters in a circle instead of the logo of Khandaq Community, and bubbles
     /// without names, as the talk of two.
+    /// KHANDAQ (inbox #28, 28.11): the entries quote the messages they answer and show photos, videos and places as the
+    /// conversation does; submanagerChats tells which quoted messages were deleted here.
     static func previewController(for chat: OCTChat,
                                   theme: Theme,
+                                  submanagerChats: OCTSubmanagerChats?,
                                   submanagerGroups: OCTSubmanagerGroups,
                                   submanagerObjects: OCTSubmanagerObjects) -> ChatPreviewController {
         let title: String
@@ -219,8 +222,13 @@ enum ChatListContent {
         }
 
         // KHANDAQ (0.2.56): in the conversation's order (OCTMessageAbstract.chatOrderSortDescriptors), so the
-        // preview shows the parts of a long text as the conversation does.
-        let allMessages = submanagerObjects.messages(predicate: NSPredicate(format: "chatUniqueIdentifier == %@", chat.uniqueIdentifier))
+        // preview shows the parts of a long text as the conversation does. KHANDAQ (inbox #28): and the messages the
+        // conversation shows: a group's notices only while its settings show them (ChatGroupController.makeMessagesResults).
+        let showsNotices = !chat.isGroup || UserDefaultsManager().groupShowSystemMessages
+        let format = showsNotices
+            ? "chatUniqueIdentifier == %@"
+            : "chatUniqueIdentifier == %@ AND groupSystemMessage == NO"
+        let allMessages = submanagerObjects.messages(predicate: NSPredicate(format: format, chat.uniqueIdentifier))
             .sortedResultsUsingDescriptors(OCTMessageAbstract.chatOrderSortDescriptors(ascending: true))
 
         var recent = [OCTMessageAbstract]()
@@ -231,11 +239,17 @@ enum ChatListContent {
             index += 1
         }
 
+        // A quote of a message deleted here says so, as in the conversation (inbox #10).
+        let deletedReplyTargets = ChatDeletedReplyTargets(chat: chat, submanagerChats: submanagerChats)
+        let entries = ChatPreviewController.entries(of: recent, in: chat, groups: submanagerGroups) { reply, message in
+            deletedReplyTargets.marked(reply, of: message, in: allMessages)
+        }
+
         return ChatPreviewController(theme: theme,
                                      title: title,
                                      tile: tileStyle(for: chat, title: title),
                                      photo: photo,
-                                     entries: ChatPreviewController.entries(of: recent, in: chat, groups: submanagerGroups))
+                                     entries: entries)
     }
 
     private static func leaveAndRemove(_ chat: OCTChat, submanagerGroups: OCTSubmanagerGroups) {

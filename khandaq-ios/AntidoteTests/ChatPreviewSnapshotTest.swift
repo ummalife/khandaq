@@ -11,9 +11,12 @@ import XCTest
 /// the tile of the chat's row in the header.
 final class ChatPreviewSnapshotTest: SnapshotBaseTest {
     private var window: UIWindow?
+    /// The file of the photo of the snapshots: none is read, its picture waits in the preview's own cache.
+    private let photoPath = "/khandaq-preview-snapshot/photo.jpg"
 
     override func tearDown() {
         window = nil
+        ChatPreviewController.thumbnails.removeObject(forKey: photoPath as NSString)
         super.tearDown()
     }
 
@@ -27,6 +30,73 @@ final class ChatPreviewSnapshotTest: SnapshotBaseTest {
         let controller = preview(theme: darkTheme())
         host(controller, style: .dark)
         FBSnapshotVerifyView(controller.view, identifier: "dark")
+    }
+
+    /// KHANDAQ (inbox #28, 28.11): a reply on either side with the quote of the message it answers, and a photo as the
+    /// conversation shows it: bare, in the shape of its picture, not "Outgoing file: Photo_….jpg".
+    func testAPreviewQuotesRepliesAndShowsPhotos() {
+        ChatPreviewController.thumbnails.setObject(picture(), forKey: photoPath as NSString)
+        let entries = [
+            ChatPreviewEntry(text: "Yes, I will bring it.", side: .incoming,
+                             reply: quote(of: "You", saying: "Can you bring the second volume on Thursday?")),
+            ChatPreviewEntry(text: "Thank you!", side: .outgoing,
+                             reply: quote(of: "Amina", saying: "Yes, I will bring it.")),
+            ChatPreviewEntry(text: "", side: .outgoing, media: .photo(path: photoPath, pixelSize: CGSize(width: 4, height: 3))),
+        ]
+        let controller = preview(title: "Amina", tile: .person(initials: "A", tone: 2), entries: entries, theme: theme)
+        host(controller, style: .light)
+        verifyView(controller.view)
+    }
+
+    /// A member's video in a group under their name, with the glyph of a video while its frame is read, and a place
+    /// with the glyph of its map while the map is made and its coordinates under it, as the conversation writes them.
+    func testAPreviewShowsVideosAndPlaces() {
+        let controller = preview(title: "Book club", tile: .group(initials: "BC", tone: 3),
+                                 entries: videoAndPlace(latitude: 21.42250, longitude: 39.82620), theme: theme)
+        host(controller, style: .light)
+        verifyView(controller.view)
+    }
+
+    func testAPreviewShowsVideosAndPlacesInTheDark() {
+        // Another place than the light one: a map made for that one while this runs must not stand in for the glyph.
+        let controller = preview(title: "Book club", tile: .group(initials: "BC", tone: 3),
+                                 entries: videoAndPlace(latitude: 41.00824, longitude: 28.97836), theme: darkTheme())
+        host(controller, style: .dark)
+        FBSnapshotVerifyView(controller.view, identifier: "dark")
+    }
+
+    private func videoAndPlace(latitude: Double, longitude: Double) -> [ChatPreviewEntry] {
+        let bilal = AirTileView.Style.person(initials: "B", tone: 5)
+        return [
+            ChatPreviewEntry(text: "", side: .incoming, author: "Bilal", authorColor: AirTone.color(at: 5), tile: bilal,
+                             showsTile: true, media: .video(path: "/khandaq-preview-snapshot/clip.mov", pixelSize: nil)),
+            ChatPreviewEntry(text: String(format: "%.5f, %.5f", latitude, longitude), side: .outgoing,
+                             media: .location(latitude: latitude, longitude: longitude)),
+        ]
+    }
+
+    private func quote(of name: String, saying words: String) -> MessageReplyHelper.ReplyMeta {
+        var meta = MessageReplyHelper.ReplyMeta()
+        meta.senderName = name
+        meta.previewText = words
+        return meta
+    }
+
+    /// A picture of a photo: bands of two tones, the same on every run.
+    private func picture() -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let size = CGSize(width: 240, height: 180)
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor(red: 0.17, green: 0.42, blue: 0.36, alpha: 1).setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            UIColor(red: 0.85, green: 0.78, blue: 0.62, alpha: 1).setFill()
+            context.fill(CGRect(x: 0, y: 120, width: 240, height: 60))
+        }
+    }
+
+    private func preview(title: String, tile: AirTileView.Style, entries: [ChatPreviewEntry], theme: Theme) -> ChatPreviewController {
+        return ChatPreviewController(theme: theme, title: title, tile: tile, photo: nil, entries: entries)
     }
 
     /// The theme the app loads in the dark (ThemeAppearance.loadTheme).

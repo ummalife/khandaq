@@ -1273,18 +1273,7 @@ extension ChatPrivateController: UITableViewDelegate {
     }
 
     func inferredFileUTI(for messageFile: OCTMessageFile) -> String? {
-        if let uti = messageFile.fileUTI, !uti.isEmpty {
-            return uti
-        }
-        guard let fileName = messageFile.fileName else {
-            return nil
-        }
-        let ext = (fileName as NSString).pathExtension
-        guard !ext.isEmpty,
-              let uti = UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, ext as CFString, nil)?.takeRetainedValue() as String? else {
-            return nil
-        }
-        return uti
+        return ChatFileMediaLoader.inferredUTI(for: messageFile)
     }
 
     func mediaPixelSize(forFileAt path: String, isVideo: Bool) -> CGSize? {

@@ -731,6 +731,25 @@ enum ChatFileMediaLoader {
         }
     }
 
+    /// KHANDAQ (inbox #28, 28.11): the UTI of a file message: the one it kept, or the one of its name's extension. An
+    /// outgoing file often kept none (#120), so a sent photo or video is told by its name, as both conversations and
+    /// the preview of a chat tell it.
+    static func inferredUTI(for messageFile: OCTMessageFile) -> String? {
+        if let uti = messageFile.fileUTI, !uti.isEmpty {
+            return uti
+        }
+        guard let fileName = messageFile.fileName else {
+            return nil
+        }
+        let ext = (fileName as NSString).pathExtension
+        guard !ext.isEmpty,
+              let uti = UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, ext as CFString, nil)?
+                .takeRetainedValue() as String? else {
+            return nil
+        }
+        return uti
+    }
+
     /// The pixel size of a photo as it is seen: a photo turned by its EXIF orientation (a portrait taken
     /// with the phone on its side) is as tall as it is shown, not as it is stored. Reads the header only.
     static func imagePixelSize(at path: String) -> CGSize? {

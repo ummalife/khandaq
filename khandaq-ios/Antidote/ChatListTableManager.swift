@@ -440,7 +440,7 @@ extension ChatListTableManager: UITableViewDelegate {
 
     @available(iOS 13.0, *)
     private func makeChatPreviewController(for chat: OCTChat) -> ChatPreviewController {
-        return ChatListContent.previewController(for: chat, theme: theme, submanagerGroups: submanagerGroups, submanagerObjects: submanagerObjects)
+        return ChatListContent.previewController(for: chat, theme: theme, submanagerChats: submanagerChats, submanagerGroups: submanagerGroups, submanagerObjects: submanagerObjects)
     }
 }
 

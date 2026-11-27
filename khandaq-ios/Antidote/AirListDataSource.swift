@@ -1224,7 +1224,7 @@ extension AirListDataSource: UITableViewDelegate {
                 guard let self = self, !chat.isInvalidated else {
                     return nil
                 }
-                return ChatListContent.previewController(for: chat, theme: self.theme, submanagerGroups: self.submanagerGroups, submanagerObjects: self.submanagerObjects)
+                return ChatListContent.previewController(for: chat, theme: self.theme, submanagerChats: self.submanagerChats, submanagerGroups: self.submanagerGroups, submanagerObjects: self.submanagerObjects)
             }
         }
 

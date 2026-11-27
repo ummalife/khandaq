@@ -382,6 +382,18 @@ final class AirCallStage
         return !remotePictureShown && !ownPictureShown;
     }
 
+    /**
+     * R4, #247: your camera's box is up in a video call from the moment its camera is to open, with its ground until
+     * the first frame, and out of an audio call. KHANDAQ (calls, 27.11): the preview is a TextureView since the calls
+     * stage (0.2.70), and a TextureView makes its texture only when it is drawn (TextureView.draw ->
+     * getTextureLayer): in the box that stayed hidden until the camera had opened it never was, so the camera never
+     * opened, the other side saw nothing, and a video call waited 16 s for the camera before it rang.
+     */
+    static boolean ownBoxUp(final boolean audioCall, final boolean cameraOpened, final boolean cameraOpening)
+    {
+        return !audioCall && (cameraOpened || cameraOpening);
+    }
+
     /** R9: the tile of an audio call, dp. */
     static int avatarDp(final int smallestScreenWidthDp)
     {

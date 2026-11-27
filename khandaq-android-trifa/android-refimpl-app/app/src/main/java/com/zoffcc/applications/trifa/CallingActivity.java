@@ -94,7 +94,6 @@ import static com.zoffcc.applications.nativeaudio.NativeAudio.na_set_call_playba
 import static com.zoffcc.applications.nativeaudio.NativeAudio.set_aec_active;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.set_gainprocessing_active;
 import static com.zoffcc.applications.nativeaudio.NativeAudio.set_rnnoise_active;
-import static com.zoffcc.applications.nativeaudio.NativeAudio.set_rec_preset;
 import static com.zoffcc.applications.trifa.CameraWrapper.camera_preview_call_back_ts_first_frame;
 import static com.zoffcc.applications.trifa.CameraWrapper.getRotation;
 import static com.zoffcc.applications.trifa.CustomVideoImageView.video_output_orentation_update;
@@ -435,6 +434,11 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
         {
             setShowWhenLocked(true);
             setTurnScreenOn(true);
+            // KHANDAQ (calls, 27.11): the screen stays on through the call, as below 27, where the flag went in with
+            // the others. Only the buttons kept it on here, so with them away (picture in picture) the screen could
+            // go off and send the app to the background, where Android silences the microphone of an app that runs
+            // no microphone service. The proximity sensor still turns it off at the ear.
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             KeyguardManager keyguardManager = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
             if (keyguardManager != null)
             {
@@ -2130,6 +2134,13 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     return;
                 }
 
+                // KHANDAQ (calls, 27.11): the box is up before the camera opens (AirCallStage.ownBoxUp), or its
+                // TextureView is never drawn and never makes the texture the camera waits for.
+                if ((video_box_self_preview_01 != null) && (video_box_self_preview_01.getVisibility() != View.VISIBLE))
+                {
+                    video_box_self_preview_01.setVisibility(View.VISIBLE);
+                }
+
                 // KHANDAQ (calls stage, 26.11): the preview goes into a TextureView; it is ready once its
                 // texture is (onSurfaceTextureAvailable calls onCameraSurfaceReady).
                 if (cameraSurfacePreview.getPreviewTexture() == null)
@@ -2236,6 +2247,10 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             {
                 value1 = (int) (value1 * 1.5);
             }
+
+            // KHANDAQ (calls, 27.11): the network's ceiling holds the encoder too, not only the rate a call starts
+            // at; toxav climbed to the quality's top (4500 kbit/s) on a mobile link as well.
+            value1 = Math.max(value2, HelperGeneric.applyNetworkVideoBitrateCap(context_s, value1));
 
             int res = toxav_option_set(tox_friend_by_public_key__wrapper(Callstate.friend_pubkey),
                                        ToxVars.TOXAV_OPTIONS_OPTION.TOXAV_ENCODER_VIDEO_MAX_BITRATE.value, value1);
@@ -2706,30 +2721,9 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
     {
         super.onPause();
 
-        try
-        {
-            set_rec_preset(true);
-        }
-        catch (Exception ignored)
-        {
-        }
-
-        if ((Callstate.state != 0) || (Callstate.audio_group_active) || (Callstate.audio_ngc_group_active))
-        {
-            if (Callstate.audio_group_active)
-            {
-
-            }
-            else if (Callstate.audio_ngc_group_active)
-            {
-
-            }
-            else
-            {
-                HelperGeneric.logI(TAG, "restart_audio_system__normal_call:005:preset_TRUE");
-                HelperGeneric.restart_audio_system();
-            }
-        }
+        // KHANDAQ (calls, 27.11): the audio is no longer started again here. It was, to record with the speaker's
+        // preset once the screen was left; a call records with one preset now on every route (native-audio-jni), so
+        // the restart changed nothing but broke the sound each time the screen went (picture in picture, the lock).
 
         sensor_manager.unregisterListener(this);
 
@@ -3133,7 +3127,10 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
             set_aec_active(1);
             set_rnnoise_active(1);
             na_set_audio_play_volume_percent(PREF__audio_play_volume_percent);
-            na_set_call_playback_gain(speaker ? 3 : 2);
+            // KHANDAQ (calls, 27.11): no boost on the speaker, which plays at its full volume. Tripled, the voice
+            // was clipped, and a clipped voice is an echo the canceller cannot take out: it came back to the other
+            // side. The earpiece keeps its double.
+            na_set_call_playback_gain(speaker ? 1 : 2);
             if (audio_manager_s != null)
             {
                 applyCallStreamVolume(audio_manager_s, speaker);
@@ -3687,7 +3684,8 @@ public class CallingActivity extends AppCompatActivity implements CameraWrapper.
                     // An audio call marks the camera "opened" without opening it (scheduleCameraOpen), so
                     // that flag alone still showed the empty frame there.
                     CallingActivity.video_box_self_preview_01.setVisibility(
-                            Callstate.camera_opened && !Callstate.audio_call ? View.VISIBLE : View.GONE);
+                            AirCallStage.ownBoxUp(Callstate.audio_call, Callstate.camera_opened, pendingCameraOpen)
+                            ? View.VISIBLE : View.GONE);
                     CallingActivity.video_box_left_top_01.setVisibility(View.VISIBLE);
                     // KHANDAQ (modern call screen): keep the debug bitrate/fps stats box hidden.
                     // CallingActivity.video_box_right_top_01.setVisibility(View.VISIBLE);

@@ -5,9 +5,9 @@
 #import "OCTSubmanagerCallsImpl.h"
 #import "OCTLogging.h"
 #import "OCTTox.h"
+#import "OCTVideoBitRateAdapter.h"
 
 const OCTToxAVAudioBitRate kDefaultAudioBitRate = OCTToxAVAudioBitRate48;
-const OCTToxAVVideoBitRate kDefaultVideoBitRate = 4000;
 
 @interface OCTSubmanagerCallsImpl () <OCTToxAVDelegate>
 
@@ -16,6 +16,12 @@ const OCTToxAVVideoBitRate kDefaultVideoBitRate = 4000;
 @property (strong, nonatomic) OCTVideoEngine *videoEngine;
 @property (strong, nonatomic) OCTCallTimer *timer;
 @property (nonatomic, assign) dispatch_once_t setupOnceToken;
+
+/// KHANDAQ (calls, 27.11): the rate the video is sent at, as the network lets it through, and the second's tick
+/// that lets it climb; the tick runs only while the video is sent.
+@property (strong, nonatomic) OCTVideoBitRateAdapter *videoBitRateAdapter;
+@property (strong, nonatomic) dispatch_source_t videoBitRateTimer;
+@property (nonatomic, assign) OCTToxFriendNumber videoBitRateFriendNumber;
 
 @end
 
@@ -33,6 +39,8 @@ const OCTToxAVVideoBitRate kDefaultVideoBitRate = 4000;
     if (! self) {
         return nil;
     }
+
+    _videoBitRateAdapter = [OCTVideoBitRateAdapter adapterForCalls];
 
     _toxAV = [[OCTToxAV alloc] initWithTox:tox error:nil];
     _toxAV.delegate = self;
@@ -70,7 +78,7 @@ const OCTToxAVVideoBitRate kDefaultVideoBitRate = 4000;
 - (OCTCall *)callToChat:(OCTChat *)chat enableAudio:(BOOL)enableAudio enableVideo:(BOOL)enableVideo error:(NSError **)error
 {
     OCTToxAVAudioBitRate audioBitRate = (enableAudio) ? kDefaultAudioBitRate : OCTToxAVAudioBitRateDisabled;
-    OCTToxAVVideoBitRate videoBitRate = (enableVideo) ? kDefaultVideoBitRate : kOCTToxAVVideoBitRateDisable;
+    OCTToxAVVideoBitRate videoBitRate = (enableVideo) ? self.videoBitRateAdapter.startBitRate : kOCTToxAVVideoBitRateDisable;
 
 
     if (chat.friends.count == 1) {
@@ -107,7 +115,7 @@ const OCTToxAVVideoBitRate kDefaultVideoBitRate = 4000;
 
 - (BOOL)enableVideoSending:(BOOL)enable forCall:(OCTCall *)call error:(NSError **)error
 {
-    OCTToxAVVideoBitRate bitrate = (enable) ? kDefaultVideoBitRate : kOCTToxAVVideoBitRateDisable;
+    OCTToxAVVideoBitRate bitrate = (enable) ? self.videoBitRateAdapter.startBitRate : kOCTToxAVVideoBitRateDisable;
     if (! [self setVideoBitrate:bitrate forCall:call error:error]) {
         return NO;
     }
@@ -116,8 +124,10 @@ const OCTToxAVVideoBitRate kDefaultVideoBitRate = 4000;
         OCTFriend *friend = [call.chat.friends firstObject];
         self.videoEngine.friendNumber = friend.friendNumber;
         [self.videoEngine startSendingVideo];
+        [self startVideoBitRateAdaptationForFriend:friend.friendNumber];
     }
     else {
+        [self stopVideoBitRateAdaptation];
         [self.videoEngine stopSendingVideo];
     }
 
@@ -132,7 +142,7 @@ const OCTToxAVVideoBitRate kDefaultVideoBitRate = 4000;
 - (BOOL)answerCall:(OCTCall *)call enableAudio:(BOOL)enableAudio enableVideo:(BOOL)enableVideo error:(NSError **)error
 {
     OCTToxAVAudioBitRate audioBitRate = (enableAudio) ? kDefaultAudioBitRate : OCTToxAVAudioBitRateDisabled;
-    OCTToxAVVideoBitRate videoBitRate = (enableVideo) ? kDefaultVideoBitRate : kOCTToxAVVideoBitRateDisable;
+    OCTToxAVVideoBitRate videoBitRate = (enableVideo) ? self.videoBitRateAdapter.startBitRate : kOCTToxAVVideoBitRateDisable;
 
     if (call.chat.friends.count == 1) {
 
@@ -450,15 +460,71 @@ const OCTToxAVVideoBitRate kDefaultVideoBitRate = 4000;
 
         if (call.videoIsEnabled) {
             [self.videoEngine startSendingVideo];
+            [self startVideoBitRateAdaptationForFriend:friend.friendNumber];
         }
 
         [self.timer startTimerForCall:call];
     }
     else {
         self.callKitAudioSessionIsActive = NO;
+        [self stopVideoBitRateAdaptation];
         [self.audioEngine stopAudioFlow:nil];
         [self.videoEngine stopSendingVideo];
         [self.timer stopTimer];
+    }
+}
+
+#pragma mark Video bit rate
+
+/// The clock of the video bit rate: monotonic, in seconds.
+- (NSTimeInterval)videoBitRateClock
+{
+    return [NSProcessInfo processInfo].systemUptime;
+}
+
+- (void)startVideoBitRateAdaptationForFriend:(OCTToxFriendNumber)friendNumber
+{
+    [self stopVideoBitRateAdaptation];
+
+    self.videoBitRateFriendNumber = friendNumber;
+    [self.videoBitRateAdapter restartAt:[self videoBitRateClock]];
+    [self applyAdaptedVideoBitRate];
+
+    dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+    if (! timer) {
+        return;
+    }
+    dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, (int64_t)NSEC_PER_SEC), NSEC_PER_SEC, NSEC_PER_SEC / 10);
+
+    __weak OCTSubmanagerCallsImpl *weakSelf = self;
+    dispatch_source_set_event_handler(timer, ^{
+        OCTSubmanagerCallsImpl *strongSelf = weakSelf;
+        if (strongSelf && [strongSelf.videoBitRateAdapter tickAt:[strongSelf videoBitRateClock]]) {
+            [strongSelf applyAdaptedVideoBitRate];
+        }
+    });
+    self.videoBitRateTimer = timer;
+    dispatch_resume(timer);
+}
+
+- (void)stopVideoBitRateAdaptation
+{
+    if (self.videoBitRateTimer) {
+        dispatch_source_cancel(self.videoBitRateTimer);
+        self.videoBitRateTimer = nil;
+    }
+}
+
+- (void)applyAdaptedVideoBitRate
+{
+    NSError *error;
+    const OCTToxAVVideoBitRate bitRate = self.videoBitRateAdapter.bitRate;
+
+    if ([self.toxAV setVideoBitRate:bitRate force:NO forFriend:self.videoBitRateFriendNumber error:&error]) {
+        OCTLogInfo(@"video bit rate %d kbit/s for friend %d", bitRate, self.videoBitRateFriendNumber);
+    }
+    else {
+        OCTLogInfo(@"video bit rate %d kbit/s for friend %d not set: %@", bitRate, self.videoBitRateFriendNumber, error);
     }
 }
 
@@ -500,6 +566,10 @@ const OCTToxAVVideoBitRate kDefaultVideoBitRate = 4000;
 
         if ((self.videoEngine.friendNumber == friendNumber) && [self.videoEngine isSendingVideo]) {
             [self.videoEngine stopSendingVideo];
+        }
+
+        if (self.videoBitRateFriendNumber == friendNumber) {
+            [self stopVideoBitRateAdaptation];
         }
 
         return;
@@ -546,9 +616,18 @@ const OCTToxAVVideoBitRate kDefaultVideoBitRate = 4000;
     // TODO https://github.com/Antidote-for-Tox/objcTox/issues/88
 }
 
-- (void)toxAV:(OCTToxAV *)toxAV videoBitRateStatus:(OCTToxAVVideoBitRate)audioBitRate forFriendNumber:(OCTToxFriendNumber)friendNumber
+- (void)toxAV:(OCTToxAV *)toxAV videoBitRateStatus:(OCTToxAVVideoBitRate)videoBitRate forFriendNumber:(OCTToxFriendNumber)friendNumber
 {
-    // TODO https://github.com/Antidote-for-Tox/objcTox/issues/88
+    // KHANDAQ (calls, 27.11): toxav suggests a lower rate when the other side reports a tenth or more of the call
+    // lost; the video goes there. The suggestion comes through the main queue, so it may come after the video was
+    // turned off: a rate set then would turn the video back on, so it counts only while the video is sent.
+    if ((self.videoBitRateTimer == nil) || (friendNumber != self.videoBitRateFriendNumber)) {
+        return;
+    }
+
+    if ([self.videoBitRateAdapter takeLossSuggestion:videoBitRate at:[self videoBitRateClock]]) {
+        [self applyAdaptedVideoBitRate];
+    }
 }
 
 - (void)                 toxAV:(OCTToxAV *)toxAV

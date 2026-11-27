@@ -326,6 +326,7 @@
 		KQLEAVE00000000000000001 /* GroupLeaveNoticeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQLEAVE00000000000000002 /* GroupLeaveNoticeTests.swift */; };
 		KQPLEAVE0000000000000001 /* GroupPendingLeaveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQPLEAVE0000000000000002 /* GroupPendingLeaveTests.swift */; };
 		KQSELFNM0000000000000001 /* GroupSelfNameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQSELFNM0000000000000002 /* GroupSelfNameTests.swift */; };
+		KQGRPSAV0000000000000001 /* GroupStateSaveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQGRPSAV0000000000000002 /* GroupStateSaveTests.swift */; };
 		KQTOMB000000000000000001 /* GroupMessageTombstoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = KQTOMB000000000000000002 /* GroupMessageTombstoneTests.swift */; };
 		B3C344111661920000000003 /* AirRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C344111661920000000002 /* AirRequestTests.swift */; };
 		C2611260FB0000000000A006 /* GroupContactsMentionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2611260FB0000000000A005 /* GroupContactsMentionsTests.swift */; };
@@ -864,6 +865,7 @@
 		KQLEAVE00000000000000002 /* GroupLeaveNoticeTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupLeaveNoticeTests.swift; sourceTree = "<group>"; };
 		KQPLEAVE0000000000000002 /* GroupPendingLeaveTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupPendingLeaveTests.swift; sourceTree = "<group>"; };
 		KQSELFNM0000000000000002 /* GroupSelfNameTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupSelfNameTests.swift; sourceTree = "<group>"; };
+		KQGRPSAV0000000000000002 /* GroupStateSaveTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupStateSaveTests.swift; sourceTree = "<group>"; };
 		KQTOMB000000000000000002 /* GroupMessageTombstoneTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupMessageTombstoneTests.swift; sourceTree = "<group>"; };
 		B3C344111661920000000002 /* AirRequestTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AirRequestTests.swift; sourceTree = "<group>"; };
 		C2611260FB0000000000A005 /* GroupContactsMentionsTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GroupContactsMentionsTests.swift; sourceTree = "<group>"; };
@@ -1070,6 +1072,7 @@
 				KQLEAVE00000000000000002 /* GroupLeaveNoticeTests.swift */,
 				KQPLEAVE0000000000000002 /* GroupPendingLeaveTests.swift */,
 				KQSELFNM0000000000000002 /* GroupSelfNameTests.swift */,
+				KQGRPSAV0000000000000002 /* GroupStateSaveTests.swift */,
 				KQTOMB000000000000000002 /* GroupMessageTombstoneTests.swift */,
 				B3C344111661920000000002 /* AirRequestTests.swift */,
 				C2611260FB0000000000A005 /* GroupContactsMentionsTests.swift */,
@@ -2436,6 +2439,7 @@
 				KQLEAVE00000000000000001 /* GroupLeaveNoticeTests.swift in Sources */,
 				KQPLEAVE0000000000000001 /* GroupPendingLeaveTests.swift in Sources */,
 				KQSELFNM0000000000000001 /* GroupSelfNameTests.swift in Sources */,
+				KQGRPSAV0000000000000001 /* GroupStateSaveTests.swift in Sources */,
 				KQTOMB000000000000000001 /* GroupMessageTombstoneTests.swift in Sources */,
 				B3C344111661920000000003 /* AirRequestTests.swift in Sources */,
 				C2611260FB0000000000A006 /* GroupContactsMentionsTests.swift in Sources */,

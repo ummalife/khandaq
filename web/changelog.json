@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27T11:10:25Z",
+  "generated_at": "2026-11-27T15:27:37Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,66 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.73",
+      "date": "2026-11-27",
+      "title": "Calls without echo, and video that holds on a mobile link",
+      "summary": "Calls: on Android the phone's own echo cancelling now runs on every call and the other side sees your camera again in a video call, and on Android and iPhone the video of a call follows what a mobile link carries instead of breaking into blocks. On Android a chat with a very long message opens without freezing. A group's name that members can change is called its name on every platform, and the desktop shows it as the group's title. The iPhone app gets TestFlight build 143014 (1.4.34); the desktop gets 0.2.73.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "Calls: echo cancelling on Android",
+          "description": "Testers heard themselves come back several times in a call. Android recorded calls in a low latency mode that turns the phone's own echo cancelling and noise suppression off, and pushed the microphone and the loudspeaker into clipping, an echo no canceller can take out. A call now records for voice communication on every route with the phone's processing on, without the extra gain on the microphone and the loudspeaker.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Android: the other side sees you in a video call",
+          "description": "Since 0.2.70 the camera of a video call on Android never opened: its preview could start only once drawn, in a box that stayed hidden until the camera had opened. The box now shows from the start, the other side sees you, and an outgoing video call no longer waits 16 seconds before it rings.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Video that holds on a mobile link",
+          "description": "The iPhone app asked its video encoder for a thousand times the rate it meant, so its video came out at the encoder's worst quality on every call; it now starts at 600 kbit/s and follows what the link lets through, between 150 and 1200. Android held its video at 1500 kbit/s at least at the default quality and let it climb to 2500 on a mobile network; it now goes down to 250 when the link loses and tops out at 1000 on mobile.",
+          "platforms": [
+            "android",
+            "ios"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "Android: a chat with a very long message opens without freezing",
+          "description": "Android said that Khandaq was not responding in a chat with a long piece of code, as a tester found. The app looked for emoji in all of a long text, several times for each message and once for each typed character, and laid it out anew each time. It now looks only where emoji can be, sets a message's text once, and no longer lays out a long draft again for each key.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Android: the screen stays on through a call",
+          "description": "On Android 8.1 and later only the call buttons kept the screen on, so with them hidden, in picture in picture, the screen could go off in the middle of a call. The call screen now keeps it on, as on older Android, and leaving the call screen no longer restarts the sound.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "A group has one name",
+          "description": "A group's settings called the name that members can change its topic, so it read as a second name, as a tester wrote. On Android, iPhone and the desktop the settings now call it the group's name and show the name the group goes by. On the desktop that name is now the group's title, as on the phones: the name a group was created with no longer covers a rename. Rename is offered only where your role may change the name, and a refused rename says so and keeps the name.",
+          "platforms": [
+            "android",
+            "ios",
+            "desktop"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.72",
       "date": "2026-11-27",

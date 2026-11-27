@@ -1,0 +1,4 @@
+{
+  "en-US": "Calls: the phone's own echo cancelling now works in every call, the other side sees your camera again in a video call, the screen stays on through a call, and video adapts to a weak mobile network instead of breaking into blocks. A chat with a very long message opens without freezing, and typing a long text is fast again. In a group's settings the name members can change is now called the group's name.",
+  "ru-RU": "Звонки: в каждом звонке теперь работает эхоподавление самого телефона, собеседник снова видит вашу камеру в видеозвонке, экран не гаснет во время звонка, а видео подстраивается под слабую мобильную сеть вместо квадратов. Чат с очень длинным сообщением открывается без зависания, а набор длинного текста снова быстрый. В настройках группы изменяемое название теперь называется «Название группы»."
+}

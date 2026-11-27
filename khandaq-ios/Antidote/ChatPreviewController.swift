@@ -4,6 +4,37 @@
 
 import UIKit
 
+/// KHANDAQ (inbox #24, 27.11): one entry of the preview of a conversation. In a group another member's entries carry
+/// the author over the first entry of their run and the member's tile beside its last, as the conversation has them:
+/// without them the preview of a group read as the talk of two. A notice of the group stands in the middle.
+struct ChatPreviewEntry {
+    enum Side {
+        case outgoing
+        case incoming
+        case notice
+    }
+
+    let text: String
+    let side: Side
+    /// The author written over the entry; only the first entry of another member's run in a group has one.
+    let author: String?
+    let authorColor: UIColor?
+    /// The tile of another member's entry in a group, nil elsewhere. Every entry of the run keeps its column, and
+    /// only the last shows the tile (showsTile).
+    let tile: AirTileView.Style?
+    let showsTile: Bool
+
+    init(text: String, side: Side, author: String? = nil, authorColor: UIColor? = nil,
+         tile: AirTileView.Style? = nil, showsTile: Bool = false) {
+        self.text = text
+        self.side = side
+        self.author = author
+        self.authorColor = authorColor
+        self.tile = tile
+        self.showsTile = showsTile
+    }
+}
+
 /// KHANDAQ (#13): a lightweight, READ-ONLY preview of a conversation, shown as the peek/context-menu
 /// preview when long-pressing a chat row in the list. It is deliberately self-contained — it reads
 /// only the OCTChat + its recent messages and renders them as simple bubbles. Unlike the live
@@ -19,16 +50,19 @@ final class ChatPreviewController: UIViewController {
 
     private let theme: Theme
     private let titleText: String
-    private let avatar: UIImage?
-    private let messages: [OCTMessageAbstract]
+    private let tile: AirTileView.Style
+    private let photo: UIImage?
+    private let entries: [ChatPreviewEntry]
 
     private let tableView = UITableView(frame: .zero, style: .plain)
 
-    init(theme: Theme, title: String, avatar: UIImage?, messages: [OCTMessageAbstract]) {
+    /// tile and photo are those of the chat's row in the list (ChatListContent.tileStyle).
+    init(theme: Theme, title: String, tile: AirTileView.Style, photo: UIImage?, entries: [ChatPreviewEntry]) {
         self.theme = theme
         self.titleText = title
-        self.avatar = avatar
-        self.messages = messages
+        self.tile = tile
+        self.photo = photo
+        self.entries = entries
 
         super.init(nibName: nil, bundle: nil)
 
@@ -77,10 +111,10 @@ final class ChatPreviewController: UIViewController {
     }
 
     private func scrollToBottom() {
-        guard messages.count > 0 else {
+        guard entries.count > 0 else {
             return
         }
-        let lastRow = IndexPath(row: messages.count - 1, section: 0)
+        let lastRow = IndexPath(row: entries.count - 1, section: 0)
         tableView.scrollToRow(at: lastRow, at: .bottom, animated: false)
     }
 
@@ -88,12 +122,10 @@ final class ChatPreviewController: UIViewController {
         let container = UIView()
         container.backgroundColor = theme.colorForType(.NormalBackground)
 
-        let avatarView = UIImageView(image: avatar)
-        avatarView.translatesAutoresizingMaskIntoConstraints = false
-        avatarView.contentMode = .scaleAspectFill
-        avatarView.clipsToBounds = true
-        avatarView.layer.cornerRadius = Constants.avatarSize / 2.0
-        container.addSubview(avatarView)
+        let tileView = AirTileView(side: Constants.avatarSize)
+        tileView.translatesAutoresizingMaskIntoConstraints = false
+        tileView.configure(style: tile, photo: photo)
+        container.addSubview(tileView)
 
         let titleLabel = UILabel()
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -108,12 +140,12 @@ final class ChatPreviewController: UIViewController {
         container.addSubview(separator)
 
         NSLayoutConstraint.activate([
-            avatarView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12.0),
-            avatarView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            avatarView.widthAnchor.constraint(equalToConstant: Constants.avatarSize),
-            avatarView.heightAnchor.constraint(equalToConstant: Constants.avatarSize),
+            tileView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12.0),
+            tileView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            tileView.widthAnchor.constraint(equalToConstant: Constants.avatarSize),
+            tileView.heightAnchor.constraint(equalToConstant: Constants.avatarSize),
 
-            titleLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: 10.0),
+            titleLabel.leadingAnchor.constraint(equalTo: tileView.trailingAnchor, constant: 10.0),
             titleLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12.0),
             titleLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor),
 
@@ -125,8 +157,60 @@ final class ChatPreviewController: UIViewController {
 
         return container
     }
+}
 
-    fileprivate func text(for message: OCTMessageAbstract) -> String {
+extension ChatPreviewController {
+    /// The entries of messages, in their order: in a group with what its conversation writes over another member's
+    /// entries and the tiles beside them, by the same names, tones and runs.
+    static func entries(of messages: [OCTMessageAbstract], in chat: OCTChat, groups: OCTSubmanagerGroups) -> [ChatPreviewEntry] {
+        guard chat.isGroup else {
+            return messages.map { ChatPreviewEntry(text: text(for: $0), side: $0.isOutgoing() ? .outgoing : .incoming) }
+        }
+
+        let runs = messages.map {
+            AirGroupTranscript.runKey(of: $0, in: chat, groups: groups, isText: $0.messageText != nil && !$0.groupSystemMessage)
+        }
+        return messages.indices.map { index -> ChatPreviewEntry in
+            let message = messages[index]
+            if message.groupSystemMessage {
+                return ChatPreviewEntry(text: text(for: message), side: .notice)
+            }
+            if message.isOutgoing() {
+                return ChatPreviewEntry(text: text(for: message), side: .outgoing)
+            }
+            let author = groupAuthor(of: message, in: chat, groups: groups)
+            let previous = index > 0 ? runs[index - 1] : nil
+            let next = index + 1 < runs.count ? runs[index + 1] : nil
+            let startsRun = AirTranscript.startsRun(runs[index], after: previous)
+            return ChatPreviewEntry(text: text(for: message),
+                                    side: .incoming,
+                                    author: startsRun ? author.name : nil,
+                                    authorColor: startsRun ? author.color : nil,
+                                    tile: author.tile,
+                                    showsTile: AirTranscript.endsRun(runs[index], before: next))
+        }
+    }
+
+    /// Who wrote another member's entry, as the conversation names them (ChatGroupController.configureGroupEntry)
+    /// without the role, which the preview has no members for: their name in their tone, the plain tile for an
+    /// author nobody confirmed or nobody can name.
+    private static func groupAuthor(of message: OCTMessageAbstract,
+                                    in chat: OCTChat,
+                                    groups: OCTSubmanagerGroups) -> (name: String, color: UIColor, tile: AirTileView.Style) {
+        guard groups.isGroupMessageAttributable(message, in: chat) else {
+            return (String(localized: "air_group_author_unconfirmed"), KQColor.ink2, .unconfirmed)
+        }
+        let knownName = AirGroupTranscript.peerName(of: message, in: chat, groups: groups)
+        let name = knownName ?? String(localized: "air_group_author_unknown")
+        let tone = AirTone.index(for: AirGroupTranscript.toneKey(of: message, name: name))
+        let unconfirmed = message.groupHistorySync && !groups.isGroupMessageAuthorVerified(message, in: chat)
+        let tile: AirTileView.Style = unconfirmed || knownName == nil
+            ? .unconfirmed
+            : .person(initials: AirInitials.from(name), tone: tone)
+        return (name, AirTone.color(at: tone), tile)
+    }
+
+    static func text(for message: OCTMessageAbstract) -> String {
         if let messageText = message.messageText {
             // KHANDAQ (#109): clean visible body in the peek bubbles, not the reply/mention wire markup.
             return MessageReplyHelper.plainBody(for: message) ?? messageText.text ?? ""
@@ -146,13 +230,12 @@ final class ChatPreviewController: UIViewController {
 
 extension ChatPreviewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return messages.count
+        return entries.count
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: BubbleCell.reuseId, for: indexPath) as! BubbleCell
-        let message = messages[indexPath.row]
-        cell.configure(text: text(for: message), outgoing: message.isOutgoing(), theme: theme)
+        cell.configure(entry: entries[indexPath.row], theme: theme)
         return cell
     }
 }
@@ -161,10 +244,20 @@ extension ChatPreviewController: UITableViewDataSource {
 private final class BubbleCell: UITableViewCell {
     static let reuseId = "ChatPreviewBubbleCell"
 
+    private struct Constants {
+        static let margin: CGFloat = 12.0
+        static let tileSide: CGFloat = 28.0
+        static let tileGap: CGFloat = 6.0
+    }
+
     private let bubble = UIView()
+    private let authorLabel = UILabel()
     private let label = UILabel()
-    private var leadingConstraint: NSLayoutConstraint?
+    private let tileView = AirTileView(side: Constants.tileSide)
+    private var leadingToMargin: NSLayoutConstraint?
+    private var leadingToTile: NSLayoutConstraint?
     private var trailingConstraint: NSLayoutConstraint?
+    private var centerConstraint: NSLayoutConstraint?
 
     override init(style: UITableViewCellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -173,30 +266,48 @@ private final class BubbleCell: UITableViewCell {
         backgroundColor = .clear
         contentView.backgroundColor = .clear
 
+        tileView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(tileView)
+
         bubble.translatesAutoresizingMaskIntoConstraints = false
         bubble.layer.cornerRadius = 12.0
         bubble.layer.masksToBounds = true
         contentView.addSubview(bubble)
 
-        label.translatesAutoresizingMaskIntoConstraints = false
+        authorLabel.font = KQFont.font(.label, weight: 600)
+        authorLabel.numberOfLines = 1
         label.numberOfLines = 0
-        label.font = UIFont.systemFont(ofSize: 15.0)
-        bubble.addSubview(label)
 
-        let leading = bubble.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12.0)
-        let trailing = bubble.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12.0)
-        leadingConstraint = leading
-        trailingConstraint = trailing
+        let stack = UIStackView(arrangedSubviews: [authorLabel, label])
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.axis = .vertical
+        stack.spacing = 2.0
+        bubble.addSubview(stack)
+
+        leadingToMargin = bubble.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Constants.margin)
+        leadingToTile = bubble.leadingAnchor.constraint(equalTo: tileView.trailingAnchor, constant: Constants.tileGap)
+        trailingConstraint = bubble.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Constants.margin)
+        centerConstraint = bubble.centerXAnchor.constraint(equalTo: contentView.centerXAnchor)
+
+        // The tile stands at the foot of the bubble, as at the last entry of a run in the conversation, and the row
+        // is never lower than the tile.
+        let tileTop = tileView.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 4.0)
 
         NSLayoutConstraint.activate([
+            tileView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Constants.margin),
+            tileView.bottomAnchor.constraint(equalTo: bubble.bottomAnchor),
+            tileView.widthAnchor.constraint(equalToConstant: Constants.tileSide),
+            tileView.heightAnchor.constraint(equalToConstant: Constants.tileSide),
+            tileTop,
+
             bubble.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4.0),
             bubble.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -4.0),
             bubble.widthAnchor.constraint(lessThanOrEqualTo: contentView.widthAnchor, multiplier: 0.78),
 
-            label.topAnchor.constraint(equalTo: bubble.topAnchor, constant: 7.0),
-            label.bottomAnchor.constraint(equalTo: bubble.bottomAnchor, constant: -7.0),
-            label.leadingAnchor.constraint(equalTo: bubble.leadingAnchor, constant: 10.0),
-            label.trailingAnchor.constraint(equalTo: bubble.trailingAnchor, constant: -10.0),
+            stack.topAnchor.constraint(equalTo: bubble.topAnchor, constant: 7.0),
+            stack.bottomAnchor.constraint(equalTo: bubble.bottomAnchor, constant: -7.0),
+            stack.leadingAnchor.constraint(equalTo: bubble.leadingAnchor, constant: 10.0),
+            stack.trailingAnchor.constraint(equalTo: bubble.trailingAnchor, constant: -10.0),
         ])
     }
 
@@ -204,25 +315,51 @@ private final class BubbleCell: UITableViewCell {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func configure(text: String, outgoing: Bool, theme: Theme) {
-        label.text = text
+    func configure(entry: ChatPreviewEntry, theme: Theme) {
+        label.text = entry.text
+        authorLabel.text = entry.author
+        authorLabel.textColor = entry.authorColor
+        authorLabel.isHidden = entry.author == nil
 
-        if outgoing {
-            bubble.backgroundColor = theme.colorForType(.LinkText)
-            label.textColor = theme.colorForType(.NormalBackground)
-            leadingConstraint?.isActive = false
-            trailingConstraint?.isActive = true
+        if let style = entry.tile {
+            tileView.configure(style: style, photo: nil)
+            tileView.isHidden = !entry.showsTile
         }
         else {
-            bubble.backgroundColor = theme.colorForType(.SeparatorsAndBorders)
-            label.textColor = theme.colorForType(.NormalText)
-            trailingConstraint?.isActive = false
-            leadingConstraint?.isActive = true
+            tileView.isHidden = true
+        }
+
+        // Every alignment constraint off first, so that none of them ever pulls against another.
+        leadingToMargin?.isActive = false
+        leadingToTile?.isActive = false
+        trailingConstraint?.isActive = false
+        centerConstraint?.isActive = false
+
+        switch entry.side {
+            case .outgoing:
+                bubble.backgroundColor = theme.colorForType(.LinkText)
+                label.textColor = theme.colorForType(.NormalBackground)
+                label.font = UIFont.systemFont(ofSize: 15.0)
+                label.textAlignment = .natural
+                trailingConstraint?.isActive = true
+            case .incoming:
+                bubble.backgroundColor = theme.colorForType(.SeparatorsAndBorders)
+                label.textColor = theme.colorForType(.NormalText)
+                label.font = UIFont.systemFont(ofSize: 15.0)
+                label.textAlignment = .natural
+                (entry.tile == nil ? leadingToMargin : leadingToTile)?.isActive = true
+            case .notice:
+                bubble.backgroundColor = .clear
+                label.textColor = KQColor.ink2
+                label.font = UIFont.systemFont(ofSize: 13.0)
+                label.textAlignment = .center
+                centerConstraint?.isActive = true
         }
     }
 
     override func prepareForReuse() {
         super.prepareForReuse()
         label.text = nil
+        authorLabel.text = nil
     }
 }

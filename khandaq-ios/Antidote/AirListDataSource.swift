@@ -35,7 +35,6 @@ final class AirListDataSource: NSObject {
     private(set) var query = ""
 
     private let theme: Theme
-    private let avatarManager: AvatarManager
     private let timeFormatter = DateFormatter(type: .time)
     private let dateFormatter = DateFormatter(type: .relativeDate)
 
@@ -75,7 +74,6 @@ final class AirListDataSource: NSObject {
          submanagerFriends: OCTSubmanagerFriends) {
         self.theme = theme
         self.tableView = tableView
-        self.avatarManager = AvatarManager(theme: theme)
         self.submanagerChats = submanagerChats
         self.submanagerGroups = submanagerGroups
         self.submanagerObjects = submanagerObjects
@@ -774,18 +772,12 @@ private extension AirListDataSource {
         guard let chat = liveChat(chatId) else {
             return (.person(initials: AirInitials.from(title), tone: AirTone.index(for: chatId)), nil)
         }
-        if chat.isSavedMessages {
-            return (.saved, nil)
-        }
-        if chat.isGroup {
-            if KhandaqCommunity.isCommunity(chat) {
-                return (.community, nil)
-            }
-            return (.group(initials: AirInitials.from(title), tone: AirTone.index(for: chat.uniqueIdentifier)), nil)
+        let style = ChatListContent.tileStyle(for: chat, title: title)
+        if chat.isSavedMessages || chat.isGroup {
+            return (style, nil)
         }
         let friend = chat.friends.lastObject() as? OCTFriend
-        let key: String = friend?.publicKey ?? chat.uniqueIdentifier ?? ""
-        return (.person(initials: AirInitials.from(title), tone: AirTone.index(for: key)), photo(for: chat.uniqueIdentifier, data: friend?.avatarData))
+        return (style, photo(for: chat.uniqueIdentifier, data: friend?.avatarData))
     }
 
     /// Decoded photos, kept while the bytes stay the same.
@@ -1232,7 +1224,7 @@ extension AirListDataSource: UITableViewDelegate {
                 guard let self = self, !chat.isInvalidated else {
                     return nil
                 }
-                return ChatListContent.previewController(for: chat, theme: self.theme, avatarManager: self.avatarManager, submanagerObjects: self.submanagerObjects)
+                return ChatListContent.previewController(for: chat, theme: self.theme, submanagerGroups: self.submanagerGroups, submanagerObjects: self.submanagerObjects)
             }
         }
 

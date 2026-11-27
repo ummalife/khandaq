@@ -1723,31 +1723,11 @@ private extension ChatGroupController {
 extension ChatGroupController {
     func peerName(for message: OCTMessageAbstract) -> String? {
         // KHANDAQ (#42): prefer the name FROZEN on the message at receipt (resolved then by the STABLE
-        // sender pubkey). The live peerId lookup below is unreliable after an app restart (the group
+        // sender pubkey). The live peerId lookup after it is unreliable after an app restart (the group
         // roster has not re-synced yet → the generic "Member N" fallback) and whenever the volatile peerId has
         // since been reused by another peer. That made stored messages change sender/name on relaunch.
         // KHANDAQ (#82): FILE messages freeze their sender name separately (OCTMessageFile.groupPeerName).
-        if let stored = AirGroupTranscript.authorName(of: message) {
-            return stored
-        }
-
-        guard message.groupSenderPeerId > 0 else {
-            return nil
-        }
-
-        if let peers = submanagerGroups.peers(for: chat) {
-            for i in 0..<peers.count {
-                guard let peer = peers[UInt(i)] as? OCTGroupPeer else {
-                    continue
-                }
-
-                if peer.peerId == message.groupSenderPeerId, let name = peer.peerName, !name.isEmpty {
-                    return name
-                }
-            }
-        }
-
-        return String(localized: "group_peer_fallback_format", message.groupSenderPeerId)
+        return AirGroupTranscript.peerName(of: message, in: chat, groups: submanagerGroups)
     }
 }
 

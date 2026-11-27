@@ -169,6 +169,18 @@ enum MessageReplyHelper {
         return String(single.prefix(maxLen - 1)).trimmingCharacters(in: .whitespacesAndNewlines) + "…"
     }
 
+    /// KHANDAQ (owner, 28.11): the quoted words as the screen shows them (the quote over a reply, the bar over the
+    /// field, VoiceOver): a quoted place is named with its coordinates (LocationMessage.caption), not its wire text
+    /// "khandaq-location:…". Only the screen: the header that travels keeps the wire text (encode), so each reader
+    /// names the place in its own language.
+    static func quoteForDisplay(_ text: String?, maxLen: Int) -> String {
+        let shown = previewForDisplay(text, maxLen: maxLen)
+        guard let place = LocationMessage.parse(shown) else {
+            return shown
+        }
+        return LocationMessage.caption(latitude: place.latitude, longitude: place.longitude)
+    }
+
     /// What VoiceOver says of the quote over a reply: "In reply to Amina, the quoted words", as the quote
     /// shows them (ChatReplyQuoteView). Nil when the entry shows no quote. The entry is read as one element,
     /// so without this a reply was read as a message of its own (QA live 0.2.61).
@@ -176,7 +188,7 @@ enum MessageReplyHelper {
         guard let meta = meta else {
             return nil
         }
-        let preview = previewForDisplay(meta.previewText, maxLen: 160)
+        let preview = quoteForDisplay(meta.previewText, maxLen: 160)
         guard !preview.isEmpty else {
             return nil
         }

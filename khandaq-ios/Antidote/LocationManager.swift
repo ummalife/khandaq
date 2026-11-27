@@ -53,12 +53,9 @@ class LocationManager: NSObject {
 private extension LocationManager {
     func setup() {
         manager = CLLocationManager()
-        if #available(iOS 14.0, *) {
-            manager.desiredAccuracy = kCLLocationAccuracyReduced
-        } else {
-            // Fallback on earlier versions
-            manager.desiredAccuracy = kCLLocationAccuracyBest
-        }
+        // KHANDAQ (owner, 28.11): this manager asks for the permission of the location you share, and that location
+        // is the exact one (LocationSharingCoordinator); kCLLocationAccuracyReduced stood here.
+        manager.desiredAccuracy = kCLLocationAccuracyBest
         manager?.delegate = self
         // KHANDAQ (App Review 2.5.4, 2026-09-17): this manager only answers "may the user share a
         // location right now" for the explicit share action and never streams updates.

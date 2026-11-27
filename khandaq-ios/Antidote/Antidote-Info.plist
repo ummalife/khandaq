@@ -97,6 +97,11 @@
 	<string>Khandaq uses Face ID or Touch ID to unlock the app instead of entering your PIN.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Used to share your location with your contacts</string>
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>ShareLocation</key>
+		<string>Khandaq sends the exact place you are in to the chat when you share your location.</string>
+	</dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>You can use audio and video calls, record voice messages and videos.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

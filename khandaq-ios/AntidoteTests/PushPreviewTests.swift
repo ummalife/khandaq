@@ -764,13 +764,32 @@ final class PushPreviewTests: XCTestCase {
         XCTAssertEqual(PushPreviewText.reactionBody(emoji: "👍", reactedKind: .photo, text: nil, language: "zh"), "对你的照片回应了 👍")
     }
 
+    /// KHANDAQ (owner, 28.11): a place is named in a push and a banner, not shown as its wire text
+    /// "khandaq-location:…", and so is a reaction to one.
+    func testAPlaceIsNamedNotShownAsItsWireText() {
+        let place = LocationMessage.payload(latitude: 41.0082, longitude: 28.9784)
+
+        XCTAssertTrue(PushPreviewText.isLocation(place))
+        XCTAssertTrue(PushPreviewText.isLocation("  KHANDAQ-LOCATION:1.00000,2.00000"))
+        XCTAssertFalse(PushPreviewText.isLocation("Meet me at the khandaq-location: gate"))
+        XCTAssertFalse(PushPreviewText.isLocation(nil))
+        XCTAssertEqual(PushPreviewText.messageBody(kind: .text, text: place, language: "en"), "📍 Location")
+        XCTAssertEqual(PushPreviewText.messageBody(kind: .text, text: place, language: "ru"), "📍 Геопозиция")
+        XCTAssertEqual(PushPreviewText.messageBody(kind: .text, text: "See you there", language: "en"), "See you there")
+        XCTAssertEqual(PushPreviewText.reactionBody(emoji: "👍", reactedKind: .text, text: place, language: "en"),
+                       "Reacted 👍 to your location")
+        XCTAssertEqual(PushPreviewText.reactionBody(emoji: "❤️", reactedKind: .text, text: place, language: "ru"),
+                       "Реакция ❤️ на вашу геопозицию")
+    }
+
     func testEveryLanguageHasEveryLine() {
         for language in PushPreviewText.languages {
             let s = PushPreviewText.strings(language)
             for line in [s.newMessage, s.newReaction, s.voice, s.video, s.photo, s.file, s.reactedVoice,
-                         s.reactedVideo, s.reactedPhoto, s.reactedFile, s.reactedMessage] {
+                         s.reactedVideo, s.reactedPhoto, s.reactedFile, s.reactedMessage, s.location] {
                 XCTAssertFalse(line.isEmpty, language)
             }
+            XCTAssertTrue(s.reactedLocation.contains("{e}"), language)
             XCTAssertTrue(s.reactedText.contains("{e}") && s.reactedText.contains("{b}"), language)
             XCTAssertTrue(s.namedFile.contains("{b}"), language)
         }

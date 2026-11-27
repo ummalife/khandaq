@@ -79,6 +79,7 @@ class BubbleView: UIView {
             return textView.text
         }
         set {
+            locationCoordinates = nil
             textView.text = newValue
         }
     }
@@ -88,8 +89,30 @@ class BubbleView: UIView {
             return textView.attributedText
         }
         set {
+            locationCoordinates = nil
             textView.attributedText = newValue
         }
+    }
+
+    /// KHANDAQ (owner, 28.11): the coordinates under a place's map, nil for any other text. They are the map's
+    /// caption, small grey figures, rather than a message of body size; kept here so the font and the colour each
+    /// cell gives the whole text after the base setup style them again instead of wiping that look.
+    private var locationCoordinates: String?
+
+    func showLocationCoordinates(_ coordinates: String) {
+        locationCoordinates = coordinates
+        styleLocationCoordinates()
+    }
+
+    private func styleLocationCoordinates() {
+        guard let coordinates = locationCoordinates else {
+            return
+        }
+        let color = isTranscript ? KQColor.ink3 : (textView.textColor ?? KQColor.ink).withAlphaComponent(0.7)
+        textView.attributedText = NSAttributedString(string: coordinates, attributes: [
+            .font: KQFont.tabular(KQFont.font(.caption)),
+            .foregroundColor: color,
+        ])
     }
 
     var textColor: UIColor {
@@ -98,6 +121,7 @@ class BubbleView: UIView {
         }
         set {
             textView.textColor = newValue
+            styleLocationCoordinates()
             if isTranscript {
                 editedLabel.textColor = KQColor.ink3
                 return
@@ -113,6 +137,7 @@ class BubbleView: UIView {
         }
         set {
             textView.font = newValue
+            styleLocationCoordinates()
         }
     }
 

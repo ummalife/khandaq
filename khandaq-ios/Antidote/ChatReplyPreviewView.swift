@@ -96,7 +96,7 @@ final class ChatReplyPreviewView: UIView {
         headerLabel.text = meta.localSenderName != nil
             ? String(localized: "chat_reply_header_self")
             : String(localized: "chat_reply_header", meta.senderName)
-        previewLabel.text = MessageReplyHelper.previewForDisplay(meta.previewText, maxLen: 120)
+        previewLabel.text = MessageReplyHelper.quoteForDisplay(meta.previewText, maxLen: 120)
         collapsedConstraint?.deactivate()
         isHidden = false
     }

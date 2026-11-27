@@ -624,6 +624,8 @@
 "chat_reply_header_self" = "In reply to yourself";
 "chat_reply_unknown_sender" = "Unknown";
 "chat_reply_deleted" = "Deleted message";
+"chat_location_title" = "Location";
+"chat_location_failed" = "Couldn't determine your location. Try again.";
 "group_messages_select_action" = "Select messages";
 "group_messages_copy_action" = "Copy";
 "network_connections_title" = "Network connections";

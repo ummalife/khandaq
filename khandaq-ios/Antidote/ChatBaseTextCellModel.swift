@@ -12,6 +12,23 @@ struct LocationMessage {
         String(format: "\(prefix)%.5f,%.5f", latitude, longitude)
     }
 
+    /// KHANDAQ (owner, 28.11): what a place sent as a message is called on screen: over its coordinates in the
+    /// conversation, in the quote of a reply to it, in the list of chats and in Maps.
+    static var title: String {
+        String(localized: "chat_location_title")
+    }
+
+    /// The coordinates as every client shows them: five decimals, a point for the decimal mark in any language.
+    static func coordinatesText(latitude: Double, longitude: Double) -> String {
+        String(format: "%.5f, %.5f", latitude, longitude)
+    }
+
+    /// The quote of a reply to a place, and anything else that names one in a line: "Location · 41.00824, 28.97836".
+    /// The header of a reply carries the wire text from every client, and each reader words it in its own language.
+    static func caption(latitude: Double, longitude: Double) -> String {
+        title + " · " + coordinatesText(latitude: latitude, longitude: longitude)
+    }
+
     static func parse(_ text: String) -> (latitude: Double, longitude: Double)? {
         if text.hasPrefix(prefix) {
             let coordinates = String(text.dropFirst(prefix.count))

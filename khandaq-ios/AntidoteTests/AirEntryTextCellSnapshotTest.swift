@@ -78,17 +78,50 @@ class AirEntryTextCellSnapshotTest: CellSnapshotTest {
         verify(groupEntry(text, time: "9:43", showsTile: true))
     }
 
-    /// An entry the history brought without a signature over it: the plain tile, and the note under the text.
-    func testGroupEntryOfAnUnconfirmedAuthorHasThePlainTileAndItsNote() {
+    /// An entry the history brought without a signature over it: the tile of an author nobody confirmed, a question
+    /// mark in a dashed frame (it was an empty square, owner 28.11), and the note under the text.
+    func testGroupEntryOfAnUnconfirmedAuthorHasTheQuestionTileAndItsNote() {
         let model = groupEntry("The gate is open now.", time: "9:44", showsTile: true, style: .unconfirmed)
         model.authorText = "Bilal"
         model.authorColor = AirTone.color(at: 4)
         model.senderUnverified = true
         verify(model)
     }
+
+    /// A place another member sent: its map with the pin on the place, and its coordinates under the map in grey
+    /// caption type, the map's caption (they stood in body type like a message, owner 28.11).
+    func testGroupLocationHasItsPinnedMapAndItsCoordinatesUnderIt() {
+        // A place of its own: a map MapKit makes for a place another test shows would stand in for its map there.
+        let model = groupEntry("39.92077, 32.85411", time: "9:47", showsTile: true)
+        model.authorText = "Bilal"
+        model.authorColor = AirTone.color(at: 4)
+        model.locationLatitude = 39.92077
+        model.locationLongitude = 32.85411
+        let cell = AirEntryTextCell()
+        cell.setupWithTheme(theme, model: model)
+        cell.applyLocationMapSnapshot(pinnedMap(), forKey: ChatBaseTextCell.mapSnapshotKey(latitude: 39.92077, longitude: 32.85411))
+        layoutAsTheLogDoes(cell)
+        verifyView(cell)
+    }
 }
 
 private extension AirEntryTextCellSnapshotTest {
+    /// A stand-in for the snapshot of the map (MapKit draws none here): two streets on a plain ground, the pin on
+    /// its middle as ChatBaseTextCell.makeMapSnapshot draws it on the place.
+    func pinnedMap() -> UIImage {
+        let size = CGSize(width: 260, height: 120)
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 3
+        let ground = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor(red: 0.90, green: 0.91, blue: 0.87, alpha: 1).setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 0, y: 72, width: size.width, height: 9))
+            context.fill(CGRect(x: 152, y: 0, width: 9, height: size.height))
+        }
+        return ChatBaseTextCell.drawPin(on: ground, at: CGPoint(x: size.width / 2, y: size.height / 2))
+    }
+
     func entry(_ text: String, time: String, status: AirEntryStatus = .none) -> AirEntryTextCellModel {
         let model = AirEntryTextCellModel()
         model.message = text

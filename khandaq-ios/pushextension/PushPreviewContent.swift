@@ -282,6 +282,9 @@ enum PushPreviewText {
         let reactedPhoto: String
         let reactedFile: String
         let reactedMessage: String
+        /// KHANDAQ (owner, 28.11): a place sent as a message, and a reaction to one.
+        let location: String
+        let reactedLocation: String
     }
 
     static func strings(_ language: String) -> Strings {
@@ -299,7 +302,9 @@ enum PushPreviewText {
                                reactedVideo: "Реакция {e} на ваше видео",
                                reactedPhoto: "Реакция {e} на ваше фото",
                                reactedFile: "Реакция {e} на ваш файл",
-                               reactedMessage: "Реакция {e} на ваше сообщение")
+                               reactedMessage: "Реакция {e} на ваше сообщение",
+                               location: "📍 Геопозиция",
+                               reactedLocation: "Реакция {e} на вашу геопозицию")
             case "ar":
                 return Strings(newMessage: "رسالة جديدة",
                                newReaction: "تفاعل جديد",
@@ -313,7 +318,9 @@ enum PushPreviewText {
                                reactedVideo: "تفاعل {e} مع الفيديو الخاص بك",
                                reactedPhoto: "تفاعل {e} مع صورتك",
                                reactedFile: "تفاعل {e} مع ملفك",
-                               reactedMessage: "تفاعل {e} مع رسالتك")
+                               reactedMessage: "تفاعل {e} مع رسالتك",
+                               location: "📍 الموقع",
+                               reactedLocation: "تفاعل {e} مع موقعك")
             case "zh":
                 return Strings(newMessage: "新消息",
                                newReaction: "新的表情回应",
@@ -327,7 +334,9 @@ enum PushPreviewText {
                                reactedVideo: "对你的视频回应了 {e}",
                                reactedPhoto: "对你的照片回应了 {e}",
                                reactedFile: "对你的文件回应了 {e}",
-                               reactedMessage: "对你的消息回应了 {e}")
+                               reactedMessage: "对你的消息回应了 {e}",
+                               location: "📍 位置",
+                               reactedLocation: "对你的位置回应了 {e}")
             default:
                 return Strings(newMessage: "New message",
                                newReaction: "New reaction",
@@ -341,7 +350,9 @@ enum PushPreviewText {
                                reactedVideo: "Reacted {e} to your video",
                                reactedPhoto: "Reacted {e} to your photo",
                                reactedFile: "Reacted {e} to your file",
-                               reactedMessage: "Reacted {e} to your message")
+                               reactedMessage: "Reacted {e} to your message",
+                               location: "📍 Location",
+                               reactedLocation: "Reacted {e} to your location")
         }
     }
 
@@ -350,7 +361,8 @@ enum PushPreviewText {
         let s = strings(language)
         switch kind {
             case .text:
-                return text ?? s.newMessage
+                // KHANDAQ (owner, 28.11): a place is named, not shown as its wire text "khandaq-location:…".
+                return isLocation(text) ? s.location : (text ?? s.newMessage)
             case .voice:
                 return s.voice
             case .video:
@@ -369,6 +381,8 @@ enum PushPreviewText {
         let s = strings(language)
         let template: String
         switch reactedKind {
+            case .some(.text) where isLocation(text):
+                template = s.reactedLocation
             case .some(.text) where text != nil:
                 template = s.reactedText
             case .some(.voice):
@@ -411,6 +425,15 @@ enum PushPreviewText {
             body = sender + ": " + body
         }
         return (title, body)
+    }
+
+    /// KHANDAQ (owner, 28.11): whether a text is a place sent as a message: the wire text of every client,
+    /// "khandaq-location:LAT,LON" (LocationMessage in the app, HelperLocationMessage on Android).
+    static func isLocation(_ text: String?) -> Bool {
+        guard let text = text else {
+            return false
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("khandaq-location:")
     }
 
     /// Templates take `{e}` and `{b}` by plain replacement, so a `%` in a message is never a format.

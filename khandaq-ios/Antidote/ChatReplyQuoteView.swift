@@ -80,7 +80,7 @@ final class ChatReplyQuoteView: UIControl {
         // KHANDAQ (inbox #10, 27.11): the quote of a message deleted here says so, not what the message said.
         previewLabel.text = meta.targetDeleted
             ? String(localized: "chat_reply_deleted")
-            : MessageReplyHelper.previewForDisplay(meta.previewText, maxLen: 160)
+            : MessageReplyHelper.quoteForDisplay(meta.previewText, maxLen: 160)
         isHidden = false
     }
 

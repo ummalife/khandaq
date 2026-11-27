@@ -19,4 +19,4 @@
 "NSFaceIDUsageDescription" = "你可以用 Face ID 或触控 ID 解锁 Khandaq，无需输入 PIN 码。";
 
 /* Location usage alert description */
-"NSLocationWhenInUseUsageDescription" = "你可以向联系人发送你的位置。";
+"NSLocationWhenInUseUsageDescription" = "你可以向联系人发送你的位置。";"ShareLocation" = "当你分享位置时，Khandaq 会把你所在的准确位置发送到聊天中。";

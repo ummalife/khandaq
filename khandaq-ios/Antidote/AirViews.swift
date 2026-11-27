@@ -140,7 +140,9 @@ final class AirTileView: UIView {
         /// (owner, 2026-11-18), the same on every device.
         case community
         /// KHANDAQ (tester 21.11, 8255): the author of a group entry nobody confirmed (one the history brought
-        /// without a signature over it): the plain tile, with neither initials nor a tone, so it stands for no member.
+        /// without a signature over it): neither initials nor a tone, so it stands for no member. KHANDAQ (owner,
+        /// 28.11): a question mark in a dashed frame, the frame of what is not settled yet; the empty square read as
+        /// a picture that failed to load.
         case unconfirmed
     }
 
@@ -283,7 +285,12 @@ final class AirTileView: UIView {
             case .saved:
                 icon = "bookmark"
                 iconTint = KQColor.ink
-            case .community, .unconfirmed:
+            case .unconfirmed:
+                borderColor = KQColor.lineStrong
+                dashed = true
+                initials = "?"
+                textColor = KQColor.ink3
+            case .community:
                 break
         }
 

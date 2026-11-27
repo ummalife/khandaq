@@ -642,4 +642,12 @@ extension ChatGroupInputViewManager: LocationSharingChat {
             }
         })
     }
+
+    /// KHANDAQ (owner, 28.11): no fix of where you are came in time, so nothing was sent; said above the field.
+    func locationSharingFailed() {
+        guard let host = presentingViewController?.view else {
+            return
+        }
+        AirToast.show(String(localized: "chat_location_failed"), in: host, above: inputView)
+    }
 }

@@ -625,6 +625,8 @@
 "chat_reply_header_self" = "В ответ себе";
 "chat_reply_unknown_sender" = "Неизвестно";
 "chat_reply_deleted" = "Удалённое сообщение";
+"chat_location_title" = "Геопозиция";
+"chat_location_failed" = "Не удалось определить геопозицию. Попробуйте ещё раз.";
 "group_messages_select_action" = "Выбрать сообщения";
 "group_messages_copy_action" = "Копировать";
 "network_connections_title" = "Сетевые подключения";

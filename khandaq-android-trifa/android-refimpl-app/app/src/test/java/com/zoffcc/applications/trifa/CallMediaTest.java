@@ -1,5 +1,7 @@
 package com.zoffcc.applications.trifa;
 
+import android.content.pm.ServiceInfo;
+
 import org.junit.Test;
 
 import java.io.IOException;
@@ -90,6 +92,32 @@ public class CallMediaTest
         assertTrue(newer > 0 && older > newer);
         assertTrue(onCreate.substring(newer, older).contains("FLAG_KEEP_SCREEN_ON"));
         assertTrue(onCreate.substring(older).contains("FLAG_KEEP_SCREEN_ON"));
+    }
+
+    // ---- the microphone in the background ----
+
+    @Test
+    public void aCallRunsAsAMicrophoneServiceFromAndroid11WhenTheMicrophoneIsAllowed()
+    {
+        final int special = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE;
+        final int microphone = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE;
+        assertEquals(special | microphone, CallAudioService.foregroundServiceTypes(30, true));
+        assertEquals(special | microphone, CallAudioService.foregroundServiceTypes(36, true));
+        // Without the microphone permission Android 14 refuses the microphone type: the service stays what it was.
+        assertEquals(special, CallAudioService.foregroundServiceTypes(36, false));
+        // Android 10 has no microphone type, and gives a foreground service the microphone anyway.
+        assertEquals(special, CallAudioService.foregroundServiceTypes(29, true));
+        assertEquals(0, CallAudioService.foregroundServiceTypes(26, true));
+    }
+
+    @Test
+    public void theManifestDeclaresTheMicrophoneServiceAndItsPermission() throws IOException
+    {
+        final String manifest = read("src/main/AndroidManifest.xml");
+        assertTrue(manifest.contains("android.permission.FOREGROUND_SERVICE_MICROPHONE"));
+        final String service = between(manifest, "android:name=\"com.zoffcc.applications.trifa.CallAudioService\"",
+                                       "</service>");
+        assertTrue(service.contains("android:foregroundServiceType=\"specialUse|microphone\""));
     }
 
     // ---- the video ----

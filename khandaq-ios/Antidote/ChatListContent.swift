@@ -117,9 +117,12 @@ enum ChatListContent {
         // disagrees with the app badge (which counts by lastMessage.dateInterval > lastReadDateInterval),
         // so a chat could show a badge yet no per-row pill. The predicate below already returns 0 for a
         // fully read chat, so the guard only introduced that inconsistency.
-        let predicate = NSPredicate(format: "chatUniqueIdentifier == %@ AND dateInterval > %f",
+        // KHANDAQ (27.11): the moment of the reading as an NSNumber, to the second. With %f NSPredicate takes a float,
+        // which holds today's dates only to 128 s: a message read up to a minute before counted unread, or one that
+        // came up to a minute after the reading did not.
+        let predicate = NSPredicate(format: "chatUniqueIdentifier == %@ AND dateInterval > %@",
                                     chat.uniqueIdentifier,
-                                    chat.lastReadDateInterval)
+                                    NSNumber(value: chat.lastReadDateInterval))
         guard let results = submanagerObjects.objects(for: .messageAbstract, predicate: predicate) else {
             return 0
         }

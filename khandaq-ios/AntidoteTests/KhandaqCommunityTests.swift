@@ -240,6 +240,38 @@ class KhandaqCommunityTests: XCTestCase {
         XCTAssertEqual(objects.chats(predicate: NotificationCoordinator.unreadChatsPredicate).count, 3)
     }
 
+    /// KHANDAQ (27.11): a chat counts what came after it was read, to the second. The count's predicate took the moment
+    /// of the reading as a float (%f), which holds today's dates only to 128 s: a message read up to a minute before
+    /// counted unread, or one that came up to a minute after the reading did not.
+    func testAChatCountsUnreadToTheSecondOfItsReading() throws {
+        let directory = makeDirectory()
+        let realmManagerClass = try appClass("OCTRealmManager", as: OCTRealmManager.Type.self)
+        let realmManager = try XCTUnwrap(realmManagerClass.init(databaseFileURL: directory.appendingPathComponent("profile.realm"),
+                                                                encryptionKey: nil))
+        let objects = OCTSubmanagerObjectsMock(realm: realmManager.realm)
+        let groups = OCTSubmanagerGroupsMock()
+        func chat(readAt lastRead: TimeInterval, messagesAt offsets: [TimeInterval]) throws -> OCTChat {
+            let chat = try appClass("OCTChat", as: OCTChat.Type.self).init()
+            chat.uniqueIdentifier = UUID().uuidString
+            chat.lastReadDateInterval = lastRead
+            realmManager.add(chat)
+            for offset in offsets {
+                let message = try appClass("OCTMessageAbstract", as: OCTMessageAbstract.Type.self).init()
+                message.uniqueIdentifier = UUID().uuidString
+                message.chatUniqueIdentifier = chat.uniqueIdentifier
+                message.senderUniqueIdentifier = UUID().uuidString
+                message.dateInterval = lastRead + offset
+                realmManager.add(message)
+            }
+            return chat
+        }
+        // As a float, 1 764 244 790 is 1 764 244 736 and 1 764 244 860 is 1 764 244 864.
+        let readAboveItsFloat = try chat(readAt: 1_764_244_790, messagesAt: [-30, -1, 1, 30])
+        let readBelowItsFloat = try chat(readAt: 1_764_244_860, messagesAt: [-30, -1, 1, 30])
+        XCTAssertEqual(ChatListContent.unreadCount(for: readAboveItsFloat, submanagerGroups: groups, submanagerObjects: objects), 2)
+        XCTAssertEqual(ChatListContent.unreadCount(for: readBelowItsFloat, submanagerGroups: groups, submanagerObjects: objects), 2)
+    }
+
     /// KHANDAQ (notification parity, 2026-11-20): what the history sync brings from a member who is not in the group at
     /// that moment, gone or offline as the Community's members are all day, has peer id 0 and its author's key alone.
     /// A text or a file of theirs counts unread in its row and on the badges as a message of a member who is there

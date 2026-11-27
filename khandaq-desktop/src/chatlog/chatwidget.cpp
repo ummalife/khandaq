@@ -1181,8 +1181,11 @@ void ChatWidget::handleSearchResult(SearchResult result, SearchDirection directi
         auto msg = (*chatLineStorage)[searchPos.logIdx];
         scrollToLine(msg);
 
+        // KHANDAQ (28.11.2026): a place is a card, not a text: the search brings it into view.
         auto text = qobject_cast<Text*>(msg->getContent(1));
-        text->selectText(result.exp, std::make_pair(result.start, result.len));
+        if (text) {
+            text->selectText(result.exp, std::make_pair(result.start, result.len));
+        }
     };
 
     // If the requested element is visible the render completion callback will
@@ -2238,7 +2241,9 @@ void ChatWidget::disableSearchText()
 
     auto line = (*chatLineStorage)[searchPos.logIdx];
     auto text = qobject_cast<Text*>(line->getContent(1));
-    text->deselectText();
+    if (text) {
+        text->deselectText();
+    }
 }
 
 void ChatWidget::removeSearchPhrase()

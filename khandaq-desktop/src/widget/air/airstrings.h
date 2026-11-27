@@ -21,6 +21,7 @@
 
 #include "src/model/air/airconversation.h"
 #include "src/model/air/airgroup.h"
+#include "src/model/air/airlocation.h"
 #include "src/model/air/airmedia.h"
 #include "src/model/air/airmessagemarks.h"
 #include "src/model/air/airmodel.h"
@@ -902,6 +903,11 @@ enum class Text
     NotifyReactedMessage,
     NotifyVideo,
     NotifyPhoto,
+    // KHANDAQ (28.11.2026): a place sent from a phone (Air::Location), in the transcript and
+    // wherever its words are read.
+    LocationTitle,
+    LocationWords,
+    NotifyReactedLocation,
 };
 
 /** The translation context of every Air string. */
@@ -975,8 +981,32 @@ QString trayHeadText(int count);
  * The words of a message where a person reads them (stage 3, item 10, DESIGN.md "Unknown
  * markup"): what its entry shows (Air::entryWords), or for a form this version cannot read the
  * sentence that says so. The list, the notifications and the bands read a message through it.
+ * KHANDAQ (28.11.2026): a place is "Location" there, as the phones name one in their lists and
+ * notifications.
  */
 QString messageWords(const QString& raw);
+/**
+ * KHANDAQ (28.11.2026): the words of a message as its entry in the transcript reads: messageWords,
+ * but a place with its coordinates (locationWords), as its card shows it. The export, the queue
+ * of messages that wait and a member's lines in a group read a message through it.
+ */
+QString transcriptWords(const QString& raw);
+/**
+ * KHANDAQ (28.11.2026): the words a reply to a message quotes: messageWords, but a place keeps the
+ * words it came as ("khandaq-location:LAT,LON"), which every client reads, so that the quote goes
+ * out as the phones send theirs and reads in the language of whoever opens it.
+ */
+QString quotedWords(const QString& raw);
+/**
+ * KHANDAQ (28.11.2026): a place in one line, its name and coordinates: "Location: 55.75580,
+ * 37.61730" (the phones put a middle dot between them, which the desktop's texts do not have).
+ */
+QString locationWords(const Air::Location& place);
+/**
+ * KHANDAQ (28.11.2026): words a quote or a search hit shows: a place (Air::readLocation) as
+ * locationWords puts it, any other words as they are.
+ */
+QString shownWords(const QString& words);
 /**
  * KHANDAQ (0.2.60): a file where a person reads of it, in the list, the bands and the
  * notifications: "File: plan.pdf"; a voice note is "Voice message", not the name of its file
@@ -994,7 +1024,8 @@ QString fileKindWords(const QString& fileName);
  * who reacted (docs/PUSH_PREVIEWS.md, "Recipient"): "Reacted ❤️ to “See you at five”", with the
  * first 80 characters of a text as its entry shows them, whole characters only and nothing added;
  * "Reacted ❤️ to your voice message", your video, photo or file, by the kind of a file; "Reacted
- * ❤️ to your message" for a text with no words to show.
+ * ❤️ to your message" for a text with no words to show. KHANDAQ (28.11.2026): "Reacted ❤️ to your
+ * location" for a place, as Android says it.
  * @param subject The text of the message as it came, or the name of the file.
  */
 QString reactionWords(const QString& emoji, Air::MessageEffect::Anchor anchor,

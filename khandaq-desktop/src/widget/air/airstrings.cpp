@@ -959,6 +959,18 @@ const Source sources[] = {
     {Text::NotifyPhoto,
      QT_TRANSLATE_NOOP3("Air", "Photo",
                         "notification and band: a photo came, in place of the name of its file")},
+    {Text::LocationTitle,
+     QT_TRANSLATE_NOOP3("Air", "Location",
+                        "a place a phone shared: the name under its map, over its coordinates; "
+                        "alone in the list of chats and in notifications")},
+    {Text::LocationWords,
+     QT_TRANSLATE_NOOP3("Air", "Location: %1",
+                        "a place a phone shared, in the quote of a reply, a search hit and the "
+                        "export: %1 is its coordinates, as 55.75580, 37.61730")},
+    {Text::NotifyReactedLocation,
+     QT_TRANSLATE_NOOP3("Air", "Reacted %1 to your location",
+                        "notification and band under who reacted: %1 is the emoji, on a place "
+                        "you shared")},
 };
 // clang-format on
 
@@ -1422,13 +1434,56 @@ QString trayHeadText(int count)
     return text(Text::TrayHead, count);
 }
 
-QString messageWords(const QString& raw)
+namespace {
+/** How the words of a message say a place (Air::readLocation). */
+enum class PlaceAs
+{
+    /** "Location", as a list says it. */
+    Title,
+    /** "Location: 55.75580, 37.61730" (locationWords). */
+    Caption,
+    /** "khandaq-location:55.75580,37.61730", as it came. */
+    Wire,
+};
+
+QString wordsOf(const QString& raw, PlaceAs placeAs)
 {
     const Air::MessageText read = Air::readMessageText(raw);
     if (read.unreadable) {
         return text(Text::MessageUnknownFormat);
     }
+    Air::Location place;
+    if (placeAs != PlaceAs::Wire && Air::readLocation(read.body, place)) {
+        return placeAs == PlaceAs::Title ? text(Text::LocationTitle) : locationWords(place);
+    }
     return read.marked ? read.body : raw;
+}
+} // namespace
+
+QString messageWords(const QString& raw)
+{
+    return wordsOf(raw, PlaceAs::Title);
+}
+
+QString transcriptWords(const QString& raw)
+{
+    return wordsOf(raw, PlaceAs::Caption);
+}
+
+QString quotedWords(const QString& raw)
+{
+    return wordsOf(raw, PlaceAs::Wire);
+}
+
+QString locationWords(const Air::Location& place)
+{
+    return text(Text::LocationWords).arg(Air::locationCoordinates(place));
+}
+
+QString shownWords(const QString& words)
+{
+    Air::Location place;
+    return Air::readLocation(words, place) ? locationWords(place) : words;
 }
 
 QString fileWords(const QString& fileName)
@@ -1471,6 +1526,11 @@ QString reactionWords(const QString& emoji, Air::MessageEffect::Anchor anchor,
     // KHANDAQ (0.2.64): the words the entry shows, a reply without its quote; none for a form this
     // build cannot read. 80 characters as the push previews quote the message (PUSH_PREVIEWS.md).
     constexpr int quotedCharacters = 80;
+    // KHANDAQ (28.11.2026): a place has no words to quote, only the words it travels as.
+    Air::Location place;
+    if (Air::messageLocation(subject, place)) {
+        return text(Text::NotifyReactedLocation).arg(emoji);
+    }
     const QString words = Air::entryWords(subject).trimmed();
     if (words.isEmpty()) {
         return text(Text::NotifyReactedMessage).arg(emoji);

@@ -155,11 +155,12 @@ private:
     /**
      * The text of a message entry, content 1: the words rawMessage shows (AirStrings::messageWords),
      * sender signs an action. KHANDAQ (26.11.2026): each @handle its mention block names stands out
-     * as a link to the member (Air::mentionLink).
+     * as a link to the member (Air::mentionLink). KHANDAQ (28.11.2026): a place a phone shared is
+     * its card, its map and its coordinates (AirLocationCard).
      */
-    static Text* createBody(const QString& rawMessage, const QString& sender, MessageType type,
-                            DocumentCache& documentCache, SmileyPack& smileyPack,
-                            Settings& settings, Style& style);
+    static ChatLineContent* createBody(const QString& rawMessage, const QString& sender,
+                                       MessageType type, DocumentCache& documentCache,
+                                       SmileyPack& smileyPack, Settings& settings, Style& style);
 
 
     bool action = false;

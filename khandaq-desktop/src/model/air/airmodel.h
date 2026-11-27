@@ -695,7 +695,8 @@ MessageText readMessageText(const QString& raw);
 /**
  * The words an entry of the transcript shows for a message: readMessageText's body when the
  * message opens with Khandaq markup, else the text as it came, so a plain message keeps its spaces
- * and lines. Empty for a message this build cannot read.
+ * and lines. Empty for a message this build cannot read. KHANDAQ (28.11.2026): a place
+ * (messageLocation) shows its coordinates, under its map (AirLocationCard).
  */
 QString entryWords(const QString& raw);
 

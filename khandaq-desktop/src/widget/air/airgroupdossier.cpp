@@ -951,7 +951,7 @@ void AirPrivateThread::rebuildLines()
         column->addLayout(head);
         QLabel* const words = makeLabel(TextRole::Body, Color::Ink, entry);
         // Without the markup of a reply, as the transcript shows a message (stage 3, item 10).
-        const QString shown = AirStrings::messageWords(line.text);
+        const QString shown = AirStrings::transcriptWords(line.text);
         words->setText(shown);
         words->setTextInteractionFlags(Qt::TextSelectableByMouse);
         // A person's own words keep their own direction, whatever the interface is.

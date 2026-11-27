@@ -482,7 +482,9 @@ void AirQuote::fit()
     }
     const int room = static_cast<int>(width) - 2 * Space::s8;
     const QFont words = air().font(TextRole::Caption);
-    lines = AirPaint::linesOf(preview, words, room, 2);
+    // KHANDAQ (28.11.2026): the quote of a place, as every client sends it, shows its name and
+    // coordinates.
+    lines = AirPaint::linesOf(AirStrings::shownWords(preview), words, room, 2);
     const QFontMetricsF wordsMetrics(words);
     qreal widest = QFontMetricsF(quoteNameFont()).horizontalAdvance(AirStrings::replyName(name));
     for (const QString& line : lines) {
@@ -548,7 +550,8 @@ void AirQuote::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, 
 
 QString AirQuote::getSpokenText() const
 {
-    return preview.isEmpty() ? QString() : AirStrings::spokenQuote(name, preview);
+    return preview.isEmpty() ? QString()
+                             : AirStrings::spokenQuote(name, AirStrings::shownWords(preview));
 }
 
 qreal AirQuote::getAscent() const

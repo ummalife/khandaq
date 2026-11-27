@@ -62,6 +62,7 @@ auto_test(net updatecheck "test/net/update/fixtures.qrc" "")
 auto_test(chatlog chatlinestorage "" "")
 auto_test(chatlog chatlinecontentproxy "" "")
 auto_test(chatlog airentrynotes "res/air.qrc" "") # the Plex faces
+auto_test(chatlog airlocationcard "${${PROJECT_NAME}_RESOURCES}" "") # the Plex faces and the themes
 # KHANDAQ (beta ideas 2026-11-20): where "Unread messages" stands as a conversation opens.
 auto_test(chatlog unreadmark "" "")
 auto_test(persistence paths "" "")
@@ -85,6 +86,7 @@ auto_test(model airgroupfilerepair "" "")
 auto_test(model airgroupleave "" "")
 auto_test(model airgroupselfname "" "")
 auto_test(model airhistorysync "" "")
+auto_test(model airlocation "" "")
 auto_test(model airmodel "" "")
 auto_test(model airnetwork "" "")
 auto_test(model airmedia "" "")

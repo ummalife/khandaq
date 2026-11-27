@@ -791,6 +791,7 @@
     <string name="contact_list_presence_recently">آخر ظهور مؤخرا</string>
     <string name="notification_media_file">📎 ملف</string>
     <string name="notification_media_photo">📷 صورة</string>
+    <string name="notification_media_location">📍 الموقع</string>
     <string name="notification_media_video">🎬 فيديو</string>
     <string name="notification_media_voice">🎤 رسالة صوتية</string>
     <string name="notification_media_generic">📎 مرفق</string>
@@ -800,6 +801,7 @@
     <string name="push_preview_reaction_voice">تفاعل %1$s مع رسالتك الصوتية</string>
     <string name="push_preview_reaction_video">تفاعل %1$s مع الفيديو الخاص بك</string>
     <string name="push_preview_reaction_photo">تفاعل %1$s مع صورتك</string>
+    <string name="push_preview_reaction_location">تفاعل %1$s مع موقعك</string>
     <string name="push_preview_reaction_file">تفاعل %1$s مع ملفك</string>
     <string name="push_preview_reaction_message">تفاعل %1$s مع رسالتك</string>
     <string name="chat_react_action">تفاعل</string>
@@ -1034,6 +1036,7 @@
     <string name="attach_option_file">ملف</string>
     <string name="attach_location">الموقع</string>
     <string name="location_share_failed">تعذر تحديد موقعك. فعل خدمة الموقع وأعد المحاولة.</string>
+    <string name="chat_location_title">الموقع</string>
     <string name="location_open_in_maps">فتح في الخرائط</string>
     <string name="forward_source_you">أنت</string>
     <string name="attach_send_selected">إرسال (%1$d)</string>

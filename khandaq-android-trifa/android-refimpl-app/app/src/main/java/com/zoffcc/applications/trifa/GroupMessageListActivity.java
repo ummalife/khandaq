@@ -2465,7 +2465,9 @@ public class GroupMessageListActivity extends AppCompatActivity
     // "khandaq-location:LAT,LON" message (wire-compatible with iOS + 1:1).
     void share_current_location_group()
     {
-        if (!ShareLocationHelper.hasPermission(this))
+        // KHANDAQ (owner, 28.11): with only the approximate location allowed, the place sent is kilometres off; a share
+        // asks once in a run for the exact one (ShareLocationHelper.shouldAskForPrecise), and its answer comes back here.
+        if (!ShareLocationHelper.hasPermission(this) || ShareLocationHelper.shouldAskForPrecise(this))
         {
             ShareLocationHelper.requestPermission(this);
             return;

@@ -404,7 +404,7 @@ final class ChatReplyPreviewController
         applyTheme(context);
         headerView.setText(barRepliesToSelf(meta) ? context.getString(R.string.chat_reply_header_self)
                                                   : context.getString(R.string.chat_reply_header, barName(meta)));
-        previewView.setText(MessageReplyHelper.previewForDisplay(context, meta.previewText, 120));
+        previewView.setText(MessageReplyHelper.quoteForDisplay(context, meta.previewText, 120));
         bar.setVisibility(View.VISIBLE);
         if (inputField != null)
         {

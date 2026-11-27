@@ -44,6 +44,10 @@ public class AirSpokenReplyTest
                 {
                     return "Deleted message";
                 }
+                if (id == R.string.chat_location_title)
+                {
+                    return "Location";
+                }
                 return super.getString(id);
             }
 
@@ -105,6 +109,21 @@ public class AirSpokenReplyTest
         final MessageReplyHelper.ReplyMeta deleted = reply("QA A", "Lunch at one?");
         deleted.targetDeleted = true;
         assertEquals("In reply to QA A, Deleted message", AirTranscript.spokenQuote(context(), deleted));
+    }
+
+    /**
+     * KHANDAQ (owner, 28.11): a reply to a place quotes it by name and coordinates, not by the wire text
+     * "khandaq-location:...", on the screen and to TalkBack; a list and a notification call it by name.
+     */
+    @Test
+    public void aQuotedPlaceIsNamedWithItsCoordinates()
+    {
+        final String place = HelperLocationMessage.encode(41.0082, 28.9784);
+        assertEquals("Location \u00B7 41.00820, 28.97840", MessageReplyHelper.quoteForDisplay(context(), place, 160));
+        assertEquals("In reply to QA A, Location \u00B7 41.00820, 28.97840",
+                     AirTranscript.spokenQuote(context(), reply("QA A", place)));
+        assertEquals("Location", HelperLocationMessage.previewText(context(), place));
+        assertEquals("Lunch at one?", HelperLocationMessage.previewText(context(), "Lunch at one?"));
     }
 
     @Test

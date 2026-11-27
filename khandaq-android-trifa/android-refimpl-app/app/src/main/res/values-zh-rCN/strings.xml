@@ -808,6 +808,7 @@
     <string name="contact_list_presence_recently">最近在线</string>
     <string name="notification_media_file">📎 文件</string>
     <string name="notification_media_photo">📷 照片</string>
+    <string name="notification_media_location">📍 位置</string>
     <string name="notification_media_video">🎬 视频</string>
     <string name="notification_media_voice">🎤 语音消息</string>
     <string name="notification_media_generic">📎 附件</string>
@@ -817,6 +818,7 @@
     <string name="push_preview_reaction_voice">对你的语音消息回应了 %1$s</string>
     <string name="push_preview_reaction_video">对你的视频回应了 %1$s</string>
     <string name="push_preview_reaction_photo">对你的照片回应了 %1$s</string>
+    <string name="push_preview_reaction_location">对你的位置回应了 %1$s</string>
     <string name="push_preview_reaction_file">对你的文件回应了 %1$s</string>
     <string name="push_preview_reaction_message">对你的消息回应了 %1$s</string>
     <string name="chat_react_action">回应</string>
@@ -1030,6 +1032,7 @@
     <string name="attach_option_file">文件</string>
     <string name="attach_location">位置</string>
     <string name="location_share_failed">无法获取你的位置，请开启定位后重试。</string>
+    <string name="chat_location_title">位置</string>
     <string name="location_open_in_maps">在地图中打开</string>
     <string name="forward_source_you">你</string>
     <string name="attach_send_selected">发送（%1$d）</string>

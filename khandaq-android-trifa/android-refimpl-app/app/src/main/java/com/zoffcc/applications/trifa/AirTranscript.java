@@ -721,7 +721,7 @@ final class AirTranscript
         // KHANDAQ (inbox #10, 27.11): as the quote shows it, of a message deleted here.
         return context.getString(R.string.chat_reply_header, name) + ", "
                + (reply.targetDeleted ? context.getString(R.string.chat_reply_deleted)
-                  : MessageReplyHelper.previewForDisplay(context, reply.previewText, 160));
+                  : MessageReplyHelper.quoteForDisplay(context, reply.previewText, 160));
     }
 
     private static void append(final StringBuilder sentence, final String part)

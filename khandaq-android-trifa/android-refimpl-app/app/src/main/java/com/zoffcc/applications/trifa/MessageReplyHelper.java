@@ -222,6 +222,16 @@ final class MessageReplyHelper
         return single.substring(0, Math.max(0, maxLen - 1)).trim() + "…";
     }
 
+    /**
+     * KHANDAQ (owner, 28.11): the quoted words as the screen shows them (the quote over a reply, the bar over the field,
+     * TalkBack): a quoted place is named with its coordinates (HelperLocationMessage.quoteText), not its wire text
+     * "khandaq-location:…". Only the screen: encode() keeps the wire text, so each reader names it in its language.
+     */
+    static String quoteForDisplay(final Context context, final String text, final int maxLen)
+    {
+        return HelperLocationMessage.quoteText(context, previewForDisplay(context, text, maxLen));
+    }
+
     static String pubkeyTail(@Nullable final String pubkey)
     {
         if (pubkey == null || pubkey.length() < 8)

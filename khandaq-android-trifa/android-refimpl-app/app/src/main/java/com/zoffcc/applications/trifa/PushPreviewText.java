@@ -50,6 +50,12 @@ final class PushPreviewText
 
         /** Reacted e to your message. */
         String reactionToMessage(String emoji);
+
+        /** KHANDAQ (owner, 28.11): a place sent as a message, its emoji first. */
+        String location();
+
+        /** Reacted e to your location. */
+        String reactionToLocation(String emoji);
     }
 
     /** Title and body of the notification. */
@@ -99,7 +105,12 @@ final class PushPreviewText
         switch (p.kind)
         {
             case PushPreviewPayload.KIND_TEXT:
-                if (p.body != null)
+                if (isLocation(p.body))
+                {
+                    // KHANDAQ (owner, 28.11): a place is named, not shown as its wire text "khandaq-location:...".
+                    body = labels.location();
+                }
+                else if (p.body != null)
                 {
                     body = p.body;
                     messageText = true;
@@ -144,6 +155,10 @@ final class PushPreviewText
         switch (kind)
         {
             case PushPreviewPayload.KIND_TEXT:
+                if (isLocation(p.body))
+                {
+                    return labels.reactionToLocation(p.emoji);
+                }
                 return p.body != null ? labels.reactionToText(p.emoji, oneLine(p.body))
                                       : labels.reactionToMessage(p.emoji);
             case PushPreviewPayload.KIND_VOICE:
@@ -157,6 +172,15 @@ final class PushPreviewText
             default:
                 return labels.reactionToMessage(p.emoji);
         }
+    }
+
+    /**
+     * KHANDAQ (owner, 28.11): whether a text is a place sent as a message, the wire text of every client
+     * "khandaq-location:LAT,LON" (HelperLocationMessage.encode, iOS LocationMessage.payload).
+     */
+    static boolean isLocation(final String text)
+    {
+        return text != null && text.trim().toLowerCase(java.util.Locale.ROOT).startsWith("khandaq-location:");
     }
 
     /** Line breaks as spaces, ends trimmed: a quoted text and a name sit on one line. */

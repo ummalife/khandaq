@@ -914,7 +914,11 @@ private extension NotificationCoordinator {
 
             if userDefaults.showNotificationPreview {
                 let preview = GroupMentionHelper.notificationPreviewText(messageText.text)
-                body = peerPrefix + (preview.isEmpty ? defaultString : preview)
+                // KHANDAQ (owner, 28.11): a place is named as the push names it, not shown as its wire text.
+                let shown = PushPreviewText.isLocation(preview)
+                    ? PushPreviewText.strings(AppLanguage.current).location
+                    : preview
+                body = peerPrefix + (shown.isEmpty ? defaultString : shown)
             }
             else {
                 body = defaultString

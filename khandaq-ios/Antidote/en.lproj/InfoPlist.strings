@@ -19,4 +19,4 @@
 "NSFaceIDUsageDescription" = "Khandaq uses Face ID or Touch ID to unlock the app instead of entering your PIN.";
 
 /* Location usage alert description */
-"NSLocationWhenInUseUsageDescription" = "You can share your location with your contacts.";
+"NSLocationWhenInUseUsageDescription" = "You can share your location with your contacts.";"ShareLocation" = "Khandaq sends the exact place you are in to the chat when you share your location.";

@@ -51,8 +51,10 @@ final class ChatPreviewSnapshotTest: SnapshotBaseTest {
     /// A member's video in a group under their name, with the glyph of a video while its frame is read, and a place
     /// with the glyph of its map while the map is made and its coordinates under it, as the conversation writes them.
     func testAPreviewShowsVideosAndPlaces() {
+        // A place no other test shows: the map MapKit makes for one of theirs is kept for every view of that place,
+        // and it stood in for the glyph here (AirAuthorTileTests and ChatLocationRowLayoutTest show 21.4225, 39.8262).
         let controller = preview(title: "Book club", tile: .group(initials: "BC", tone: 3),
-                                 entries: videoAndPlace(latitude: 21.42250, longitude: 39.82620), theme: theme)
+                                 entries: videoAndPlace(latitude: 24.46861, longitude: 39.61417), theme: theme)
         host(controller, style: .light)
         verifyView(controller.view)
     }

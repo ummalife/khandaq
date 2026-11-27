@@ -45,7 +45,7 @@ class ChatBaseTextCell: ChatMovableDateCell {
         if textModel.hasLocation,
            let latitude = textModel.locationLatitude,
            let longitude = textModel.locationLongitude {
-            bubbleView.text = String(format: "%.5f, %.5f", latitude, longitude)
+            bubbleView.showLocationCoordinates(LocationMessage.coordinatesText(latitude: latitude, longitude: longitude))
             bubbleView.onLocationTap = { [weak self] in
                 self?.openLocationInMaps(latitude: latitude, longitude: longitude)
             }
@@ -174,9 +174,11 @@ class ChatBaseTextCell: ChatMovableDateCell {
         options.scale = UIScreen.main.scale
 
         MKMapSnapshotter(options: options).start { snapshot, _ in
-            guard let image = snapshot?.image else {
+            guard let snapshot = snapshot else {
                 return
             }
+            let place = snapshot.point(for: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
+            let image = drawPin(on: snapshot.image, at: place)
 
             mapSnapshotCache.setObject(image, forKey: cacheKey)
 
@@ -186,11 +188,50 @@ class ChatBaseTextCell: ChatMovableDateCell {
         }
     }
 
+    /// KHANDAQ (owner, 28.11): the pin of the place on its map, drawn into the snapshot, so the conversation and the
+    /// preview of a chat show where on the map it is (the map alone left that to guess): a red head with a white
+    /// dot and a white edge, its point on the place, a soft shadow under the point. Android draws its marker into
+    /// its map the same way (LocationMapSnapshot.drawMarker).
+    static func drawPin(on map: UIImage, at place: CGPoint) -> UIImage {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = map.scale
+        return UIGraphicsImageRenderer(size: map.size, format: format).image { context in
+            map.draw(at: .zero)
+            let cg = context.cgContext
+
+            let radius: CGFloat = 10
+            let head = CGPoint(x: place.x, y: place.y - 2.2 * radius)
+            // The two sides run from the point to where they touch the head: there the radius is square to them.
+            let spread = acos(radius / (place.y - head.y))
+            let pin = UIBezierPath()
+            pin.move(to: place)
+            pin.addArc(withCenter: head, radius: radius,
+                       startAngle: .pi / 2 + spread, endAngle: 2.5 * .pi - spread, clockwise: true)
+            pin.close()
+
+            cg.setFillColor(UIColor.black.withAlphaComponent(0.22).cgColor)
+            cg.fillEllipse(in: CGRect(x: place.x - 5, y: place.y - 2, width: 10, height: 4))
+
+            cg.saveGState()
+            cg.setShadow(offset: CGSize(width: 0, height: 1), blur: 3, color: UIColor.black.withAlphaComponent(0.3).cgColor)
+            KQColor.dangerFill.setFill()
+            pin.fill()
+            cg.restoreGState()
+
+            KQColor.fixedWhite.setStroke()
+            pin.lineWidth = 1.5
+            pin.stroke()
+
+            KQColor.fixedWhite.setFill()
+            UIBezierPath(arcCenter: head, radius: 3.5, startAngle: 0, endAngle: 2 * .pi, clockwise: true).fill()
+        }
+    }
+
     fileprivate func openLocationInMaps(latitude: Double, longitude: Double) {
         let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
         let placemark = MKPlacemark(coordinate: coordinate)
         let mapItem = MKMapItem(placemark: placemark)
-        mapItem.name = "Location"
+        mapItem.name = LocationMessage.title
         mapItem.openInMaps()
     }
 

@@ -44,7 +44,9 @@ enum ChatListContent {
         if message.messageText != nil {
             // KHANDAQ (#109): show the clean visible body in the list preview, not the reply and mention
             // wire markup ([KQ|...] ... [KQ/end]).
-            return Preview(text: MessageReplyHelper.plainBody(for: message) ?? message.messageText?.text ?? "", kind: .message)
+            let body = MessageReplyHelper.plainBody(for: message) ?? message.messageText?.text ?? ""
+            // KHANDAQ (owner, 28.11): a place is named, not shown as its wire text "khandaq-location:…".
+            return Preview(text: LocationMessage.parse(body) == nil ? body : LocationMessage.title, kind: .message)
         }
         else if let file = message.messageFile {
             let fileName = file.fileName ?? ""

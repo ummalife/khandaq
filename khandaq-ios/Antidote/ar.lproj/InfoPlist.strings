@@ -19,4 +19,4 @@
 "NSFaceIDUsageDescription" = "يمكنك فتح Khandaq باستخدام Face ID أو Touch ID بدلًا من إدخال رمز PIN.";
 
 /* Location usage alert description */
-"NSLocationWhenInUseUsageDescription" = "يمكنك مشاركة موقعك مع جهات الاتصال.";
+"NSLocationWhenInUseUsageDescription" = "يمكنك مشاركة موقعك مع جهات الاتصال.";"ShareLocation" = "يرسل Khandaq مكانك الدقيق إلى المحادثة عندما تشارك موقعك.";

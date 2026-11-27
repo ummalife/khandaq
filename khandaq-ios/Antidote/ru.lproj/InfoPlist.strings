@@ -19,4 +19,4 @@
 "NSFaceIDUsageDescription" = "Khandaq использует Face ID или Touch ID для разблокировки приложения вместо ввода PIN-кода.";
 
 /* Location usage alert description */
-"NSLocationWhenInUseUsageDescription" = "Вы можете поделиться геопозицией с контактами.";
+"NSLocationWhenInUseUsageDescription" = "Вы можете поделиться геопозицией с контактами.";"ShareLocation" = "Khandaq отправляет в чат точное место, где вы находитесь, когда вы делитесь геопозицией.";

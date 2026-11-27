@@ -884,7 +884,12 @@ extension ChatPrivateController {
 
 // KHANDAQ (#T2): conform to LocationSharingChat so the "+" menu can share once via the coordinator's
 // one-shot path (like groups). sendLocationMessage(_:) is implemented in the main class body above.
-extension ChatPrivateController: LocationSharingChat {}
+extension ChatPrivateController: LocationSharingChat {
+    /// KHANDAQ (owner, 28.11): no fix of where you are came in time, so nothing was sent; said above the field.
+    func locationSharingFailed() {
+        AirToast.show(String(localized: "chat_location_failed"), in: view, above: chatInputView)
+    }
+}
 
 extension ChatPrivateController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {

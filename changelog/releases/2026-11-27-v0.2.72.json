@@ -1,0 +1,42 @@
+{
+  "version": "0.2.72",
+  "date": "2026-11-27",
+  "title": "A deleted message is gone from the replies too",
+  "summary": "The quote of a reply to a deleted message now says it was deleted, on Android and iPhone, instead of keeping the message's words. On Android, sheets open whole on a tablet in landscape and a theme switch fades once without flashing; on iPhone, a chat's unread count is exact to the second. The iPhone app gets TestFlight build 143013 (1.4.34); the desktop stays at 0.2.70.",
+  "commits": [],
+  "changes": [
+    {
+      "severity": "important",
+      "title": "A reply to a deleted message no longer shows its words",
+      "description": "A reply carries the words it quotes, so deleting a message left them readable in the quote of every reply to it, in groups and in Saved Messages, as a tester found. Each device now remembers what it deletes, and the quote of a reply to such a message says \"Deleted message\", keeps the author's name and no longer leads to the message. A reply written on another device is matched by the message's date.",
+      "platforms": [
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "severity": "medium",
+      "title": "Android: sheets from below open whole on a tablet",
+      "description": "On a tablet in landscape, sheets such as Create group and New contact, and the questions the app asks, opened only a strip at the bottom, as a tester wrote; they now open whole.",
+      "platforms": [
+        "android"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "Android: a theme switch fades once",
+      "description": "Switching between the light and the dark theme flashed the whole screen a few times; the old theme now fades into the new one once.",
+      "platforms": [
+        "android"
+      ]
+    },
+    {
+      "severity": "low",
+      "title": "iPhone: a chat's unread count is exact",
+      "description": "The unread count of a chat in the list compared message dates with the moment the chat was read to only about two minutes, so a message just read could still count unread, or one that came right after it not; it is now exact to the second.",
+      "platforms": [
+        "ios"
+      ]
+    }
+  ]
+}

@@ -20,6 +20,7 @@ because a matrix with no owner is a list, not an accountability.
 | `USE_FULL_SCREEN_INTENT` | all | Ringing an incoming call over the lock screen | `HelperNotification` |
 | `FOREGROUND_SERVICE` | all | The Tox connection is a foreground service | `ToxService` |
 | `FOREGROUND_SERVICE_SPECIAL_USE` | 34+ | Type declaration required from API 34 | `ToxService` |
+| `FOREGROUND_SERVICE_MICROPHONE` | 34+ | A call keeps its microphone when the app goes to the background: the call's service is a `microphone` service as well (the type from API 30, its permission from API 34) | `CallAudioService` |
 | `RECEIVE_BOOT_COMPLETED` | all | Reconnecting after a reboot | `BootReceiver` |
 | `SCHEDULE_EXACT_ALARM` | all | DHT keepalive/re-bootstrap | `ToxService` alarm |
 | `POST_NOTIFICATIONS` | 33+ | Message and call notifications | `MainActivity` |

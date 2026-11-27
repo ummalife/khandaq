@@ -412,6 +412,8 @@ public class MessageListActivity extends AppCompatActivity
         // do NOT pre-focus the input: with SOFT_INPUT_STATE_HIDDEN a tap on an
         // already-focused field is not a focus change and some IMEs never open.
         ChatInputBarHelper.ensureImeOpensOnTap(ml_new_message);
+        // KHANDAQ (inbox #20, 27.11): before a draft or a shared text comes in.
+        ChatInputBarHelper.keepEmojiCompatToShortTexts(ml_new_message);
         try
         {
             // hide softkeyboard initially

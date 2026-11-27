@@ -551,7 +551,11 @@ void bqRecorderCallback(SLAndroidSimpleBufferQueueItf bq, void *context)
             if (gainprocessing_active == 1)
             {
 
-#if 1
+                // KHANDAQ (calls, 27.11): the microphone is no longer tripled before the gain control. Tripled, with
+                // the up to 10 dB the gain control adds, the voice was clipped and the other side's voice from the
+                // speaker came back loud enough to be heard again; the gain control and the platform's voice
+                // processing set the level.
+#if 0
                 // TODO: make this better? faster?
                 // --------------------------------------------------
                 // increase GAIN manually and rather slow:
@@ -1221,23 +1225,19 @@ Java_com_zoffcc_applications_nativeaudio_NativeAudio_createAudioRecorder(JNIEnv 
         __android_log_print(ANDROID_LOG_INFO, LOGTAG,
                             "createAudioRecorder:SL_IID_ANDROIDCONFIGURATION...");
 
-        SLuint32 presetValue = SL_ANDROID_RECORDING_PRESET_VOICE_RECOGNITION;
-        if (use_with_louderspeaker)
-        {
-            presetValue = SL_ANDROID_RECORDING_PRESET_VOICE_COMMUNICATION;
-        }
-        // SL_ANDROID_RECORDING_PRESET_UNPROCESSED <--- ??
-        // SL_ANDROID_RECORDING_PRESET_VOICE_RECOGNITION <-- low latency
-        // SL_ANDROID_RECORDING_PRESET_VOICE_COMMUNICATION <-- high latency
+        // KHANDAQ (calls, 27.11): a call records for voice communication on every route, with a performance mode
+        // that lets the platform process it, so the device's echo canceller and noise suppressor run on the call.
+        // The earpiece recorded with the voice recognition preset, and every route with
+        // SL_ANDROID_PERFORMANCE_LATENCY, which takes all pre-processing off ("No HW or software pre/post
+        // processing", OpenSLES_AndroidConfiguration.h): no echo canceller ever ran, and both sides of a call heard
+        // themselves come back. use_with_louderspeaker (set_rec_preset) no longer changes the preset.
+        SLuint32 presetValue = SL_ANDROID_RECORDING_PRESET_VOICE_COMMUNICATION;
         (*inputConfig)->SetConfiguration(inputConfig,
                                          SL_ANDROID_KEY_RECORDING_PRESET,
                                          &presetValue,
                                          sizeof(SLuint32));
 
-        SLuint32 presetValue2 = SL_ANDROID_PERFORMANCE_LATENCY;
-        // SL_ANDROID_PERFORMANCE_NONE
-        // SL_ANDROID_PERFORMANCE_LATENCY <--- ??
-        // SL_ANDROID_PERFORMANCE_LATENCY_EFFECTS
+        SLuint32 presetValue2 = SL_ANDROID_PERFORMANCE_NONE;
         (*inputConfig)->SetConfiguration(inputConfig,
                                          SL_ANDROID_KEY_PERFORMANCE_MODE,
                                          &presetValue2,

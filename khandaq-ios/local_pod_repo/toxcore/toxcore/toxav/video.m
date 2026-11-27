@@ -392,16 +392,24 @@ int vc_reconfigure_encoder(VCSession *vc, uint32_t bit_rate, uint16_t width, uin
         return -1;
     }
 
+    /* KHANDAQ (calls, 27.11): bit_rate comes in bit/s (toxav_video_send_frame passes video_bit_rate * 1000), and
+     * libvpx takes its target in kbit/s. Set as it came, the target was a thousand times the rate asked for and
+     * the encoder ran at its worst quantizer whatever the network: measured offline with this libvpx and these
+     * settings, 4000 kbit/s asked gave 425 kbit/s at quantizer 63 of 63, a blocky picture on every call from an
+     * iPhone. The check below never found the rate unchanged either, so the encoder was set again on every frame.
+     * The toxav of the desktop and of Android divides it the same way. */
+    const uint32_t target_kbit_rate = bit_rate / 1000;
+
     vpx_codec_enc_cfg_t cfg2 = *vc->encoder->config.enc;
 
-    if (cfg2.rc_target_bitrate == bit_rate && cfg2.g_w == width && cfg2.g_h == height && kf_max_dist == -1) {
+    if (cfg2.rc_target_bitrate == target_kbit_rate && cfg2.g_w == width && cfg2.g_h == height && kf_max_dist == -1) {
         return 0; /* Nothing changed */
     }
 
     if (cfg2.g_w == width && cfg2.g_h == height && kf_max_dist == -1) {
         /* Only bit rate changed */
-        LOGGER_INFO(vc->log, "bitrate change from: %u to: %u", (uint32_t)cfg2.rc_target_bitrate, (uint32_t)bit_rate);
-        cfg2.rc_target_bitrate = bit_rate;
+        LOGGER_INFO(vc->log, "bitrate change from: %u to: %u kbit/s", (uint32_t)cfg2.rc_target_bitrate, target_kbit_rate);
+        cfg2.rc_target_bitrate = target_kbit_rate;
         const vpx_codec_err_t rc = vpx_codec_enc_config_set(vc->encoder, &cfg2);
 
         if (rc != VPX_CODEC_OK) {
@@ -416,7 +424,7 @@ int vc_reconfigure_encoder(VCSession *vc, uint32_t bit_rate, uint16_t width, uin
         vpx_codec_ctx_t new_c;
         vpx_codec_enc_cfg_t  cfg;
         vc_init_encoder_cfg(vc->log, &cfg, kf_max_dist);
-        cfg.rc_target_bitrate = bit_rate;
+        cfg.rc_target_bitrate = target_kbit_rate;
         cfg.g_w = width;
         cfg.g_h = height;
 

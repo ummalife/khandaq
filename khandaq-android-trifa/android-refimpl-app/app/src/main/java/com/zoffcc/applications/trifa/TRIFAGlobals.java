@@ -155,8 +155,10 @@ public class TRIFAGlobals
     final static int LOWER_GLOBAL_VIDEO_BITRATE = 800;
 
     final static int VIDEO_BITRATE_WIFI_CEILING = 5000;
-    final static int VIDEO_BITRATE_CELLULAR_CEILING = 2500;
-    final static int VIDEO_BITRATE_3G_CEILING = 800;
+    // KHANDAQ (calls, 27.11): a mobile link starts and tops out at 1000 kbit/s (it was 2500), a slow one at 400 (was
+    // 800): the video of a call on a mobile network went in blocks at 2500, and the voice with it.
+    final static int VIDEO_BITRATE_CELLULAR_CEILING = 1000;
+    final static int VIDEO_BITRATE_3G_CEILING = 400;
 
     final static int HIGHER_NGC_VIDEO_BITRATE = 400;
     final static int LOWER_NGC_VIDEO_BITRATE = 90;
@@ -203,11 +205,14 @@ public class TRIFAGlobals
     final static int VIDEO_ENCODER_MAX_BITRATE_MED = 1500;
     final static int VIDEO_ENCODER_MAX_BITRATE_HIGH = 3000;
 
-    final static int VIDEO_ENCODER_MIN_BITRATE_LOW = 400;
-    final static int VIDEO_ENCODER_MIN_BITRATE_MED = 800;
-    final static int VIDEO_ENCODER_MIN_BITRATE_HIGH = 1500;
+    // KHANDAQ (calls, 27.11): the floors toxav may take the video down to when the link loses. The quality (high
+    // by default) held it at 1500 kbit/s at least, above the mobile ceilings, so on a link that could not carry
+    // that the call lost its video and its voice in blocks; the quality now sets only how high it climbs.
+    final static int VIDEO_ENCODER_MIN_BITRATE_LOW = 150;
+    final static int VIDEO_ENCODER_MIN_BITRATE_MED = 200;
+    final static int VIDEO_ENCODER_MIN_BITRATE_HIGH = 250;
 
-    final static int GLOBAL_MIN_VIDEO_BITRATE = 500;
+    final static int GLOBAL_MIN_VIDEO_BITRATE = 150;
     final static int GLOBAL_MIN_AUDIO_BITRATE = 6; // allowed values: (xx>=6) && (xx<=510)
 
     final static int GLOBAL_INIT_PLAY_DELAY = 0;

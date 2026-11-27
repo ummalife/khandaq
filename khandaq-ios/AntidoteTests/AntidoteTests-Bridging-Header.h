@@ -273,6 +273,19 @@ void friendMessageCallback(void *cTox, uint32_t friendNumber, uint32_t cType, co
 - (void)enqueuePixelBuffer:(CVPixelBufferRef)pixelBuffer;
 @end
 
+// KHANDAQ (calls, 27.11): the rate a call sends its video at, declared here so the tests can follow it as toxav's
+// loss suggestions and the seconds come.
+@interface OCTVideoBitRateAdapter : NSObject
+@property (nonatomic, assign, readonly) OCTToxAVVideoBitRate startBitRate;
+@property (nonatomic, assign, readonly) OCTToxAVVideoBitRate floorBitRate;
+@property (nonatomic, assign, readonly) OCTToxAVVideoBitRate ceilingBitRate;
+@property (nonatomic, assign, readonly) OCTToxAVVideoBitRate bitRate;
++ (nonnull instancetype)adapterForCalls NS_SWIFT_NAME(forCalls());
+- (void)restartAt:(NSTimeInterval)now;
+- (BOOL)takeLossSuggestion:(OCTToxAVVideoBitRate)suggestedBitRate at:(NSTimeInterval)now;
+- (BOOL)tickAt:(NSTimeInterval)now;
+@end
+
 #undef LOG_INFO
 #undef LOG_DEBUG
 #import "DDLog.h"

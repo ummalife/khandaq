@@ -118,6 +118,112 @@ class AirCallTests: XCTestCase {
 }
 
 /**
+ KHANDAQ (calls, 27.11): the rate a call sends its video at. It was a fixed 4000 kbit/s that no loss report changed;
+ it starts low now, goes down at once to toxav's suggestion when the other side loses a tenth or more of the call,
+ not again while the reports still describe the rate before, and climbs back by a tenth after a quiet spell.
+ */
+class VideoBitRateAdapterTests: XCTestCase {
+    func testACallStartsAt600AndStaysBetween150And1200() {
+        let adapter = OCTVideoBitRateAdapter.forCalls()
+
+        XCTAssertEqual(adapter.startBitRate, 600)
+        XCTAssertEqual(adapter.floorBitRate, 150)
+        XCTAssertEqual(adapter.ceilingBitRate, 1200)
+        XCTAssertEqual(adapter.bitRate, 600)
+    }
+
+    func testALossSuggestionTakesTheRateDownAtOnceButNotUnderTheFloor() {
+        let adapter = OCTVideoBitRateAdapter.forCalls()
+        adapter.restart(at: 100)
+
+        XCTAssertTrue(adapter.takeLossSuggestion(450, at: 101))
+        XCTAssertEqual(adapter.bitRate, 450)
+
+        XCTAssertTrue(adapter.takeLossSuggestion(40, at: 103))
+        XCTAssertEqual(adapter.bitRate, 150)
+
+        XCTAssertFalse(adapter.takeLossSuggestion(100, at: 105))
+        XCTAssertEqual(adapter.bitRate, 150)
+    }
+
+    func testTheReportsJustAfterADropDoNotTakeItDownAgain() {
+        let adapter = OCTVideoBitRateAdapter.forCalls()
+        adapter.restart(at: 100)
+
+        XCTAssertTrue(adapter.takeLossSuggestion(500, at: 101))
+        XCTAssertFalse(adapter.takeLossSuggestion(400, at: 101.2))
+        XCTAssertFalse(adapter.takeLossSuggestion(350, at: 102.4))
+        XCTAssertEqual(adapter.bitRate, 500)
+
+        XCTAssertTrue(adapter.takeLossSuggestion(400, at: 102.6))
+        XCTAssertEqual(adapter.bitRate, 400)
+    }
+
+    func testASuggestionAboveTheRateChangesNothing() {
+        let adapter = OCTVideoBitRateAdapter.forCalls()
+        adapter.restart(at: 100)
+
+        XCTAssertFalse(adapter.takeLossSuggestion(900, at: 101))
+        XCTAssertEqual(adapter.bitRate, 600)
+    }
+
+    func testTheRateClimbsByATenthAfterAQuietSpellUpToTheCeiling() {
+        let adapter = OCTVideoBitRateAdapter.forCalls()
+        adapter.restart(at: 100)
+
+        XCTAssertFalse(adapter.tick(at: 101))
+        XCTAssertFalse(adapter.tick(at: 103.9))
+        XCTAssertTrue(adapter.tick(at: 104))
+        XCTAssertEqual(adapter.bitRate, 660)
+        XCTAssertFalse(adapter.tick(at: 105))
+        XCTAssertTrue(adapter.tick(at: 106))
+        XCTAssertEqual(adapter.bitRate, 726)
+
+        var now: TimeInterval = 106
+        var climbs = 0
+        while adapter.bitRate < adapter.ceilingBitRate && climbs < 100 {
+            now += 2
+            XCTAssertTrue(adapter.tick(at: now))
+            climbs += 1
+        }
+        XCTAssertEqual(adapter.bitRate, 1200)
+        XCTAssertFalse(adapter.tick(at: now + 10))
+        XCTAssertEqual(adapter.bitRate, 1200)
+    }
+
+    func testALossReportStartsTheQuietSpellAgain() {
+        let adapter = OCTVideoBitRateAdapter.forCalls()
+        adapter.restart(at: 100)
+
+        XCTAssertTrue(adapter.takeLossSuggestion(300, at: 101))
+        XCTAssertFalse(adapter.takeLossSuggestion(250, at: 101.5))
+        XCTAssertFalse(adapter.tick(at: 105))
+        XCTAssertTrue(adapter.tick(at: 105.5))
+        XCTAssertEqual(adapter.bitRate, 330)
+    }
+
+    func testTheSmallestClimbIs20() {
+        let adapter = OCTVideoBitRateAdapter.forCalls()
+        adapter.restart(at: 100)
+        XCTAssertTrue(adapter.takeLossSuggestion(150, at: 101))
+
+        XCTAssertTrue(adapter.tick(at: 105))
+        XCTAssertEqual(adapter.bitRate, 170)
+    }
+
+    func testARestartGoesBackToTheStart() {
+        let adapter = OCTVideoBitRateAdapter.forCalls()
+        adapter.restart(at: 100)
+        XCTAssertTrue(adapter.takeLossSuggestion(200, at: 101))
+
+        adapter.restart(at: 200)
+        XCTAssertEqual(adapter.bitRate, 600)
+        XCTAssertTrue(adapter.takeLossSuggestion(500, at: 200.5))
+        XCTAssertEqual(adapter.bitRate, 500)
+    }
+}
+
+/**
  KHANDAQ (calls stage, 26.11): the geometry of a video call by the rules all three clients follow
  (calls stage SPEC, R1 to R6), in exact numbers: the scale mode of a frame, the rect it takes, the
  size and the corners of your own picture, where a release snaps it and which video is the big one.

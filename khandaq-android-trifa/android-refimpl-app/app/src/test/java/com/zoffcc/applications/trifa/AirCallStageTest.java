@@ -384,6 +384,20 @@ public class AirCallStageTest
         assertFalse(AirCallStage.personInMiddle(true, true));
     }
 
+    /** KHANDAQ (calls, 27.11): the box is up while its camera opens, or the camera never gets a texture to open in. */
+    @Test
+    public void yourBoxIsUpInAVideoCallFromTheMomentItsCameraIsToOpen()
+    {
+        assertTrue(AirCallStage.ownBoxUp(false, false, true));
+        assertTrue(AirCallStage.ownBoxUp(false, true, false));
+        assertTrue(AirCallStage.ownBoxUp(false, true, true));
+        assertFalse(AirCallStage.ownBoxUp(false, false, false));
+        // #247: never in an audio call, which marks its camera opened without opening it.
+        assertFalse(AirCallStage.ownBoxUp(true, true, false));
+        assertFalse(AirCallStage.ownBoxUp(true, false, true));
+        assertFalse(AirCallStage.ownBoxUp(true, false, false));
+    }
+
     @Test
     public void theTileOfAnAudioCall()
     {

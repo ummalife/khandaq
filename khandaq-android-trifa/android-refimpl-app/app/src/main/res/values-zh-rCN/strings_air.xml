@@ -157,6 +157,10 @@
     <string name="air_tray_already_left">已经发出，无法在此修改</string>
     <string name="air_failed_retry">未发送。重试</string>
     <string name="air_failed_retry_hint">再次发送此消息</string>
+    <!-- KHANDAQ (inbox #26, 27.11): an entry that shows only the start of a long text (AirLongText). -->
+    <string name="air_entry_read_more">阅读全文</string>
+    <string name="air_entry_read_more_hint">打开完整消息</string>
+    <string name="air_long_text_title">消息</string>
     <string name="air_chat_dossier_hint">打开档案：连接、过去 24 小时、密钥</string>
     <string name="air_dossier_close_hint">关闭档案</string>
     <string name="air_dossier_link_title">连接</string>

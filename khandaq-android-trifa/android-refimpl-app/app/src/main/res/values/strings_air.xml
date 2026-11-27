@@ -164,6 +164,10 @@
     <string name="air_tray_already_left">It has already left and cannot be changed here</string>
     <string name="air_failed_retry">Not sent. Retry</string>
     <string name="air_failed_retry_hint">Sends the message again</string>
+    <!-- KHANDAQ (inbox #26, 27.11): an entry that shows only the start of a long text (AirLongText). -->
+    <string name="air_entry_read_more">Read more</string>
+    <string name="air_entry_read_more_hint">Opens the whole message</string>
+    <string name="air_long_text_title">Message</string>
     <string name="air_chat_dossier_hint">Opens the dossier: link, last 24 hours, key</string>
     <string name="air_dossier_close_hint">Closes the dossier</string>
     <string name="air_dossier_link_title">Link</string>

@@ -192,6 +192,10 @@
     <string name="air_tray_already_left">أُرسلت بالفعل ولا يمكن تعديلها هنا</string>
     <string name="air_failed_retry">لم تُرسل. أعد المحاولة</string>
     <string name="air_failed_retry_hint">يرسل الرسالة مرة أخرى</string>
+    <!-- KHANDAQ (inbox #26, 27.11): an entry that shows only the start of a long text (AirLongText). -->
+    <string name="air_entry_read_more">اقرأ المزيد</string>
+    <string name="air_entry_read_more_hint">يفتح الرسالة كاملة</string>
+    <string name="air_long_text_title">الرسالة</string>
     <string name="air_chat_dossier_hint">يفتح الملف: الاتصال وآخر 24 ساعة والمفتاح</string>
     <string name="air_dossier_close_hint">يغلق الملف</string>
     <string name="air_dossier_link_title">الاتصال</string>

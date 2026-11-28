@@ -838,7 +838,7 @@ protected:
             }
             const QRect piece = QStyle::visualRect(layoutDirection(), area,
                                                    QRect(x, area.top(), width, area.height()));
-            const QIcon& icon = icons.at(index);
+            const QIcon icon = icons.value(index);
             if (icon.isNull()) {
                 painter.drawText(piece, Qt::AlignCenter, emoticons().at(index));
             } else {

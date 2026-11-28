@@ -62,6 +62,9 @@ auto_test(net updatecheck "test/net/update/fixtures.qrc" "")
 auto_test(chatlog chatlinestorage "" "")
 auto_test(chatlog chatlinecontentproxy "" "")
 auto_test(chatlog airentrynotes "res/air.qrc" "") # the Plex faces
+# KHANDAQ (owner, 28.11.2026): the compact transcript; the Plex faces, the themes, and the files of
+# a core that never goes online for a file entry.
+auto_test(chatlog airentrylayout "${${PROJECT_NAME}_RESOURCES}" "mock_library")
 auto_test(chatlog airlocationcard "${${PROJECT_NAME}_RESOURCES}" "") # the Plex faces and the themes
 # KHANDAQ (beta ideas 2026-11-20): where "Unread messages" stands as a conversation opens.
 auto_test(chatlog unreadmark "" "")

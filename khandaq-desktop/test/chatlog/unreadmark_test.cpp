@@ -339,7 +339,8 @@ void TestUnreadMark::looksBackNoFurtherThanItsLimit()
 
 /**
  * @brief The line holds its words at the text column, 8 under its top and 4 over the entry, as the
- * room iOS keeps over the entry for its mark.
+ * room iOS keeps over the entry for its mark. KHANDAQ (owner, 28.11.2026): the text column starts
+ * at the 16 px margin, as there is no time column before it any more.
  */
 void TestUnreadMark::theLineTakesTheRoomOfItsWordsAtTheTextColumn()
 {
@@ -355,7 +356,7 @@ void TestUnreadMark::theLineTakesTheRoomOfItsWordsAtTheTextColumn()
 
     const ChatLineContent* const words = line.getContent(0);
     QVERIFY(words->isVisible());
-    QCOMPARE(words->pos().x(), static_cast<qreal>(Space::s16 + Size::timeColumn + Space::s10));
+    QCOMPARE(words->pos().x(), static_cast<qreal>(Space::s16));
     QCOMPARE(words->pos().y(), 100.0 + Space::s8);
     QVERIFY(!line.getContent(1)->isVisible());
     QVERIFY(!line.getContent(2)->isVisible());

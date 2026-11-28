@@ -59,8 +59,17 @@ public:
              int tone = 0);
 
     void setText(const QString& text);
-    /** The width the text takes on one line. */
+    /**
+     * KHANDAQ (owner, 28.11.2026): words before the text, a 4 px gap apart, in its type and ink:
+     * "edited" before the time of an entry. They are neither copied nor spoken with the text (the
+     * notes of the entry say it). Returns whether they changed.
+     */
+    bool setLead(const QString& lead);
+    QString getLead() const;
+    /** The width the text takes on one line, with its lead. */
     qreal naturalWidth() const;
+    /** How far under the top of the label paint() sets the baseline of the text. */
+    qreal baseline() const;
     /**
      * Where the text stands in the label: at the start edge of the interface, as wide as it shows
      * (cut short when the label is narrower).
@@ -88,6 +97,7 @@ private:
     QFont font() const;
 
     QString text;
+    QString lead;
     AirTokens::TextRole role;
     Ink ink;
     int weight;
@@ -106,6 +116,11 @@ public:
 
     void setStatus(Air::EntryStatus status);
     Air::EntryStatus getStatus() const;
+    /**
+     * KHANDAQ (owner, 28.11.2026): whether the state has a glyph (a text of ours in a group that
+     * went has none): the time of the entry then stands at the end by itself.
+     */
+    bool isShown() const;
 
     void setWidth(float width) override;
     QRectF boundingRect() const override;
@@ -199,15 +214,17 @@ private:
 };
 
 /**
- * What happened to an entry after it came (stage 3, item 10), under its text: the reactions, then
- * "edited" in the caption and ink-3, a pixel lower. A reaction is a chip, as the phones draw it
+ * What happened to an entry after it came (stage 3, item 10), under its text: the reactions.
+ * KHANDAQ (owner, 28.11.2026): "edited" left its own line here for the time at the end of the
+ * entry ("edited 14:17", AirLabel::setLead); the notes still say it to a screen reader. A reaction
+ * is a chip, as the phones draw it
  * (AirTranscript.styleReactionChip on Android, AirReactionChipsView on iOS): its emoji and, once more
  * than one person chose it, the count in the caption and ink, on the raised plate with a hairline
  * and round ends. The chips follow each other from the start edge on one line and stop where the
  * column ends. An emoji takes the picture messages give it, from the smiley pack, so a heart is the
  * same heart in both; one the pack has no picture of is set in the colour emoji font of the system,
  * as messages set the sequences the pack has none of (0.2.61: it was the text font's glyph in ink-2,
- * a small grey ✍ for the ✍️ of an iPhone). An entry with neither takes no room.
+ * a small grey ✍ for the ✍️ of an iPhone). An entry without reactions takes no room.
  */
 class AirEntryNotes : public ChatLineContent
 {

@@ -19,6 +19,9 @@
 
 #include "chatline.h"
 #include "chatlinecontent.h"
+#include "chatlinecontentproxy.h"
+#include "content/airlabel.h"
+#include "content/text.h"
 
 #include "src/widget/air/airstyle.h"
 #include "src/widget/air/airtokens.h"
@@ -29,6 +32,9 @@
 #include <QPen>
 #include <QGuiApplication>
 #include <QStringList>
+#include <QWidget>
+
+#include <cmath>
 
 ChatLine::ChatLine()
 {
@@ -277,10 +283,16 @@ bool ChatLine::isCollapsed() const
 
 /**
  * @brief Places an entry or a day mark of the transcript. The line runs from its start edge, the
- * left one in left-to-right languages: 16 px of padding, the time column, a gap of 10, the text at
- * most 760 px wide, a gap of 10 and the 18 px state mark. Wider lines keep the rest as margin. In
- * the text column the author stands above the quote of a reply, 4 px over the text, and the notes
- * of the entry under the text.
+ * left one in left-to-right languages: 16 px of padding, the text at most 760 px wide and 16 px of
+ * padding at the far end. Wider lines keep the rest as margin. In the text column the author stands
+ * above the quote of a reply, 4 px over the text, and the notes of the entry under the text.
+ *
+ * KHANDAQ (owner, 28.11.2026): no time column before the text and no column for the state mark
+ * after it any more. The meta of an entry, "edited" and the time (content 2) and then the mark of
+ * ours (content 3) 4 px apart, stands at the far end of the text column: on the last line of the
+ * text, on its baseline, when that line leaves 8 px and the meta free at its end; else on a line
+ * of its own right under the text. A body that is not words (a file, a call, a place) keeps 8 px
+ * clear of the meta, which stands at its foot.
  */
 void ChatLine::layoutAir(QPointF scenePos)
 {
@@ -314,9 +326,8 @@ void ChatLine::layoutAir(QPointF scenePos)
     };
 
     const qreal edge = Space::s16;
-    const qreal textStart = edge + Size::timeColumn + Space::s10;
-    const qreal markRoom = Space::s10 + Size::mark;
-    const qreal textWidth = qBound<qreal>(0.0, width - textStart - edge - markRoom, Size::textMeasure);
+    const qreal textStart = edge;
+    const qreal textWidth = qBound<qreal>(0.0, width - 2 * edge, Size::textMeasure);
 
     if (lineLayout == Layout::AirDay) {
         place(content[0], textStart, Space::s12, textWidth);
@@ -371,18 +382,71 @@ void ChatLine::layoutAir(QPointF scenePos)
         placePart(quote, Space::s4);
     }
 
-    place(content[1], textStart, y, textWidth);
-    y += content[1]->boundingRect().height();
+    // The meta: the time with "edited" before it, then the mark of ours while it shows a glyph.
+    auto* const time = qobject_cast<AirLabel*>(content[2]);
+    auto* const mark = qobject_cast<AirMark*>(getContent(3));
+    const bool markShown = mark && mark->isShown();
+    const qreal timeWidth = time ? std::ceil(time->naturalWidth()) : 0.0;
+    const qreal timeHeight = time ? time->boundingRect().height() : 0.0;
+    const qreal markGap = timeWidth > 0 && markShown ? Space::s4 : 0.0;
+    const qreal metaWidth = timeWidth + markGap + (markShown ? Size::mark : 0);
+    const qreal metaHeight = qMax<qreal>(timeHeight, markShown ? Size::mark : 0);
+    const qreal metaRoom = metaWidth > 0 ? Space::s8 + metaWidth : 0.0;
+
+    ChatLineContent* const body = content[1];
+    const Text* const words = qobject_cast<const Text*>(body);
+    place(body, textStart, y, words ? textWidth : qMax<qreal>(0.0, textWidth - metaRoom));
+    const qreal bodyTop = y;
+    const QRectF bodyBox = body->boundingRect();
+    y += bodyBox.height();
+
+    // The top of the meta's own box, metaHeight tall: the time and the mark stand in its middle.
+    qreal metaTop = y;
+    bool metaOnItsLine = true;
+    QRectF lastLine;
+    qreal lastBaseline = 0.0;
+    if (words && words->lastTextLine(&lastLine, &lastBaseline)) {
+        // The room the last line leaves at the end of the column, which is its right in a
+        // left-to-right interface and its left in a right-to-left one: the item is not mirrored.
+        const qreal room = rightToLeft ? lastLine.left() - (bodyBox.width() - textWidth)
+                                       : textWidth - lastLine.right();
+        if (room >= metaRoom) {
+            metaOnItsLine = false;
+            const qreal timeTop = time && timeWidth > 0
+                                      ? bodyTop + lastBaseline - time->baseline()
+                                      : bodyTop + lastLine.center().y() - timeHeight / 2;
+            metaTop = timeTop - (metaHeight - timeHeight) / 2;
+        }
+    } else if (!words && bodyBox.width() <= textWidth - metaRoom) {
+        // At the foot of the body, which kept clear of it. A body that could not (a file card at
+        // its least width in a narrow window) has the meta on a line of its own under it. A card
+        // stands in its proxy with some room under it, which is not the card's.
+        const auto* const card = qobject_cast<const ChatLineContentProxy*>(body);
+        const qreal foot = card && card->getWidget()
+                               ? qMin(y, bodyTop + card->getWidget()->height())
+                               : y;
+        metaOnItsLine = false;
+        metaTop = qMax(bodyTop, foot - metaHeight);
+    }
+    if (metaOnItsLine) {
+        y += metaHeight;
+    }
+    y = qMax(y, metaTop + metaHeight);
+
+    const qreal metaStart = textStart + textWidth - metaWidth;
+    if (time) {
+        place(time, metaStart, metaTop + (metaHeight - timeHeight) / 2, timeWidth);
+    }
+    if (markShown) {
+        place(mark, metaStart + timeWidth + markGap, metaTop + (metaHeight - Size::mark) / 2,
+              Size::mark);
+    } else if (mark) {
+        mark->setVisible(false);
+    }
 
     ChatLineContent* const notes = notesPart();
     if (notes) {
         placePart(notes, 0);
-    }
-
-    place(content[2], edge, top + Space::s2, Size::timeColumn);
-
-    if (content.size() > 3 && quoteColumn != 3 && notesColumn != 3 && privateColumn != 3) {
-        place(content[3], textStart + textWidth + Space::s10, top, Size::mark);
     }
 
     bbox.setHeight(y + Space::s4);

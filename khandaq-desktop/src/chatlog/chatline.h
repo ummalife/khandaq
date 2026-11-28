@@ -75,9 +75,10 @@ public:
         /** The classic row of columns, sized by their ColumnFormat. */
         Columns,
         /**
-         * An entry of the transcript (design/system kq-entry): the time at the start, the author
-         * above the text, the state mark after the text. Contents: 0 the author, 1 the text, 2 the
-         * time, and 3 the state mark when there is one; then the parts setEntryParts names.
+         * An entry of the transcript (design/system kq-entry): the author above the text, and
+         * (KHANDAQ, owner, 28.11.2026) the time and the state mark at the end of its last line.
+         * Contents: 0 the author, 1 the text, 2 the time, and 3 the state mark when there is one;
+         * then the parts setEntryParts names.
          */
         AirEntry,
         /** A day mark, set where the text of the entries starts: content 0. */

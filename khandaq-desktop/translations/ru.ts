@@ -2449,6 +2449,11 @@
         <translation>Загрузка прервалась</translation>
     </message>
     <message>
+        <source>The sender cancelled it</source>
+        <comment>file entry of theirs: the person who sent it cancelled the transfer before it was all here</comment>
+        <translation>Отправитель отменил отправку</translation>
+    </message>
+    <message>
         <source>Not sent</source>
         <comment>file entry of ours that broke or was cancelled</comment>
         <translation>Не отправлено</translation>

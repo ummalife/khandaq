@@ -1479,6 +1479,9 @@ void TestCore::a_file_that_cannot_be_read_any_more_is_cancelled_for_its_receiver
     QTRY_COMPARE_WITH_TIMEOUT(bobLog.of(bobLog.cancelled).size(), 1, connected_message_wait);
     QCOMPARE(aliceLog.of(aliceLog.cancelled).size(), 1);
     QCOMPARE(bobLog.of(bobLog.finished).size(), 0);
+    // KHANDAQ (inbox #36): his entry says its sender cancelled it; hers is a file of ours.
+    QVERIFY(bobLog.of(bobLog.cancelled).first().cancelledThere);
+    QVERIFY(!aliceLog.of(aliceLog.cancelled).first().cancelledThere);
     // Cancelled by its sender, it never goes on from what came: nothing of it stays.
     QVERIFY(!QFileInfo::exists(Air::partFilePath(target)));
     QVERIFY(!QFileInfo::exists(target));
@@ -1552,6 +1555,9 @@ void TestCore::a_file_cancelled_here_leaves_nothing_in_its_folder()
     }
     QTRY_COMPARE_WITH_TIMEOUT(aliceLog.of(aliceLog.cancelled).size(), 1, connected_message_wait);
     QCOMPARE(bobLog.of(bobLog.finished).size(), 1);
+    // KHANDAQ (inbox #36): his own cancel is no cancel of its sender, and hers is of a file of ours.
+    QVERIFY(!bobLog.of(bobLog.cancelled).first().cancelledThere);
+    QVERIFY(!aliceLog.of(aliceLog.cancelled).first().cancelledThere);
 
     // Cancelled while it waits for its sender: the part it left goes too.
     const QString later = dir.filePath(QStringLiteral("course later.mkv"));

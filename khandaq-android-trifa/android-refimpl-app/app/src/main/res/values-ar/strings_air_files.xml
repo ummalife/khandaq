@@ -33,6 +33,8 @@
     <string name="air_file_prepare_failed">لم يُرسل الملف. حاول مرة أخرى</string>
     <!-- 0.2.57: a 1:1 file under way while its connection is gone; it goes on by itself -->
     <string name="air_file_waits_connection">بانتظار الاتصال</string>
+    <!-- Inbox #36: a file of theirs that its sender cancelled before it was whole here -->
+    <string name="air_file_cancelled_there">ألغى المرسل الإرسال</string>
     <!-- Testers' ideas (0.2.67): a document picked to send is asked about first; the verb is air_compose_send -->
     <string name="air_file_send_title">إرسال الملف؟</string>
     <string name="air_file_send_what_format">%1$s، %2$s</string>

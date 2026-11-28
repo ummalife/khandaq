@@ -791,6 +791,9 @@ public class HelperFiletransfer
                     delete_filetransfer_tmpfile(friend_number, file_number);
                     // set state for FT in message
                     HelperMessage.set_message_state_from_id(msg_id, TOX_FILE_CONTROL_CANCEL.value);
+                    // KHANDAQ (inbox #36): their CANCEL is the only way here, so the sender cancelled it; the entry
+                    // says so rather than "The download stopped" with nothing to do about it.
+                    mark_incoming_cancelled_there(msg_id);
                     remove_vfs_ft_from_cache(f);
                     // remove link to any message
                     set_filetransfer_for_message_from_friendnum_and_filenum(friend_number, file_number, -1);
@@ -1997,11 +2000,13 @@ public class HelperFiletransfer
             f.message_id = m.id;
             update_filetransfer_db_full(f);
             orma.updateFiletransfer().idEq(f.id).ft_accepted(false).execute();
+            // KHANDAQ (inbox #36): its sender offers it again, so a cancel of theirs no longer holds.
             orma.updateMessage().idEq(m.id).
                     filetransfer_id(f.id).
                     filetransfer_kind(kind).
                     state(TOX_FILE_CONTROL_PAUSE.value).
                     ft_accepted(accepted_before).
+                    ft_cancelled_there(false).
                     execute();
 
             final Message current = (Message) orma.selectFromMessage().idEq(m.id).get(0);
@@ -4360,6 +4365,28 @@ public class HelperFiletransfer
         catch (Exception e)
         {
             Log.w(TAG, "resume_incoming_filetransfer_by_itself:EE:" + e.getMessage());
+        }
+    }
+
+    /**
+     * KHANDAQ (inbox #36): a file of theirs that its sender cancelled before it was whole here (their CANCEL,
+     * cancel_filetransfer). Its entry says so (AirFileEntry) instead of "The download stopped"; a new offer of
+     * the same file clears it (resume_incoming_offer).
+     */
+    static void mark_incoming_cancelled_there(long msg_id)
+    {
+        if (msg_id < 0)
+        {
+            return;
+        }
+
+        try
+        {
+            orma.updateMessage().idEq(msg_id).ft_cancelled_there(true).execute();
+        }
+        catch (Exception e)
+        {
+            Log.w(TAG, "mark_incoming_cancelled_there:EE:" + e.getMessage());
         }
     }
 

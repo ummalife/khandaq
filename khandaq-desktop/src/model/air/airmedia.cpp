@@ -340,7 +340,10 @@ FileEntryState fileEntryState(const FileFacts& facts)
     case ToxFile::BROKEN:
     case ToxFile::CANCELED:
         if (facts.incoming) {
-            state.note = FileNote::DownloadStopped;
+            // KHANDAQ (inbox #36): one its sender cancelled tells so, instead of a stop to wonder at.
+            state.note = facts.cancelledThere && facts.status == ToxFile::CANCELED
+                             ? FileNote::CancelledThere
+                             : FileNote::DownloadStopped;
         } else {
             state.note = FileNote::NotSent;
             if (facts.canSendAgain) {

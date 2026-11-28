@@ -532,6 +532,7 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                 a.state != b.state || a.ft_accepted != b.ft_accepted ||
                 a.ft_outgoing_started != b.ft_outgoing_started || a.filedb_id != b.filedb_id ||
                 a.ft_outgoing_preparing != b.ft_outgoing_preparing ||
+                a.ft_cancelled_there != b.ft_cancelled_there ||
                 a.filetransfer_id != b.filetransfer_id || a.sent_timestamp != b.sent_timestamp ||
                 a.rcvd_timestamp != b.rcvd_timestamp || a.read != b.read || a.edited != b.edited ||
                 a.msg_at_relay != b.msg_at_relay || a.sent_push != b.sent_push ||
@@ -841,6 +842,8 @@ public class MessagelistAdapter extends RecyclerView.Adapter implements FastScro
                             && old_item.filetransfer_id == new_item.filetransfer_id
                             // KHANDAQ (0.2.56): a copy that became complete brings its preview: a full bind.
                             && old_item.ft_outgoing_preparing == new_item.ft_outgoing_preparing
+                            // KHANDAQ (inbox #36): a cancel of theirs changes what the entry says: a full bind.
+                            && old_item.ft_cancelled_there == new_item.ft_cancelled_there
                             && ((old_item.filename_fullpath == null) == (new_item.filename_fullpath == null))
                             // KHANDAQ: a reaction change must force a FULL rebind (chip row + selection
                             // state), otherwise a reaction on a media/voice row only shows up after

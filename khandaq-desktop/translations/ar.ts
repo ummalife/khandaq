@@ -2509,6 +2509,11 @@
         <translation>توقف التنزيل</translation>
     </message>
     <message>
+        <source>The sender cancelled it</source>
+        <comment>file entry of theirs: the person who sent it cancelled the transfer before it was all here</comment>
+        <translation>ألغى المرسل الإرسال</translation>
+    </message>
+    <message>
         <source>Not sent</source>
         <comment>file entry of ours that broke or was cancelled</comment>
         <translation>لم يُرسل</translation>

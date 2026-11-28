@@ -355,7 +355,7 @@ public class MainActivity extends AppCompatActivity
     final static boolean NDK_STDOUT_LOGGING = false; // set "false" for release builds
     final static boolean DEBUG_BATTERY_OPTIMIZATION_LOGGING = false;  // set "false" for release builds
     final static boolean INSANE_TRACE_LOGGING = false; // set "false" for release builds
-    final static int ORMA_CURRENT_DB_SCHEMA_VERSION = 10246; // increase for database schema changes
+    final static int ORMA_CURRENT_DB_SCHEMA_VERSION = 10247; // increase for database schema changes
     final static boolean DB_ENCRYPT = true; // set "true" always!
     final static boolean VFS_ENCRYPT = true; // set "true" always!
     final static boolean AEC_DEBUG_DUMP = false; // set "false" for release builds
@@ -2865,6 +2865,12 @@ public class MainActivity extends AppCompatActivity
         if (new_version == 10246) {
             run_multi_sql("ALTER TABLE Message ADD COLUMN ft_outgoing_preparing BOOLEAN NOT NULL DEFAULT false");
             run_multi_sql("CREATE INDEX `index_ft_outgoing_preparing_on_Message` ON `Message` (`ft_outgoing_preparing`)");
+        }
+
+        // KHANDAQ (inbox #36): a file of theirs whose sender cancelled it before it was whole here. Rows from
+        // before do not know why their download stopped, hence false: they keep saying "The download stopped".
+        if (new_version == 10247) {
+            run_multi_sql("ALTER TABLE Message ADD COLUMN ft_cancelled_there BOOLEAN NOT NULL DEFAULT false");
         }
     }
 

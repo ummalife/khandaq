@@ -34,7 +34,31 @@
 #include <QStyle>
 #include <QTextBlock>
 #include <QTextFragment>
+#include <QTextLayout>
 #include <QUrl>
+
+namespace {
+/** Whether the words hold a letter written left to right or right to left. */
+bool hasStrongLetter(const QString& words)
+{
+    for (int i = 0; i < words.size(); ++i) {
+        uint code = words.at(i).unicode();
+        if (words.at(i).isHighSurrogate() && i + 1 < words.size() && words.at(i + 1).isLowSurrogate()) {
+            code = QChar::surrogateToUcs4(words.at(i), words.at(i + 1));
+            ++i;
+        }
+        switch (QChar::direction(code)) {
+        case QChar::DirL:
+        case QChar::DirR:
+        case QChar::DirAL:
+            return true;
+        default:
+            break;
+        }
+    }
+    return false;
+}
+} // namespace
 
 Text::Text(DocumentCache& documentCache_, Settings& settings_, Style& style_,
     const QColor& custom, const QString& txt, const QFont& font, bool enableElide,
@@ -126,6 +150,12 @@ void Text::setDocumentMargin(qreal margin)
 void Text::setStartAligned(bool startAligned_)
 {
     startAligned = startAligned_;
+    dirty = true;
+}
+
+void Text::setOwnDirection(bool ownDirection_)
+{
+    ownDirection = ownDirection_;
     dirty = true;
 }
 
@@ -291,6 +321,17 @@ qreal Text::getAscent() const
     return ascent;
 }
 
+bool Text::lastTextLine(QRectF* box, qreal* baseline) const
+{
+    // Every laid-out line has a height, an empty one too: a null box is a text not laid out yet.
+    if (lastLineBox.isNull()) {
+        return false;
+    }
+    *box = lastLineBox;
+    *baseline = lastLineBaseline;
+    return true;
+}
+
 void Text::mousePressEvent(QGraphicsSceneMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton)
@@ -403,6 +444,19 @@ void Text::regenerate()
             doc->setHtml(text);
         }
 
+        // KHANDAQ (owner, 28.11.2026): Qt sets a paragraph without a letter of either direction
+        // (figures, emoji) from left to right; such a paragraph takes the interface's direction,
+        // as on the phones, so "15:30" or a smiley stands at the right in Arabic.
+        if (ownDirection && !startAligned && QGuiApplication::layoutDirection() == Qt::RightToLeft) {
+            for (QTextBlock block = doc->begin(); block.isValid(); block = block.next()) {
+                if (!hasStrongLetter(block.text())) {
+                    QTextBlockFormat format = block.blockFormat();
+                    format.setLayoutDirection(Qt::RightToLeft);
+                    QTextCursor(block).setBlockFormat(format);
+                }
+            }
+        }
+
         // wrap mode
         QTextOption opt;
         opt.setWrapMode(elide ? QTextOption::NoWrap : QTextOption::WrapAtWordBoundaryOrAnywhere);
@@ -427,6 +481,22 @@ void Text::regenerate()
 
         // get the new width and height
         size = idealSize();
+
+        // KHANDAQ (owner, 28.11.2026): where the last line ends and where its baseline lies, read
+        // once the whole document is laid out (size above), for the time of the entry.
+        lastLineBox = QRectF();
+        lastLineBaseline = 0.0;
+        for (QTextBlock block = doc->lastBlock(); block.isValid(); block = block.previous()) {
+            const QTextLayout* const blockLayout = block.layout();
+            if (!blockLayout || blockLayout->lineCount() == 0) {
+                continue;
+            }
+            const QTextLine line = blockLayout->lineAt(blockLayout->lineCount() - 1);
+            const QPointF origin = blockLayout->position();
+            lastLineBox = line.naturalTextRect().translated(origin);
+            lastLineBaseline = origin.y() + line.y() + line.ascent();
+            break;
+        }
 
         dirty = false;
     }

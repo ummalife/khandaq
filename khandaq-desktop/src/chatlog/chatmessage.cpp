@@ -77,6 +77,15 @@ AirLabel* timeLabel(const QDateTime& date)
 }
 
 /**
+ * KHANDAQ (owner, 28.11.2026): an entry its author changed says so before its time, as Telegram's
+ * "edited 14:17", no longer on a line of its own under the text.
+ */
+QString editedLead(const Air::EntryMarks& marks)
+{
+    return marks.edited ? AirStrings::text(AirStrings::Text::MessageEdited) : QString();
+}
+
+/**
  * KHANDAQ (26.11.2026): where a mention starts and ends in the words while they go through the
  * formatting (escaping, smileys, links, markdown), which leaves characters of the private use area
  * as they are; createBody turns them into the link at the end.
@@ -186,7 +195,10 @@ ChatLineContent* ChatMessage::createBody(const QString& rawMessage, const QStrin
         new Text(documentCache, settings, style, text, bodyFont(settings), false,
                  type == ACTION ? QString("%1 %2").arg(sender, words) : words, textType);
     body->setDocumentMargin(0);
-    body->setStartAligned(true);
+    // KHANDAQ (owner, 28.11.2026): each paragraph by its own direction, as on the phones: an
+    // Arabic one stands at the right in an English interface, and its time goes under it, as the
+    // last line has no room left at its end (ChatLine::layoutAir).
+    body->setOwnDirection(true);
     return body;
 }
 
@@ -202,6 +214,7 @@ ChatMessage::Ptr ChatMessage::createChatMessage(const AirLook& look, const QStri
     msg->rawText = rawMessage;
     msg->senderName = sender;
     msg->messageType = type;
+    msg->editable = true;
     if (type == ACTION) {
         msg->setAsAction();
     }
@@ -211,7 +224,9 @@ ChatMessage::Ptr ChatMessage::createChatMessage(const AirLook& look, const QStri
     msg->addColumn(authorLabel(look), ColumnFormat());
     msg->addColumn(createBody(rawMessage, sender, type, documentCache, smileyPack, settings, style),
                    ColumnFormat());
-    msg->addColumn(timeLabel(date), ColumnFormat());
+    AirLabel* const time = timeLabel(date);
+    time->setLead(editedLead(marks));
+    msg->addColumn(time, ColumnFormat());
     if (look.hasMark) {
         msg->addColumn(new AirMark(look.status), ColumnFormat());
     }
@@ -377,12 +392,15 @@ ChatMessage::Ptr ChatMessage::createBusyNotification(DocumentCache& documentCach
     return msg;
 }
 
-void ChatMessage::setStatus(Air::EntryStatus status)
+bool ChatMessage::setStatus(Air::EntryStatus status)
 {
     auto* mark = qobject_cast<AirMark*>(getContent(3));
-    if (mark) {
-        mark->setStatus(status);
+    if (!mark) {
+        return false;
     }
+    const bool wasShown = mark->isShown();
+    mark->setStatus(status);
+    return mark->isShown() != wasShown;
 }
 
 bool ChatMessage::updateMessage(const QString& rawMessage, MessageType type,
@@ -410,7 +428,12 @@ bool ChatMessage::updateMessage(const QString& rawMessage, MessageType type,
 bool ChatMessage::updateMarks(const Air::EntryMarks& marks)
 {
     auto* const notes = qobject_cast<AirEntryNotes*>(notesPart());
-    return notes && notes->setNotes(marks);
+    const bool notesResized = notes && notes->setNotes(marks);
+    // KHANDAQ (owner, 28.11.2026): "edited" before the time widens it, and the time may then
+    // leave the last line of the text for a line of its own. A file is not edited.
+    auto* const time = editable ? qobject_cast<AirLabel*>(getContent(2)) : nullptr;
+    const bool timeResized = time && time->setLead(editedLead(marks));
+    return notesResized || timeResized;
 }
 
 bool ChatMessage::updateAuthor(const AirLook& look)

@@ -117,9 +117,34 @@ QFont AirLabel::font() const
     return result;
 }
 
+bool AirLabel::setLead(const QString& lead_)
+{
+    if (lead == lead_) {
+        return false;
+    }
+    prepareGeometryChange();
+    lead = lead_;
+    update();
+    return true;
+}
+
+QString AirLabel::getLead() const
+{
+    return lead;
+}
+
 qreal AirLabel::naturalWidth() const
 {
-    return QFontMetricsF(font()).horizontalAdvance(text);
+    const QFontMetricsF metrics(font());
+    const qreal own = metrics.horizontalAdvance(text);
+    return lead.isEmpty() ? own : metrics.horizontalAdvance(lead) + AirTokens::Space::s4 + own;
+}
+
+qreal AirLabel::baseline() const
+{
+    // QPainter::drawText centres one line by its ascent and descent, without the leading.
+    const QFontMetricsF metrics(font());
+    return (boundingRect().height() - metrics.ascent() - metrics.descent()) / 2.0 + metrics.ascent();
 }
 
 QRectF AirLabel::textRect() const
@@ -197,15 +222,30 @@ void AirLabel::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, 
     }
 
     const QFont labelFont = font();
+    const QFontMetricsF metrics(labelFont);
     painter->setFont(labelFont);
     painter->setPen(color);
-    const QRectF box = boundingRect();
-    const QString shown = QFontMetricsF(labelFont).elidedText(text, Qt::ElideRight, box.width());
     // As the names in the list: at the start edge of the interface, written in the label's own
     // direction. The alignment is absolute, so the view's painter does not mirror it once more.
     const Qt::Alignment start =
         QStyle::visualAlignment(QGuiApplication::layoutDirection(), Qt::AlignLeft | Qt::AlignVCenter);
-    AirPaint::ownText(*painter, box.toRect(), static_cast<int>(start) | Qt::TextSingleLine, shown);
+    const int flags = static_cast<int>(start) | Qt::TextSingleLine;
+    QRectF box = boundingRect();
+    if (!lead.isEmpty()) {
+        // The lead at the start edge, the text after it and the gap.
+        const bool rightToLeft = QGuiApplication::layoutDirection() == Qt::RightToLeft;
+        const qreal leadRoom =
+            std::min(metrics.horizontalAdvance(lead) + AirTokens::Space::s4, box.width());
+        const QRectF leadBox(rightToLeft ? box.right() - leadRoom : box.left(), box.top(), leadRoom,
+                             box.height());
+        AirPaint::ownText(*painter, leadBox.toRect(), flags, lead);
+        box.setWidth(box.width() - leadRoom);
+        if (!rightToLeft) {
+            box.moveLeft(leadBox.right());
+        }
+    }
+    const QString shown = metrics.elidedText(text, Qt::ElideRight, box.width());
+    AirPaint::ownText(*painter, box.toRect(), flags, shown);
 }
 
 QString AirLabel::getText() const
@@ -240,6 +280,11 @@ void AirMark::setStatus(Air::EntryStatus status_)
 Air::EntryStatus AirMark::getStatus() const
 {
     return status;
+}
+
+bool AirMark::isShown() const
+{
+    return !Air::statusIconName(status).isEmpty();
 }
 
 void AirMark::setWidth(float width)
@@ -601,15 +646,9 @@ QIcon AirEntryNotes::pictureOf(const QString& emoji) const
 
 qreal AirEntryNotes::height() const
 {
-    using namespace AirTokens;
-    qreal total = 0;
-    if (!shown.isEmpty()) {
-        total += reactionChipsTop + reactionChipHeight;
-    }
-    if (edited) {
-        total += 1 + air().lineHeight(TextRole::Caption);
-    }
-    return total;
+    // KHANDAQ (owner, 28.11.2026): "edited" takes no line here any more: it stands before the
+    // time, at the end of the entry.
+    return shown.isEmpty() ? 0 : reactionChipsTop + reactionChipHeight;
 }
 
 void AirEntryNotes::setWidth(float width_)
@@ -647,9 +686,6 @@ void AirEntryNotes::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
     using namespace AirTokens;
     std::ignore = option;
     std::ignore = widget;
-    const int flags = static_cast<int>(startEdge()) | Qt::TextSingleLine;
-    const int room = static_cast<int>(width);
-    qreal y = 0;
     if (!shown.isEmpty()) {
         const bool rightToLeft = QGuiApplication::layoutDirection() == Qt::RightToLeft;
         const QColor ink = air().color(Color::Ink);
@@ -689,16 +725,6 @@ void AirEntryNotes::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
             }
         }
         painter->restore();
-        y += reactionChipsTop + reactionChipHeight;
-    }
-    if (edited) {
-        const QFont font = air().font(TextRole::Caption);
-        painter->setFont(font);
-        painter->setPen(air().color(Color::Ink3));
-        const qreal line = air().lineHeight(TextRole::Caption);
-        y += 1;
-        AirPaint::ownText(*painter, QRect(0, static_cast<int>(y), room, static_cast<int>(line)),
-                          flags, AirStrings::text(AirStrings::Text::MessageEdited));
     }
 }
 

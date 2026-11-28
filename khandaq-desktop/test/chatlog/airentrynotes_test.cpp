@@ -19,6 +19,7 @@
 
 #include "src/chatlog/content/airlabel.h"
 #include "src/model/air/airmessagemarks.h"
+#include "src/widget/air/airstrings.h"
 #include "src/widget/air/airstyle.h"
 #include "src/widget/air/airtokens.h"
 
@@ -94,10 +95,15 @@ void TestAirEntryNotes::chipsTakeALineOfTheirOwn()
     chips.setWidth(400);
     QCOMPARE(chips.boundingRect().height(), qreal(Space::s4 + Size::controlSmall));
 
+    // KHANDAQ (owner, 28.11.2026): "edited" stands before the time at the end of the entry, no
+    // longer on a line of its own under the chips; the notes still say it.
     AirEntryNotes both(reacted({{writingHand, 1}}, true), nullptr);
     both.setWidth(400);
-    QVERIFY2(both.boundingRect().height() > chips.boundingRect().height(),
-             "\"edited\" takes no line under the chips");
+    QCOMPARE(both.boundingRect().height(), chips.boundingRect().height());
+    AirEntryNotes edited(reacted({}, true), nullptr);
+    edited.setWidth(400);
+    QCOMPARE(edited.boundingRect().height(), 0.0);
+    QCOMPARE(edited.getSpokenText(), AirStrings::text(AirStrings::Text::MessageEdited));
 }
 
 void TestAirEntryNotes::eachReactionIsAChipFromTheStartEdge()

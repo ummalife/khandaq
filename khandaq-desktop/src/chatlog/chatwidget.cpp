@@ -124,12 +124,13 @@ bool renderMessageRaw(const ChatMessage::AirLook& look, const QString& displayNa
     auto chatMessage = static_cast<ChatMessage*>(chatLine.get());
 
     if (chatMessage) {
-        chatMessage->setStatus(look.status);
+        // KHANDAQ (owner, 28.11.2026): a mark that comes or goes moves the time beside it.
+        const bool markChanged = chatMessage->setStatus(look.status);
         const bool authorChanged = chatMessage->updateAuthor(look);
         const bool bodyChanged = chatMessage->updateMessage(chatLogMessage.message.content,
                                                             messageTypeOf(look, chatLogMessage),
                                                             chatLogMessage.marks, smileyPack);
-        return authorChanged || bodyChanged;
+        return markChanged || authorChanged || bodyChanged;
     }
     chatLine =
         createMessage(look, displayName, chatLogMessage, documentCache, smileyPack, settings, style);
@@ -2056,8 +2057,9 @@ size_t ChatWidget::applyEntryFlags()
         }
         if (personChat && isSelf
             && (type == ChatLogItem::ContentType::message
-                || type == ChatLogItem::ContentType::fileTransfer)) {
-            static_cast<ChatMessage*>(line)->setStatus(statusOf(item));
+                || type == ChatLogItem::ContentType::fileTransfer)
+            && static_cast<ChatMessage*>(line)->setStatus(statusOf(item))) {
+            moved(position);
         }
         previous = key;
         hasPrevious = true;
@@ -2187,9 +2189,9 @@ void ChatWidget::renderFile(const ChatMessage::AirLook& look, ToxFile file, QDat
         assert(entry);
         entry->onFileTransferUpdate(file);
         auto* const line = static_cast<ChatMessage*>(chatMessage.get());
-        line->setStatus(look.status);
+        const bool markChanged = line->setStatus(look.status);
         const bool authorChanged = line->updateAuthor(look);
-        if (line->updateMarks(marks) || authorChanged) {
+        if (line->updateMarks(marks) || authorChanged || markChanged) {
             resizedLines.push_back(chatMessage);
             resizedLater->start();
         }

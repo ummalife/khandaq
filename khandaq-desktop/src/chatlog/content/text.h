@@ -59,8 +59,14 @@ public:
      * author's name does. */
     void setDocumentMargin(qreal margin);
     /** Sets the lines at the start edge of the interface, whatever the direction of their own
-     * words; the transcript has them so, next to its time column. */
+     * words; the service lines of the transcript have them so. */
     void setStartAligned(bool startAligned);
+    /**
+     * KHANDAQ (owner, 28.11.2026): sets each paragraph at the start of its own direction, as the
+     * phones do, and one without a letter of either direction (figures, emoji) as the interface
+     * runs; the words of a message have them so since the time column before them went.
+     */
+    void setOwnDirection(bool ownDirection);
 
     void selectionMouseMove(QPointF scenePos) final;
     void selectionStarted(QPointF scenePos) final;
@@ -79,6 +85,13 @@ public:
     void reloadTheme() final;
 
     qreal getAscent() const final;
+    /**
+     * KHANDAQ (owner, 28.11.2026): the last line as it is laid out, for the time and the mark of
+     * an entry to stand on (ChatLine::layoutAir): box is the room its words take (where it starts
+     * and ends by its alignment), baseline the height of its baseline, both in the coordinates of
+     * this item. False while the text has not been laid out.
+     */
+    bool lastTextLine(QRectF* box, qreal* baseline) const;
     void mousePressEvent(QGraphicsSceneMouseEvent* event) final;
     void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) final;
     void hoverMoveEvent(QGraphicsSceneHoverEvent* event) final;
@@ -122,10 +135,17 @@ private:
     int selectionEnd = -1;
     int selectionAnchor = -1;
     qreal ascent = 0.0;
+    /**
+     * The last line as the document laid it out, kept as the size is: the document goes back to
+     * the cache while the line is out of view, and the transcript lays out lines it does not show.
+     */
+    QRectF lastLineBox;
+    qreal lastLineBaseline = 0.0;
     /** QTextDocument's own default. */
     qreal documentMargin = 4.0;
     /** Off: each paragraph stands by its own direction, as QTextOption has it. */
     bool startAligned = false;
+    bool ownDirection = false;
     QFont defFont;
     TextType textType;
     QColor color;

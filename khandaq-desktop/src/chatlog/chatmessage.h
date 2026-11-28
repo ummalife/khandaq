@@ -119,8 +119,11 @@ public:
     static ChatMessage::Ptr createTypingNotification(DocumentCache& documentCache, Settings& settings, Style& style);
     static ChatMessage::Ptr createBusyNotification(DocumentCache& documentCache, Settings& settings, Style& style);
 
-    /** Changes the state mark of one of our messages. */
-    void setStatus(Air::EntryStatus status);
+    /**
+     * Changes the state mark of one of our messages. KHANDAQ (owner, 28.11.2026): returns whether
+     * the mark came or went (AirMark::isShown), so the time at the end of the entry moves.
+     */
+    bool setStatus(Air::EntryStatus status);
     /**
      * Shows what changed on a message since it was drawn (stage 3, item 10): the new words of an
      * edit, its type (KHANDAQ, beta feedback 2026-11-22: a saved message edited into an action or
@@ -170,6 +173,8 @@ private:
     QString rawText;
     QString senderName;
     MessageType messageType = NORMAL;
+    /** A message, whose author may change it: its time says "edited" then. A file is not. */
+    bool editable = false;
     DocumentCache& documentCache;
     Settings& settings;
     Style& style;

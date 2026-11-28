@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27T20:12:25Z",
+  "generated_at": "2026-11-28T04:57:55Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,39 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.77",
+      "date": "2026-11-28",
+      "title": "A shared place is a map on the desktop",
+      "summary": "On the desktop a place someone shares is a small map with a marker that opens on OpenStreetMap, no longer a line of letters and numbers, and quotes, the chat list and notifications call it a location. On the iPhone a shared place is where you are, with a pin on its map. The desktop gets 0.2.77 and the iPhone TestFlight build 143017 (1.4.34); Android stays at 0.2.75.",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "Desktop: a shared place is a map",
+          "description": "A place shared from a phone showed on the desktop as the text khandaq-location: and its coordinates. It is now a map card: the map around the place with a marker on it, and under it Location and the coordinates; a click opens the place on openstreetmap.org. The map comes from OpenStreetMap through the proxy set in the app's settings, without cookies; while it loads, or when it cannot, the card keeps its place and tries again after a minute.",
+          "platforms": [
+            "desktop"
+          ]
+        },
+        {
+          "severity": "important",
+          "title": "iPhone: a shared place is where you are",
+          "description": "A place shared from the iPhone could be kilometres off, because the app asked for the reduced accuracy. It now waits up to 8 seconds for a fresh fix and sends the most accurate one; with Precise Location off for the app, it asks once for the exact place, and a share that gets no fix says so. The map in the chat has a pin on the place, with the coordinates as its caption; quotes, the chat list and notifications say Location, and holding a chat in the list shows its places, photos, videos and quotes as the chat does.",
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Desktop: a place is called a location everywhere",
+          "description": "A reply to a place, the reply bar, search, export and the queue of unsent messages show Location and the coordinates; the chat list, notifications and in-app bands say Location, and a reaction to a place says it was to your location.",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.76",
       "date": "2026-11-27",

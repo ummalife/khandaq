@@ -42,6 +42,8 @@ public:
 
     static QList<QPair<QString, QString>> listSmileyPacks(const QStringList& paths);
     static QList<QPair<QString, QString>> listSmileyPacks();
+    static QHash<QString, QString> picturesOf(const QString& filename,
+                                              const QStringList& emoticons);
 
     QString smileyfied(const QString& msg);
     QList<QStringList> getEmoticons() const;

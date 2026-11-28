@@ -360,7 +360,7 @@ const Source sources[] = {
     {Text::GroupRoleModerator, QT_TRANSLATE_NOOP3("Air", "moderator", "group role, as a member row says it")},
     {Text::GroupRoleMember, QT_TRANSLATE_NOOP3("Air", "member", "group role, as a member row says it")},
     {Text::GroupRoleObserver, QT_TRANSLATE_NOOP3("Air", "observer", "group role, as a member row says it")},
-    {Text::GroupYouFounder, QT_TRANSLATE_NOOP3("Air", "You founded the group. You name moderators, make anyone a member or an observer, remove members and change the group settings.", "group dossier: Your role")},
+    {Text::GroupYouFounder, QT_TRANSLATE_NOOP3("Air", "You founded the group. You manage its members, moderators and settings.", "group dossier: Your role")},
     {Text::GroupYouModerator, QT_TRANSLATE_NOOP3("Air", "You are a moderator. You make members observers and observers members, and you can remove them from the group.", "group dossier: Your role")},
     {Text::GroupYouMember, QT_TRANSLATE_NOOP3("Air", "You are a member. You write in the group; the founder and the moderators manage it.", "group dossier: Your role")},
     {Text::GroupYouObserver, QT_TRANSLATE_NOOP3("Air", "You are an observer. You read the group but cannot write; a moderator can give you the right to write.", "group dossier: Your role")},

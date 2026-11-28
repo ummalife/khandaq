@@ -760,6 +760,129 @@ private:
 };
 
 /**
+ * KHANDAQ (inbox #37): a few emoticons as a message shows them with a smiley set, under the choice
+ * of the set, so that the sets can be told apart: the pictures of the set at the size chosen, and
+ * as text what the set leaves as text (the typed smileys in the ASCII sets, the emoji the classic
+ * set has no picture of).
+ */
+class SmileySample : public QWidget
+{
+public:
+    explicit SmileySample(QWidget* parent)
+        : QWidget(parent)
+    {
+        setObjectName(QStringLiteral("settingsSmileySample"));
+        setContentsMargins(0, Space::s4, 0, 0);
+        setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+        AirPaint::followTheme(this);
+    }
+
+    /** Two typed smileys, which the ASCII sets leave as text, and four emoji. */
+    static const QStringList& emoticons()
+    {
+        static const QStringList sample{QStringLiteral(":)"), QStringLiteral(";)"),
+                                        QStringLiteral("😃"), QStringLiteral("😂"),
+                                        QStringLiteral("😎"), QStringLiteral("👍")};
+        return sample;
+    }
+
+    /** The sample as the set of filename draws it: its pictures size by size, its text in font. */
+    void setSet(const QString& filename, int size, const QFont& font)
+    {
+        if (filename != shownSet || icons.isEmpty()) {
+            shownSet = filename;
+            const QHash<QString, QString> pictures = SmileyPack::picturesOf(filename, emoticons());
+            icons.clear();
+            for (const QString& emoticon : emoticons()) {
+                const auto picture = pictures.constFind(emoticon);
+                icons.append(picture == pictures.constEnd() ? QIcon() : QIcon(picture.value()));
+            }
+        }
+        pictureSize = size;
+        textFont = font;
+        updateGeometry();
+        update();
+    }
+
+    QSize sizeHint() const override
+    {
+        int width = 0;
+        for (int index = 0; index < emoticons().size(); ++index) {
+            width += pieceWidth(index) + (index > 0 ? Space::s8 : 0);
+        }
+        return withMargins(QSize(width, lineHeight()));
+    }
+
+    QSize minimumSizeHint() const override
+    {
+        return withMargins(QSize(pieceWidth(0), lineHeight()));
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setRenderHint(QPainter::SmoothPixmapTransform);
+        // Dimmed with its row while smileys are off.
+        painter.setOpacity(isEnabled() ? 1.0 : 0.4);
+        painter.setFont(textFont);
+        painter.setPen(air().color(Color::Ink));
+        const QRect area = contentsRect();
+        int x = area.left();
+        for (int index = 0; index < emoticons().size(); ++index) {
+            const int width = pieceWidth(index);
+            // What does not fit, in a narrow pane or at a big size, is left out, not cut.
+            if (x + width > area.left() + area.width()) {
+                break;
+            }
+            const QRect piece = QStyle::visualRect(layoutDirection(), area,
+                                                   QRect(x, area.top(), width, area.height()));
+            const QIcon icon = icons.value(index);
+            if (icon.isNull()) {
+                painter.drawText(piece, Qt::AlignCenter, emoticons().at(index));
+            } else {
+                const int top = piece.top() + (piece.height() - pictureSize) / 2;
+                icon.paint(&painter, QRect(piece.left(), top, pictureSize, pictureSize));
+            }
+            x += width + Space::s8;
+        }
+    }
+
+    void changeEvent(QEvent* event) override
+    {
+        if (event->type() == QEvent::EnabledChange) {
+            update();
+        }
+        QWidget::changeEvent(event);
+    }
+
+private:
+    int pieceWidth(int index) const
+    {
+        return icons.value(index).isNull() ? textWidth(textFont, emoticons().at(index))
+                                           : pictureSize;
+    }
+
+    int lineHeight() const
+    {
+        return std::max(pictureSize, QFontMetrics(textFont).height());
+    }
+
+    /** QSize::grownBy() came in Qt 5.14; the Windows build has Qt 5.12. */
+    QSize withMargins(const QSize& size) const
+    {
+        const QMargins margins = contentsMargins();
+        return size + QSize(margins.left() + margins.right(), margins.top() + margins.bottom());
+    }
+
+    QString shownSet;
+    QVector<QIcon> icons;
+    int pictureSize = 0;
+    QFont textFont;
+};
+
+/**
  * The still dot before the state of the node: green while messages leave, the grey of waiting
  * while the node looks for the network, red only when there is no network. It is as high as the
  * first line of the title beside it, so it keeps to that line when the title wraps.
@@ -964,7 +1087,7 @@ QLabel* AirSettingsPage::label(TextRole role, Color color, QWidget* parent, cons
 }
 
 QWidget* AirSettingsPage::row(QVBoxLayout* rows, const Words& title, const Words& detail,
-                              QWidget* control)
+                              QWidget* control, QWidget* below)
 {
     QWidget* const parent = rows->parentWidget() ? rows->parentWidget() : this;
     auto* const line = new QWidget(parent);
@@ -979,6 +1102,10 @@ QWidget* AirSettingsPage::row(QVBoxLayout* rows, const Words& title, const Words
         QLabel* const detailLabel = label(TextRole::Caption, Color::Ink3, line, nullptr);
         textColumn->addWidget(detailLabel);
         details.emplace_back(detailLabel, detail);
+    }
+    if (below) {
+        below->setParent(line);
+        textColumn->addWidget(below);
     }
     box->addWords(textColumn);
     if (control) {
@@ -1011,10 +1138,10 @@ AirSwitch* AirSettingsPage::switchRow(QVBoxLayout* rows, const Words& title, con
 
 QWidget* AirSettingsPage::menuRow(QVBoxLayout* rows, const Words& title, const Words& value,
                                   const std::function<void(QWidget* anchor)>& open,
-                                  const Words& detail)
+                                  const Words& detail, QWidget* below)
 {
     auto* const button = new MenuButton(this);
-    QWidget* const line = row(rows, title, detail, button);
+    QWidget* const line = row(rows, title, detail, button, below);
     readers.push_back([button, value] {
         button->setText(value());
         button->updateGeometry();
@@ -1154,6 +1281,8 @@ void AirSettingsPage::buildAppearance()
     switchRow(
         chats, words(Text::SettingsSmileys), nullptr, [this] { return settings.getUseEmoticons(); },
         [this](bool on) { settings.setUseEmoticons(on); });
+    // KHANDAQ (inbox #37): under the name of the set, a few emoticons as a message shows them.
+    auto* const smileySample = new SmileySample(this);
     QWidget* const pack = menuRow(
         chats, words(Text::SettingsSmileyPack),
         [this] {
@@ -1165,7 +1294,20 @@ void AirSettingsPage::buildAppearance()
             }
             return QFileInfo(chosen).dir().dirName();
         },
-        [this](QWidget* anchor) { openSmileyMenu(anchor); });
+        [this](QWidget* anchor) { openSmileyMenu(anchor); }, nullptr, smileySample);
+    const auto showSmileySample = [this, smileySample] {
+        // The font of the messages, as ChatMessage::bodyFont() makes it: the font of the app, or
+        // the one chosen above.
+        const QFont chosen = settings.getChatMessageFont();
+        smileySample->setSet(settings.getSmileyPack(), settings.getEmojiFontPointSize(),
+                             chosen == Style::getFont(Style::Font::Big) ? air().font(TextRole::Body)
+                                                                        : chosen);
+    };
+    readers.push_back(showSmileySample);
+    // The size is kept when its field is left, and the font is chosen in a dialog: neither reads
+    // the page again.
+    connect(&settings, &Settings::emojiFontPointSizeChanged, smileySample, showSmileySample);
+    connect(&settings, &Settings::chatMessageFontChanged, smileySample, showSmileySample);
     QWidget* const sizeRow = numberRow(
         chats, words(Text::SettingsSmileySize), words(Text::SettingsPixels),
         QStringLiteral("settingsSmileySize"), smileySizeMin, smileySizeMax,

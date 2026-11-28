@@ -325,7 +325,7 @@
     <string name="air_group_role_moderator">مشرف</string>
     <string name="air_group_role_user">عضو</string>
     <string name="air_group_role_observer">مراقب</string>
-    <string name="air_group_you_founder">أنت مؤسس المجموعة: تعيّن المشرفين، وتجعل أي شخص عضوًا أو مراقبًا، وتزيل الأعضاء، وتغيّر إعدادات المجموعة.</string>
+    <string name="air_group_you_founder">أنت مؤسس المجموعة: تدير أعضاءها ومشرفيها وإعداداتها.</string>
     <string name="air_group_you_moderator">أنت مشرف: تجعل الأعضاء مراقبين والمراقبين أعضاء، ويمكنك إزالتهم من المجموعة.</string>
     <string name="air_group_you_user">أنت عضو: تكتب في المجموعة، ويديرها المؤسس والمشرفون.</string>
     <string name="air_group_you_observer">أنت مراقب: تقرأ المجموعة لكن لا يمكنك الكتابة. يمكن لمشرف أن يمنحك حق الكتابة.</string>

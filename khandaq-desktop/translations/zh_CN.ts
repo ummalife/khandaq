@@ -1673,9 +1673,9 @@
         <translation>旁观者</translation>
     </message>
     <message>
-        <source>You founded the group. You name moderators, make anyone a member or an observer, remove members and change the group settings.</source>
+        <source>You founded the group. You manage its members, moderators and settings.</source>
         <comment>group dossier: Your role</comment>
-        <translation>你创建了这个群组：可以任命管理员，把任何人设为成员或旁观者，移除成员，并更改群组设置。</translation>
+        <translation>你创建了这个群组：管理成员、管理员和群组设置。</translation>
     </message>
     <message>
         <source>You are a moderator. You make members observers and observers members, and you can remove them from the group.</source>

@@ -1040,7 +1040,7 @@
 "air_group_role_moderator" = "moderator";
 "air_group_role_user" = "member";
 "air_group_role_observer" = "observer";
-"air_group_you_founder" = "You founded the group. You name moderators, make anyone a member or an observer, remove members and change the group settings.";
+"air_group_you_founder" = "You founded the group. You manage its members, moderators and settings.";
 "air_group_you_moderator" = "You are a moderator. You make members observers and observers members, and you can remove them from the group.";
 "air_group_you_user" = "You are a member. You write in the group; the founder and the moderators manage it.";
 "air_group_you_observer" = "You are an observer. You read the group but cannot write; a moderator can give you the right to write.";

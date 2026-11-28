@@ -634,6 +634,47 @@ QList<QPair<QString, QString>> SmileyPack::listSmileyPacks(const QStringList& pa
 }
 
 /**
+ * @brief The pictures a pack has for some emoticons, read from its file
+ * @param filename The emoticons.xml of the pack, as listSmileyPacks() gives it
+ * @param emoticons The emoticons asked about, as they are typed
+ * @return The picture of each emoticon the pack draws, by the emoticon, in the form load() gives
+ * the pack in use; an emoticon the pack leaves as text is not there, nor is any when the file
+ * cannot be read
+ * @note KHANDAQ (inbox #37): for the sample of a pack in the settings, which need not be the pack
+ * in use. The file is read anew; the pack in use and its lock are not touched.
+ */
+QHash<QString, QString> SmileyPack::picturesOf(const QString& filename,
+                                               const QStringList& emoticons)
+{
+    QHash<QString, QString> pictures;
+    QFile xmlFile(filename);
+    if (!xmlFile.open(QIODevice::ReadOnly)) {
+        return pictures;
+    }
+    QDomDocument doc;
+    if (!doc.setContent(xmlFile.readAll())) {
+        return pictures;
+    }
+
+    // As load() reads it: the file of a picture is relative to the folder of the pack, and a
+    // spelling given twice is the picture of its last entry.
+    const QString folder = QFileInfo(filename).absolutePath();
+    const QDomNodeList emoticonElements = doc.elementsByTagName(QStringLiteral("emoticon"));
+    for (int i = 0; i < emoticonElements.size(); ++i) {
+        const QDomNode node = emoticonElements.at(i);
+        const QString iconName = node.attributes().namedItem(QStringLiteral("file")).nodeValue();
+        const QString iconPath = QDir{folder}.filePath(iconName);
+        for (QDomElement stringElement = node.firstChildElement(QStringLiteral("string"));
+             !stringElement.isNull(); stringElement = stringElement.nextSibling().toElement()) {
+            if (emoticons.contains(stringElement.text())) {
+                pictures.insert(stringElement.text(), iconPath);
+            }
+        }
+    }
+    return pictures;
+}
+
+/**
  * @brief Load smile pack
  * @note The caller must lock loadingMutex and should run it in a thread
  * @param filename Filename of smilepack.

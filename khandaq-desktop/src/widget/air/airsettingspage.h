@@ -139,16 +139,18 @@ private:
     QVBoxLayout* group(Page& page, const Words& title, const QString& name);
     QLabel* label(AirTokens::TextRole role, AirTokens::Color color, QWidget* parent,
                   const Words& words);
-    /** A row: its words on the start side, what it is set to at the end. */
-    QWidget* row(QVBoxLayout* rows, const Words& title, const Words& detail, QWidget* control);
+    /** A row: its words on the start side, what it is set to at the end; below, when given,
+     * under its words. */
+    QWidget* row(QVBoxLayout* rows, const Words& title, const Words& detail, QWidget* control,
+                 QWidget* below = nullptr);
     AirSwitch* switchRow(QVBoxLayout* rows, const Words& title, const Words& detail,
                          const std::function<bool()>& read, const std::function<void(bool)>& write,
                          const std::function<bool()>& enabled = nullptr);
     /** A row whose value opens a menu of choices under it; detail, when it says something, under
-     * the title. */
+     * the title, and below, when given, under its words. */
     QWidget* menuRow(QVBoxLayout* rows, const Words& title, const Words& value,
                      const std::function<void(QWidget* anchor)>& open,
-                     const Words& detail = nullptr);
+                     const Words& detail = nullptr, QWidget* below = nullptr);
     /** Choices side by side under their title, one under another when they do not fit. */
     QWidget* segmentRow(QVBoxLayout* rows, const Words& title, const std::vector<Words>& choices,
                         const std::function<int()>& read, const std::function<void(int)>& write);

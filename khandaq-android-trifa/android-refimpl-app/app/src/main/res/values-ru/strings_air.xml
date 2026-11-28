@@ -307,7 +307,7 @@
     <string name="air_group_role_moderator">модератор</string>
     <string name="air_group_role_user">участник</string>
     <string name="air_group_role_observer">наблюдатель</string>
-    <string name="air_group_you_founder">Вы основали группу: назначаете модераторов, делаете любого участником или наблюдателем, исключаете и меняете настройки группы.</string>
+    <string name="air_group_you_founder">Вы основали группу: управляете участниками, модераторами и настройками.</string>
     <string name="air_group_you_moderator">Вы модератор: делаете участников наблюдателями и наоборот и можете исключать их из группы.</string>
     <string name="air_group_you_user">Вы участник: пишете в группе, а управляют ею основатель и модераторы.</string>
     <string name="air_group_you_observer">Вы наблюдатель: читаете группу, но писать не можете. Право писать может дать модератор.</string>

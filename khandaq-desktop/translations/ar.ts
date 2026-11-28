@@ -1733,9 +1733,9 @@
         <translation>مراقب</translation>
     </message>
     <message>
-        <source>You founded the group. You name moderators, make anyone a member or an observer, remove members and change the group settings.</source>
+        <source>You founded the group. You manage its members, moderators and settings.</source>
         <comment>group dossier: Your role</comment>
-        <translation>أنت مؤسس المجموعة: تعيّن المشرفين، وتجعل أي شخص عضوًا أو مراقبًا، وتزيل الأعضاء، وتغيّر إعدادات المجموعة.</translation>
+        <translation>أنت مؤسس المجموعة: تدير أعضاءها ومشرفيها وإعداداتها.</translation>
     </message>
     <message>
         <source>You are a moderator. You make members observers and observers members, and you can remove them from the group.</source>

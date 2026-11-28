@@ -1697,9 +1697,9 @@
         <translation>наблюдатель</translation>
     </message>
     <message>
-        <source>You founded the group. You name moderators, make anyone a member or an observer, remove members and change the group settings.</source>
+        <source>You founded the group. You manage its members, moderators and settings.</source>
         <comment>group dossier: Your role</comment>
-        <translation>Вы основали группу: назначаете модераторов, делаете любого участником или наблюдателем, исключаете и меняете настройки группы.</translation>
+        <translation>Вы основали группу: управляете участниками, модераторами и настройками.</translation>
     </message>
     <message>
         <source>You are a moderator. You make members observers and observers members, and you can remove them from the group.</source>

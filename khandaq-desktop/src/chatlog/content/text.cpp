@@ -58,6 +58,22 @@ bool hasStrongLetter(const QString& words)
     }
     return false;
 }
+
+/** Whether the words hold a figure, a decimal digit of any script. */
+bool hasFigure(const QString& words)
+{
+    for (int i = 0; i < words.size(); ++i) {
+        uint code = words.at(i).unicode();
+        if (words.at(i).isHighSurrogate() && i + 1 < words.size() && words.at(i + 1).isLowSurrogate()) {
+            code = QChar::surrogateToUcs4(words.at(i), words.at(i + 1));
+            ++i;
+        }
+        if (QChar::category(code) == QChar::Number_DecimalDigit) {
+            return true;
+        }
+    }
+    return false;
+}
 } // namespace
 
 Text::Text(DocumentCache& documentCache_, Settings& settings_, Style& style_,
@@ -445,11 +461,13 @@ void Text::regenerate()
         }
 
         // KHANDAQ (owner, 28.11.2026): Qt sets a paragraph without a letter of either direction
-        // (figures, emoji) from left to right; such a paragraph takes the interface's direction,
-        // as on the phones, so "15:30" or a smiley stands at the right in Arabic.
+        // from left to right. One of emoji or signs takes the interface's direction, so a smiley
+        // stands at the right in Arabic; one with figures keeps left to right, as figures are read
+        // in every language, so a phone number or the coordinates of a place keep their order (as
+        // on iOS).
         if (ownDirection && !startAligned && QGuiApplication::layoutDirection() == Qt::RightToLeft) {
             for (QTextBlock block = doc->begin(); block.isValid(); block = block.next()) {
-                if (!hasStrongLetter(block.text())) {
+                if (!hasStrongLetter(block.text()) && !hasFigure(block.text())) {
                     QTextBlockFormat format = block.blockFormat();
                     format.setLayoutDirection(Qt::RightToLeft);
                     QTextCursor(block).setBlockFormat(format);

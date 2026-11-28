@@ -689,7 +689,7 @@ final class AirEntryTextCell: ChatBaseTextCell {
         if let quote = MessageReplyHelper.spokenQuote(entry.replyMeta) {
             value.append(quote)
         }
-        // KHANDAQ (owner, 28.11): a place is said as what it is and where, "Location · 41.00824, 28.97836".
+        // KHANDAQ (owner, 28.11): a place is said as what it is and where: its title and coordinates (LocationMessage.caption).
         if let latitude = entry.locationLatitude, let longitude = entry.locationLongitude {
             value.append(LocationMessage.caption(latitude: latitude, longitude: longitude))
         }

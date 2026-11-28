@@ -459,7 +459,7 @@ public class HelperMsgNotification
                 }
             }
             // KHANDAQ (owner, 28.11): a place is named as the list of chats names it, not shown as its wire text
-            // "khandaq-location:…"; every message notification and the in-app band come through here.
+            // "khandaq-location:..."; every message notification and the in-app band come through here.
             final String shown_text = context_s == null ? notification_text
                                       : HelperLocationMessage.previewText(context_s, notification_text);
             show_msg_notification(notification_title, shown_text, key, sent_at_ms, group_peer_key, event);

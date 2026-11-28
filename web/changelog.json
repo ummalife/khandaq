@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-28T04:57:55Z",
+  "generated_at": "2026-11-28T05:06:02Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,31 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.78",
+      "date": "2026-11-28",
+      "title": "A shared place is where you are, on Android",
+      "summary": "On Android a shared place is where you are: the app sends the most accurate fresh fix of every location source that is on, and asks once for the exact place when only the approximate one is allowed. Quotes, the chat list and notifications call a place a location. Android gets 0.2.78; the desktop stays at 0.2.77 and the iPhone at TestFlight build 143017 (1.4.34).",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "Android: a shared place is where you are",
+          "description": "A place shared from Android could be kilometres off: the app took the newest fix the phone had, from whichever source and however rough, and after 15 seconds without one it sent any fix at all, however old. It now listens to every location source that is on and sends the most accurate fresh fix: at once within 20 metres, within 65 metres after two and a half seconds, otherwise the best one when the 15 seconds end, or one the phone had in the last two minutes. With only the approximate location allowed (Android 12 and newer), a share asks once to allow the exact one; a no sends the approximate place, as allowed.",
+          "platforms": [
+            "android"
+          ]
+        },
+        {
+          "severity": "medium",
+          "title": "Android: a place is called a location",
+          "description": "A reply to a place, the reply bar and TalkBack say Location and the coordinates, no longer the text khandaq-location:; the chat list, notifications and in-app bands say Location, and a reaction to a place says it was to your location.",
+          "platforms": [
+            "android"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.77",
       "date": "2026-11-28",

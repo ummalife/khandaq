@@ -602,7 +602,10 @@ void TestAirLocationCard::aTileTooLargeIsNoTile()
     loader.load(redSquare, QNetworkProxy(QNetworkProxy::NoProxy));
     QPointer<TileReply> large = manager.replies.first();
     large->respond(QByteArray(2 * 1024 * 1024, 'x'), 200);
-    QVERIFY(large.isNull() || large->aborted);
+    // The pointer is read once: GCC's -Wnull-dereference (an error in the strict Windows build)
+    // cannot tell that a QPointer which is not null stays so for a second read.
+    const TileReply* const reply = large.data();
+    QVERIFY(reply == nullptr || reply->aborted);
     manager.answerAll([](const QUrl&) { return pngOf(solid(Qt::green)); });
     QVERIFY(loader.map(redSquare).isNull());
 }

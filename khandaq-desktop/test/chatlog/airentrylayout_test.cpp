@@ -458,15 +458,25 @@ void TestAirEntryLayout::theMirrorInARightToLeftInterface()
     QCOMPARE(englishParts.time.left(), qreal(Space::s16));
     QCOMPARE(englishParts.time.top(), englishParts.body.bottom());
 
-    // Figures and emoji have no direction of their own: they run as the interface does, from the
-    // right, and the time stands on their line.
+    // Emoji have no direction of their own: they run as the interface does, from the right, and
+    // the time stands on their line.
+    const ChatMessage::Ptr emoji =
+        message(member(QStringLiteral("Amina"), 2), QStringLiteral("\U0001F44D \U0001F389"));
+    layOut(*emoji, width);
+    const Placed emojiParts = placed(*emoji);
+    QVERIFY(emojiParts.lastLine.right() > emojiParts.body.right() - 1);
+    QVERIFY(std::abs(emojiParts.timeBaseline - emojiParts.lastBaseline) < 0.01);
+    QCOMPARE(emojiParts.time.left(), qreal(Space::s16));
+
+    // Figures are read left to right in every language: the coordinates of a place keep their
+    // order, start at the left, and have the time under them, as English does.
     const ChatMessage::Ptr figures =
-        message(member(QStringLiteral("Amina"), 2), QStringLiteral("15:30 \U0001F44D"));
+        message(member(QStringLiteral("Amina"), 2), QStringLiteral("39.92077, 32.85411"));
     layOut(*figures, width);
     const Placed figureParts = placed(*figures);
-    QVERIFY(figureParts.lastLine.right() > figureParts.body.right() - 1);
-    QVERIFY(std::abs(figureParts.timeBaseline - figureParts.lastBaseline) < 0.01);
+    QVERIFY(figureParts.lastLine.left() < figureParts.body.left() + 1);
     QCOMPARE(figureParts.time.left(), qreal(Space::s16));
+    QCOMPARE(figureParts.time.top(), figureParts.body.bottom());
 
     // Ours: the mark at the end, the time after it in the direction of the interface.
     const ChatMessage::Ptr our =

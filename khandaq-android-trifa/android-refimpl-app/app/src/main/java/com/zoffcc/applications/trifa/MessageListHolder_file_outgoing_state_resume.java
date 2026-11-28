@@ -59,6 +59,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.format_speed;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.get_filetransfer_filenum_from_id;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.bindOutgoingCompactAudioUi;
+import static com.zoffcc.applications.trifa.HelperFiletransfer.bindOutgoingCompactMediaUi;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.isAudioMessage;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.outgoingFileDisplayLabel;
 import static com.zoffcc.applications.trifa.HelperFiletransfer.remove_ft_from_cache;
@@ -209,6 +210,19 @@ public class MessageListHolder_file_outgoing_state_resume extends RecyclerView.V
             bindOutgoingCompactAudioUi(context, message, textView, imageView, ft_preview_container, ft_preview_image,
                                        ft_buttons_container, ft_progressbar, ft_audio_player, button_ok, button_cancel,
                                        true, percent, true);
+            setup_cancel_button(message);
+            HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
+            ChatTransferProgressHelper.applyDirect(context, itemView, message, true);
+            return;
+        }
+
+        // KHANDAQ (inbox #34): our photo or video stays its own picture while it goes, as before it went, once it
+        // has gone and in a group. Only a photo had its picture here: a video turned into the paperclip on the
+        // still plate with the bar under it, which read as the video loading on the phone that sends it.
+        if (bindOutgoingCompactMediaUi(context, itemView, message, textView, imageView, ft_preview_container,
+                                       ft_preview_image, ft_buttons_container, ft_progressbar, ft_audio_player,
+                                       button_ok, button_cancel, true))
+        {
             setup_cancel_button(message);
             HelperGeneric.set_avatar_img_height_in_chat(img_avatar);
             ChatTransferProgressHelper.applyDirect(context, itemView, message, true);

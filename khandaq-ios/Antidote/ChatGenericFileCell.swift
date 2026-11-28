@@ -6,11 +6,12 @@ import UIKit
 import SnapKit
 
 /// A file, a photo or a video, or a voice note as an entry of the transcript (redesign stage 3, E8):
-/// the time column and the author as for a text (AirEntryFrame), then the attachment. A photo or a
-/// video shows its preview with the caption under it; a file shows its name and size, and while it
-/// moves the bar, what is left and the actions (AirFileRowView); a voice note shows its play button, its wave
-/// and its length. Our own entries carry the status mark at the far end. ChatIncomingFileCell and
-/// ChatOutgoingFileCell only say which way the file goes.
+/// the author as for a text (AirEntryFrame), then the attachment. A photo or a video shows its preview
+/// with the caption under it; a file shows its name and size, and while it moves the bar, what is left
+/// and the actions (AirFileRowView); a voice note shows its play button, its wave and its length. The
+/// time, and the status mark of our own entries, stand at the far end, level with the bottom of the
+/// attachment (AirEntryMeta). ChatIncomingFileCell and ChatOutgoingFileCell only say which way the
+/// file goes.
 class ChatGenericFileCell: ChatMovableDateCell {
     /// The preview of a photo or a video.
     var loadingView: LoadingImageView!
@@ -32,8 +33,6 @@ class ChatGenericFileCell: ChatMovableDateCell {
     private let videoBadgeLabel = UILabel()
     private lazy var summaryElement = ChatFileEntryElement(cell: self)
     private var fileModel: ChatGenericFileCellModel?
-    /// The height of the first line of the body, for the time column and the mark.
-    private var firstLine: CGFloat = 0
     private var personName: String?
     private var personOnline = true
 
@@ -101,6 +100,7 @@ class ChatGenericFileCell: ChatMovableDateCell {
         if fileModel?.isVoiceMessage == false, state == .done {
             fileRow.isHidden = true
         }
+        alignEntryMeta()
     }
 
     /// A video: the play mark in the middle of its preview.
@@ -190,22 +190,19 @@ class ChatGenericFileCell: ChatMovableDateCell {
             cell.delegate?.chatMovableDateCellReactPressed(cell)
         }
 
-        if previewSize != nil {
-            firstLine = ceil(KQFont.lineHeight(.caption))
-        }
-        else if playsInline {
-            firstLine = KQSize.targetIos
-        }
-        else {
-            firstLine = AirFileRowView.firstLineHeight
-        }
-        entry.configure(fileModel, firstLine: firstLine)
+        entry.configure(fileModel)
         let status = entryStatus()
         entry.mark.takesReadReceipts = (fileModel as? ChatOutgoingFileCellModel)?.takesReadReceipts ?? false
         entry.mark.set(status, animated: false)
         entry.mark.isHidden = isIncoming || status == .none
+        alignEntryMeta()
 
         refreshSpokenText()
+    }
+
+    /// KHANDAQ (owner, 28.11.2026): the time stands level with the bottom of the attachment, over the reactions.
+    private func alignEntryMeta() {
+        entry.alignMeta(withBottomOf: body.arrangedSubviews.last { !$0.isHidden && $0 !== reactionsView })
     }
 
     override func createViews() {
@@ -434,7 +431,7 @@ class ChatGenericFileCell: ChatMovableDateCell {
             return
         }
         // The fixed-size font of the time is made again for a new text size.
-        entry.configure(model, firstLine: firstLine)
+        entry.configure(model)
     }
 }
 

@@ -103,8 +103,8 @@ Rules on top of the generated palette below:
   network) with Settings and Create, the command line "Find a chat or paste an ID", the pills
   All, Requests, In transit, Favorites with their counts (All has a pill of its own since 0.2.65:
   without one, the list a swipe led to was a folder nobody could see). The list: Requests, Online now, Offline, Just
-  for you; while searching, Messages. The conversation is a transcript without bubbles: time in its own left
-  column (`time-column`), delivery marks on the right, the On its way tray above the composer. New
+  for you; while searching, Messages. The conversation is a transcript without bubbles: the time and
+  the delivery mark end each entry at the far edge, the On its way tray above the composer. New
   contact is a bottom sheet with the ID field and its ruler. Touch targets are at least 44 pt; small
   marks (filter pills, inline Retry) keep their drawn size and get a 44 pt touch area around them.
 - **Desktop.** The list column is `list-column` wide, conversation text stops at `text-measure`. The
@@ -154,7 +154,7 @@ the frame, is done; screen decisions are added here as each screen lands in the 
 | --- | --- | --- |
 | Theme choice on iOS | System, light or dark in Settings; colours resolve per trait collection | in the iOS client |
 | Main screen Air (E1, E2) | One screen instead of four tabs, sections by reachability | in the iOS client; next Android, then desktop |
-| Conversation with one person (E5, E6, E7, E10, E16) | A transcript with a time column, the In transit tray, the composer with its delivery hint, the dossier from the header | in the iOS and Android clients; next desktop |
+| Conversation with one person (E5, E6, E7, E10, E16) | A transcript with the time at the end of each entry (a time column until 28.11.2026), the In transit tray, the composer with its delivery hint, the dossier from the header | in the iOS and Android clients; next desktop |
 | Block (contract for every client) | A local block list of public keys: Block in the dossier, the list in Settings > Privacy > Blocked | in the iOS client; next Android, then desktop |
 | New contact and the command line (E11, E3) | The ID ruler with a real check, Send request above the keyboard, the start of an ID in the command line | in the iOS client; next Android, then desktop |
 | Requests and group invitations (E12) | Cards above the sections until answered; Decline is taken back from a toast, not asked about | in the iOS client; next Android, then desktop |
@@ -220,12 +220,26 @@ Deferred, with the screens they belong to:
 
 Decided while building it in the iOS client (11.11.2026); Android and desktop follow the same rules.
 
-- **A transcript, not bubbles.** Each entry: the time in a 38 pt column of tabular figures (wider
-  with a large text size), the text, and at the far end the mark of our own texts. The author shows
+- **A transcript, not bubbles.** Each entry starts at the 16 margin (in a group, another member's entry
+  after the column of their 28 tile and an 8 gap) and its text runs to the far margin. The entry ends
+  with its meta: "edited" when it was, the time in caption type, `ink-3`, tabular figures, and for our
+  own texts the mark. The meta stands at the trailing edge of the text's last line when that line
+  leaves 8 and the meta free there, and on a line of its own under the text, at the same edge, when it
+  does not; a right-to-left paragraph in a left-to-right interface (and the reverse) ends at the far
+  edge, so its meta always takes the next line. The text system's own layout of the last line
+  decides, not a count of characters. Each paragraph stands at the side its own direction starts
+  from (an Arabic one at the right of an English row, an English one at the left of an Arabic row);
+  a paragraph of figures without a letter runs left to right, as figures are read in every language,
+  so a phone number or the coordinates of a place keep their order; one of emoji or signs runs as the
+  interface does. A file, a voice note, a photo or a call has its meta at the
+  trailing edge, level with the bottom of its body, which never runs under it. Reactions, Retry and
+  Read more stay under the text, under its meta. Until 28.11.2026 the time stood in a 38 pt column at
+  the start of every entry and the mark in a column of its own at the far end; the owner found the
+  column took too much of the row. The author shows
   only where a run starts (same author, same day, under five minutes apart), a step above the text: "You"
   in `tone-5` (0.2.60: in `ink-2` it read as a line of the text), the other person by first name in
   their tone. The day ("Today", "Yesterday", a date) heads its first
-  entry at the text column. No wallpaper. A new entry rises 8 pt and fades in; with reduced motion it
+  entry at the margin. No wallpaper. A new entry rises 8 pt and fades in; with reduced motion it
   only fades.
 - **Marks:** amber clock in transit, faint clock while leaving, a check when sent, two checks when
   delivered, red when the network refused it. Notes for yourself carry none.
@@ -315,11 +329,12 @@ and Chinese. Only what differs from iOS, or is particular to Android, is listed 
   name opens the dossier, and so does Information in the menu of a contact in the list.
 - **Typing** is the word "typing" in the presence line. The three moving dots are gone: the brief
   bans endless animation.
-- **Time column:** `size-time-column-phone` (38 dp), measured again for the system text size and the
-  digits of the language so that "23:59" stays whole, at most twice as wide. At the accessibility text
-  sizes on iOS the time and the name stand on a line of their own above the text, which then takes
-  the whole width, so no word breaks inside a narrow column.
-- **Digits** follow the app's language, as the counts of the list do: the time column, the tray, "online
+- **Time:** an entry has no time column since 28.11.2026: its time ends it (see The conversation on
+  the phone). The rows of the In transit tray keep `size-time-column-phone` (38 dp), measured again
+  for the system text size and the digits of the language so that "23:59" stays whole, at most twice
+  as wide; at the accessibility text sizes on iOS a row of the tray puts its time on a line above its
+  text, which then takes the whole width, so no word breaks inside a narrow column.
+- **Digits** follow the app's language, as the counts of the list do: the time of an entry, the tray, "online
   since", the hours of the day hints, the axis of the day strip and the "24" of its heading are written
   in the language's digits (Arabic-Indic in Arabic). The strings keep "24" and "%d:00" as on iOS;
   without this one Arabic line read "١٨:00" next to "24".
@@ -432,7 +447,11 @@ shows.
   5 points in Russian; held to that share, the log keeps a third of the screen.
 - **Authors** are named in full over each run, in their tone, with the role of the founder and the
   moderators ("Amina Safina, moderator"); a relayed message whose signature does not check out reads
-  "Author not confirmed" instead of a name. A message that mentions you, by your key in this group or
+  "Author not confirmed" instead of a name. A message the history brought without any signature over
+  it (every message of a client that does not sign, the desktop) is drawn as any other message of its
+  author, with their tile, which opens them; it still never notifies. The line "Relayed from history,
+  sender not verified" under such a message and its dashed tile are gone (owner, 28.11.2026: they
+  only annoyed people). A message that mentions you, by your key in this group or
   by your name from an older client, has the `selected` ground and tells VoiceOver "Mentions you".
 - **Our message** has the transit mark while the group is not connected, one check once it left, two
   once a member's device confirmed it.
@@ -492,8 +511,9 @@ shows.
 Decided while building them in the iOS client (11.11.2026); Android and desktop follow the same rules.
 Transfers stay Tox file transfers, and a voice note keeps the `.file.m4a` name the clients share.
 
-- **A file is an entry of the transcript:** the time column as for a text, then the file glyph, the
-  name, the size and one line of state in words. Theirs waits for Accept (with Decline) when automatic
+- **A file is an entry of the transcript:** the author as for a text, then the file glyph, the
+  name, the size and one line of state in words, and the time at the far edge, level with the bottom of
+  the file. Theirs waits for Accept (with Decline) when automatic
   download is off; ours says what it waits for: "Waits for Yusuf to accept it", or "Goes when Yusuf is
   online" while he is offline. While it moves, a 6 pt bar and "1.2 MB left", with Pause and Resume; a
   stopped transfer says which way it went ("The download stopped" with Download again, "Not sent"
@@ -766,8 +786,8 @@ particular to Android, is listed here.
   and the read-only bar are ports of iOS (`AirGroupModel`, `AirGroupPanel`). Roles read as words and
   only the founder and the moderators see the role actions. Leave and Delete in the list ask in the
   app's language with the verb on the button ("Leave QA roles?" with Leave the group; Delete). Since
-  3b the conversation is drawn as the one with a person: the time column, the sender's name in the
-  accent, no bubbles and no wallpaper. The header says how many members there are and how many are
+  3b the conversation is drawn as the one with a person: the time at the end of each entry (a time
+  column until 28.11.2026), the sender's name in the accent, no bubbles and no wallpaper. The header says how many members there are and how many are
   online now, and the line under the field says who gets the message now ("1 of 2 gets it now, the
   rest when they come online"). The group dossier (`AirGroupDossierActivity`) is drawn as the dossier
   of a person: the members with presence and roles (your own row without the old "(you)" suffix),

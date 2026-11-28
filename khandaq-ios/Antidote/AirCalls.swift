@@ -712,9 +712,9 @@ final class AirCallWaitingController: UIViewController {
 
 // MARK: - Transcript
 
-/// A call in the transcript: the time column and the author as for a text, then the phone glyph and
-/// "Call, 4:12", "Missed call" or "No answer". ChatIncomingCallCell and ChatOutgoingCallCell only say
-/// which way it went.
+/// A call in the transcript: the author as for a text, the phone glyph and "Call, 4:12", "Missed call"
+/// or "No answer", and the time at the far end (AirEntryFrame). ChatIncomingCallCell and
+/// ChatOutgoingCallCell only say which way it went.
 class AirCallEntryCell: ChatMovableDateCell {
     /// The way the call went; ChatOutgoingCallCell says false.
     var isIncoming: Bool {
@@ -752,7 +752,7 @@ class AirCallEntryCell: ChatMovableDateCell {
         label.textColor = answered ? KQColor.ink : KQColor.ink2
         iconView.tintColor = KQColor.ink2
 
-        entry.configure(model, firstLine: ceil(KQFont.lineHeight(.body)))
+        entry.configure(model)
         entry.mark.isHidden = true
 
         canBeCopied = false
@@ -800,7 +800,7 @@ class AirCallEntryCell: ChatMovableDateCell {
         guard let model = entryModel else {
             return
         }
-        entry.configure(model, firstLine: ceil(KQFont.lineHeight(.body)))
+        entry.configure(model)
     }
 }
 

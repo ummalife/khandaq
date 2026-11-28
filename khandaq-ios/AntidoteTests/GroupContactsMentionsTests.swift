@@ -430,7 +430,9 @@ class GroupContactsMentionsTests: XCTestCase {
         XCTAssertTrue(subviews(of: note).contains { ($0 as? UIImageView)?.image != nil }, "no lock")
 
         let text = try XCTUnwrap(subviews(of: cell).compactMap { $0 as? UITextView }.first?.attributedText)
-        XCTAssertEqual(text.string, model.message)
+        // KHANDAQ (owner, 28.11.2026): after the message, the room kept for its time (BubbleView.showTrailingMeta).
+        XCTAssertTrue(text.string.hasPrefix(model.message))
+        XCTAssertEqual(cell.bubbleView.text, model.message)
         let mention = text.attributes(at: 1, effectiveRange: nil)
         XCTAssertEqual(mention[BubbleView.mentionKeyAttribute] as? String, key)
         XCTAssertEqual(mention[.font] as? UIFont, KQFont.font(.body, weight: 600))

@@ -232,7 +232,7 @@ extension ChatPreviewController {
 
     /// Who wrote another member's entry, as the conversation names them (ChatGroupController.configureGroupEntry)
     /// without the role, which the preview has no members for: their name in their tone, the plain tile for an
-    /// author nobody confirmed or nobody can name.
+    /// author whose signing key went stale (KQ-03) or nobody can name.
     private static func groupAuthor(of message: OCTMessageAbstract,
                                     in chat: OCTChat,
                                     groups: OCTSubmanagerGroups) -> (name: String, color: UIColor, tile: AirTileView.Style) {
@@ -242,8 +242,9 @@ extension ChatPreviewController {
         let knownName = AirGroupTranscript.peerName(of: message, in: chat, groups: groups)
         let name = knownName ?? String(localized: "air_group_author_unknown")
         let tone = AirTone.index(for: AirGroupTranscript.toneKey(of: message, name: name))
-        let unconfirmed = message.groupHistorySync && !groups.isGroupMessageAuthorVerified(message, in: chat)
-        let tile: AirTileView.Style = unconfirmed || knownName == nil
+        // KHANDAQ (owner, 28.11.2026): a row the history brought without a signature over it has its author's tile, as
+        // in the conversation (ChatGroupController.configureGroupEntry).
+        let tile: AirTileView.Style = knownName == nil
             ? .unconfirmed
             : .person(initials: AirInitials.from(name), tone: tone)
         return (name, AirTone.color(at: tone), tile)

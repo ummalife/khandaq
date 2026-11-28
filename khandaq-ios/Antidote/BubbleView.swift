@@ -15,6 +15,112 @@ private struct Constants {
     static let TextViewHorizontalOffset = 5.0
 }
 
+/// The text of a bubble. KHANDAQ (owner, 28.11.2026): TextKit 1, whose layout manager says where the last line of the
+/// text and its baseline are (BubbleView.layoutTrailingMeta); a copy of a selection leaves out the room kept there.
+private final class BubbleTextView: UITextView {
+    override func copy(_ sender: Any?) {
+        let selection = selectedRange
+        guard let text = attributedText, selection.length > 0, NSMaxRange(selection) <= text.length else {
+            super.copy(sender)
+            return
+        }
+        let selected = NSMutableAttributedString(attributedString: text.attributedSubstring(from: selection))
+        guard BubbleView.removeTrailingMetaRoom(from: selected) else {
+            super.copy(sender)
+            return
+        }
+        UIPasteboard.general.string = selected.string
+    }
+}
+
+/// KHANDAQ (owner, 28.11.2026): which way the last paragraph of a text runs, as the text system lays it out, for where
+/// it ends: the time of a transcript entry stands at the end of its text (BubbleView.showTrailingMeta).
+enum AirTextDirection {
+    private static let cache: NSCache<NSString, NSNumber> = {
+        let cache = NSCache<NSString, NSNumber>()
+        cache.countLimit = 512
+        return cache
+    }()
+
+    /// Whether the last paragraph of `text` runs right to left (paragraphRunsRightToLeft); an empty one, after a
+    /// text that ends a paragraph, runs as the interface does.
+    static func lastParagraphRunsRightToLeft(_ text: NSAttributedString, interfaceRightToLeft: Bool) -> Bool {
+        let string = text.string as NSString
+        guard string.length > 0 else {
+            return interfaceRightToLeft
+        }
+        let last = string.character(at: string.length - 1)
+        // A text that ends a paragraph ends with an empty one.
+        if last == 0x0A || last == 0x0D || last == 0x85 || last == 0x2029 {
+            return interfaceRightToLeft
+        }
+        var start = 0
+        var end = 0
+        var contentsEnd = 0
+        string.getParagraphStart(&start, end: &end, contentsEnd: &contentsEnd, for: NSRange(location: string.length - 1, length: 0))
+        let paragraph = text.attributedSubstring(from: NSRange(location: start, length: contentsEnd - start))
+        return paragraphRunsRightToLeft(paragraph, interfaceRightToLeft: interfaceRightToLeft)
+    }
+
+    /// Whether `paragraph` (one paragraph without its separator) runs right to left: by its letters
+    /// (paragraphEndsLeft). One of figures without a letter runs left to right, as figures are read in every language,
+    /// so a phone number or the coordinates of a place keep their order in an Arabic interface; one of neither
+    /// (emoji, signs) runs as the interface does.
+    static func paragraphRunsRightToLeft(_ paragraph: NSAttributedString, interfaceRightToLeft: Bool) -> Bool {
+        if let endsLeft = paragraphEndsLeft(paragraph) {
+            return endsLeft
+        }
+        if paragraph.string.unicodeScalars.contains(where: { $0.properties.numericType == .decimal }) {
+            return false
+        }
+        return interfaceRightToLeft
+    }
+
+    /// Whether `paragraph` (one paragraph without its separator) runs right to left by its own letters, so it ends
+    /// at its left. The text system lays it out on one line with a mark after it, without any paragraph style, so the
+    /// first letter with a direction decides (the bidirectional algorithm), and the mark stands on the side the
+    /// paragraph ends on. nil when the paragraph has no letter to take a direction from (figures, emoji), or is empty.
+    static func paragraphEndsLeft(_ paragraph: NSAttributedString) -> Bool? {
+        let text = paragraph.string
+        guard !text.isEmpty, text.unicodeScalars.contains(where: { $0.properties.isAlphabetic }) else {
+            return nil
+        }
+        let key = text as NSString
+        if let known = cache.object(forKey: key) {
+            return known.boolValue
+        }
+
+        let probe = NSMutableAttributedString(attributedString: paragraph)
+        // The direction of the words, not one a style gave them (BubbleView aligns each paragraph by this).
+        probe.removeAttribute(.paragraphStyle, range: NSRange(location: 0, length: probe.length))
+        let mark = NSTextAttachment()
+        mark.bounds = CGRect(x: 0, y: 0, width: 1, height: 1)
+        probe.append(NSAttributedString(attachment: mark))
+        let storage = NSTextStorage(attributedString: probe)
+        let layout = NSLayoutManager()
+        let container = NSTextContainer(size: CGSize(width: 1_000_000, height: CGFloat.greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        layout.addTextContainer(container)
+        storage.addLayoutManager(layout)
+        layout.ensureLayout(for: container)
+
+        let glyph = layout.glyphIndexForCharacter(at: probe.length - 1)
+        var line = NSRange(location: 0, length: 0)
+        _ = layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: &line)
+        guard glyph > line.location else {
+            return nil
+        }
+        let words = layout.boundingRect(forGlyphRange: NSRange(location: line.location, length: glyph - line.location), in: container)
+        let markRect = layout.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: container)
+        guard words.width > 0.5 else {
+            return nil
+        }
+        let endsLeft = markRect.midX < words.midX
+        cache.setObject(NSNumber(value: endsLeft), forKey: key)
+        return endsLeft
+    }
+}
+
 class BubbleView: UIView {
     fileprivate var textView: UITextView!
     fileprivate var mapImageView: UIImageView?
@@ -26,11 +132,26 @@ class BubbleView: UIView {
     // reactions line) instead of being appended inline into the body — so it reads as a system note,
     // not as text the sender typed onto the end of their message.
     fileprivate let editedLabel = UILabel()
-    // KHANDAQ (audit#2 finding 1): "relayed from history — sender not verified", its own bottom
-    // sub-row under the edited marker. The transport authenticates whoever RELAYED a history row,
-    // never the author it names, so until a signature says otherwise the name on the bubble is a
-    // claim and the UI has to say so in words rather than let it read as established.
-    fileprivate let unverifiedLabel = UILabel()
+    // KHANDAQ (owner, 28.11.2026): the line "Relayed from history, sender not verified" under a group entry is gone:
+    // the owner found the yellow notice would annoy people. Every row from a client that does not sign (the desktop)
+    // carried it. A synced row still never notifies (NotificationCoordinator), and an author whose signing key went
+    // stale is still not named (ChatGroupController+Air, KQ-03).
+    //
+    // KHANDAQ (owner, 28.11.2026): the end of a transcript entry, its time and our mark (AirEntryMeta), at the
+    // trailing edge of the text's last line or on a line of its own under it (showTrailingMeta).
+    private var trailingMeta: AirEntryMeta?
+    /// The width the text keeps after its last character for the meta: the gap and the meta.
+    private var trailingMetaRoom: CGFloat = 0
+    /// The size of the meta, and how far its baseline is from its top.
+    private var trailingMetaSize = CGSize.zero
+    private var trailingMetaBaseline: CGFloat = 0
+    /// Whether the room starts a line of its own: the text's last paragraph runs against the interface (Arabic in a
+    /// Russian row), so it ends at the far edge and its last line has no room at the trailing one.
+    private var trailingMetaOwnLine = false
+    /// The direction of the interface the room was laid out for.
+    private var trailingMetaRightToLeft = false
+    /// The mark the characters of the room carry, so the text can be set again without a second room.
+    fileprivate static let trailingMetaRoomKey = NSAttributedString.Key("KQTrailingMetaRoom")
     // KHANDAQ (26.11.2026, DESIGN-group-contacts-private-mentions.md): a private message in the feed of a group says
     // on its first line who sees it, behind a small lock, in the private colour.
     fileprivate let privateNoteRow = UIStackView()
@@ -74,23 +195,32 @@ class BubbleView: UIView {
         return isTranscript ? Double(KQSize.textMeasure) : Constants.TextViewMaxWidth
     }
 
+    /// The text without the room kept for the meta (showTrailingMeta).
     var text: String? {
         get {
-            return textView.text
+            return attributedText?.string
         }
         set {
             locationCoordinates = nil
             textView.text = newValue
+            applyTrailingMetaRoom()
         }
     }
 
+    /// The text without the room kept for the meta (showTrailingMeta).
     var attributedText: NSAttributedString? {
         get {
-            return textView.attributedText
+            guard let text = textView.attributedText else {
+                return nil
+            }
+            let plain = NSMutableAttributedString(attributedString: text)
+            BubbleView.removeTrailingMetaRoom(from: plain)
+            return plain
         }
         set {
             locationCoordinates = nil
             textView.attributedText = newValue
+            applyTrailingMetaRoom()
         }
     }
 
@@ -113,6 +243,7 @@ class BubbleView: UIView {
             .font: KQFont.tabular(KQFont.font(.caption)),
             .foregroundColor: color,
         ])
+        applyTrailingMetaRoom()
     }
 
     var textColor: UIColor {
@@ -138,6 +269,8 @@ class BubbleView: UIView {
         set {
             textView.font = newValue
             styleLocationCoordinates()
+            // The font of the whole text reached the room too, which keeps the meta's type.
+            applyTrailingMetaRoom()
         }
     }
 
@@ -174,9 +307,6 @@ class BubbleView: UIView {
         textView.adjustsFontForContentSizeCategory = true
         editedLabel.font = KQFont.font(.caption)
         editedLabel.adjustsFontForContentSizeCategory = true
-        unverifiedLabel.font = KQFont.font(.caption)
-        unverifiedLabel.adjustsFontForContentSizeCategory = true
-        unverifiedLabel.textColor = KQColor.transit
         mapImageView?.layer.cornerRadius = KQRadius.card
         replyQuoteView.useTranscriptStyle()
         updateTextConstraints(hasMap: mapImageView?.isHidden == false)
@@ -304,16 +434,197 @@ class BubbleView: UIView {
         updateTextConstraints(hasMap: mapImageView?.isHidden == false)
     }
 
-    // KHANDAQ (audit#2 finding 1): show/hide the "sender not verified" note on relayed history rows.
-    func bindUnverifiedSender(_ isUnverified: Bool) {
-        // The note is the widest line of a bubble: hidden with its text, it held every bubble at its
-        // width (bindEdited).
-        unverifiedLabel.text = isUnverified ? String(localized: "group_msg_sender_unverified") : nil
-        unverifiedLabel.isHidden = !isUnverified
-        // Read out by VoiceOver as part of the bubble: the wording IS the feature, an icon alone
-        // would say nothing to anyone who cannot see it.
-        unverifiedLabel.accessibilityLabel = unverifiedLabel.text
-        updateTextConstraints(hasMap: mapImageView?.isHidden == false)
+    /// KHANDAQ (owner, 28.11.2026): ends the text with `meta` (AirEntryMeta), as Telegram ends a message with its time:
+    /// at the trailing edge of the text's last line when that line leaves the gap and the meta free, otherwise on a
+    /// line of its own under the text, at the same edge. The text keeps the room for it after its last character, an
+    /// empty attachment as wide as the gap and the meta and as tall as the meta: the text system wraps it with the
+    /// text, so the row is measured with the meta wherever it goes, and layoutSubviews puts the meta on the room's
+    /// line. A cell calls it last, after every style of the text; setting the text again keeps the room.
+    func showTrailingMeta(_ meta: AirEntryMeta, gap: CGFloat) {
+        if trailingMeta !== meta {
+            trailingMeta?.removeFromSuperview()
+            trailingMeta = meta
+            addSubview(meta)
+        }
+        // The meta runs the way the row does: in a right-to-left row the mark stands at the far left.
+        if semanticContentAttribute != .unspecified {
+            meta.semanticContentAttribute = semanticContentAttribute
+        }
+        meta.translatesAutoresizingMaskIntoConstraints = true
+        meta.isHidden = false
+        let size = meta.systemLayoutSizeFitting(UILayoutFittingCompressedSize)
+        meta.bounds = CGRect(origin: .zero, size: CGSize(width: ceil(size.width), height: ceil(size.height)))
+        trailingMetaSize = meta.bounds.size
+        trailingMetaBaseline = meta.firstBaselineOffset
+        trailingMetaRoom = gap + meta.bounds.width
+        applyTrailingMetaRoom()
+        setNeedsLayout()
+    }
+
+    /// The direction of the interface the bubble is drawn in: forced on the view (the in-app language through the
+    /// appearance proxy, a test), or the in-app language's, which a row not yet on screen has not taken.
+    private var interfaceRunsRightToLeft: Bool {
+        switch semanticContentAttribute {
+            case .forceRightToLeft:
+                return true
+            case .forceLeftToRight:
+                return false
+            default:
+                return window != nil ? effectiveUserInterfaceLayoutDirection == .rightToLeft : AppLanguage.isRightToLeft
+        }
+    }
+
+    /// Puts the room for the meta after the last character of the text (showTrailingMeta), or takes it away when the
+    /// bubble has no meta.
+    private func applyTrailingMetaRoom() {
+        guard let current = textView.attributedText else {
+            return
+        }
+        let text = NSMutableAttributedString(attributedString: current)
+        let hadRoom = BubbleView.removeTrailingMetaRoom(from: text)
+        guard let meta = trailingMeta, trailingMetaRoom > 0, text.length > 0 else {
+            if hadRoom {
+                textView.attributedText = text
+            }
+            return
+        }
+        let rightToLeft = interfaceRunsRightToLeft
+        trailingMetaRightToLeft = rightToLeft
+        BubbleView.alignParagraphs(of: text, rightToLeftInterface: rightToLeft)
+
+        // The room has the meta's type, so a line of its own is as tall as the meta, and the paragraph of the text.
+        var attributes: [NSAttributedString.Key: Any] = [
+            .font: meta.timeLabel.font ?? KQFont.font(.caption),
+            BubbleView.trailingMetaRoomKey: true,
+        ]
+        if let paragraph = text.attribute(.paragraphStyle, at: text.length - 1, effectiveRange: nil) {
+            attributes[.paragraphStyle] = paragraph
+        }
+
+        // The end of a paragraph that runs against the interface (Arabic in a Russian row, Russian in an Arabic one)
+        // is at the far edge: its last line has no room at the trailing one.
+        trailingMetaOwnLine = AirTextDirection.lastParagraphRunsRightToLeft(text, interfaceRightToLeft: rightToLeft) != rightToLeft
+        // A line separator keeps the room's line in the paragraph, with its direction; a zero width space lets the
+        // room wrap alone when the last word leaves too little after it.
+        text.append(NSAttributedString(string: trailingMetaOwnLine ? "\u{2028}" : "\u{200B}", attributes: attributes))
+        let attachment = NSTextAttachment()
+        attachment.image = BubbleView.emptyImage
+        let descent = trailingMetaSize.height - trailingMetaBaseline
+        attachment.bounds = CGRect(x: 0, y: -descent, width: trailingMetaRoom, height: trailingMetaSize.height)
+        let room = NSMutableAttributedString(attachment: attachment)
+        room.addAttributes(attributes, range: NSRange(location: 0, length: room.length))
+        text.append(room)
+        textView.attributedText = text
+    }
+
+    /// KHANDAQ (owner, 28.11.2026): each paragraph of an entry stands at the side its own direction starts from, as on
+    /// Android and the desktop: an Arabic one at the right in an English interface, an English one at the left in an
+    /// Arabic interface (AirTextDirection.paragraphRunsRightToLeft). The natural alignment of a text view follows the
+    /// language of the app instead: it left an Arabic paragraph at the left of an English row, with its time on the
+    /// line under it at the right.
+    private static func alignParagraphs(of text: NSMutableAttributedString, rightToLeftInterface: Bool) {
+        let string = text.string as NSString
+        let options: NSString.EnumerationOptions = [.byParagraphs, .substringNotRequired]
+        string.enumerateSubstrings(in: NSRange(location: 0, length: string.length), options: options) { _, range, enclosing, _ in
+            let paragraph = text.attributedSubstring(from: range)
+            let rightToLeft = AirTextDirection.paragraphRunsRightToLeft(paragraph, interfaceRightToLeft: rightToLeftInterface)
+            let current = text.attribute(.paragraphStyle, at: enclosing.location, effectiveRange: nil) as? NSParagraphStyle
+            let style = (current?.mutableCopy() as? NSMutableParagraphStyle) ?? NSMutableParagraphStyle()
+            style.baseWritingDirection = rightToLeft ? .rightToLeft : .leftToRight
+            style.alignment = rightToLeft ? .right : .left
+            text.addAttribute(.paragraphStyle, value: style, range: enclosing)
+        }
+    }
+
+    /// Takes the room for the meta out of `text`; says whether it had one.
+    @discardableResult
+    fileprivate static func removeTrailingMetaRoom(from text: NSMutableAttributedString) -> Bool {
+        var ranges = [NSRange]()
+        text.enumerateAttribute(trailingMetaRoomKey, in: NSRange(location: 0, length: text.length), options: []) { value, range, _ in
+            if value != nil {
+                ranges.append(range)
+            }
+        }
+        for range in ranges.reversed() {
+            text.deleteCharacters(in: range)
+        }
+        return !ranges.isEmpty
+    }
+
+    private static let emptyImage: UIImage = {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1), format: format).image { _ in }
+    }()
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layoutTrailingMeta()
+    }
+
+    /// A row turned the other way after its text was set (the in-app language, a test that mirrors it) keeps the room
+    /// for its meta where the new direction needs it.
+    override var semanticContentAttribute: UISemanticContentAttribute {
+        didSet {
+            trailingMeta?.semanticContentAttribute = semanticContentAttribute
+            guard trailingMeta != nil, interfaceRunsRightToLeft != trailingMetaRightToLeft else {
+                return
+            }
+            applyTrailingMetaRoom()
+            setNeedsLayout()
+        }
+    }
+
+    /// Places the meta on the line of its room, with its baseline on the line's: at the trailing edge of the text
+    /// column. Where the words of that line still stand on the trailing side of the room (a direction the guess
+    /// missed), the meta takes the room's own place instead, so it never stands over a word.
+    private func layoutTrailingMeta() {
+        guard let meta = trailingMeta, !meta.isHidden, let text = textView.attributedText, text.length > 0,
+              text.attribute(BubbleView.trailingMetaRoomKey, at: text.length - 1, effectiveRange: nil) != nil else {
+            return
+        }
+        // The text view lays its text out at the width the bubble has just given it.
+        textView.layoutIfNeeded()
+        let layout = textView.layoutManager
+        let container = textView.textContainer
+        layout.ensureLayout(for: container)
+        let glyph = layout.glyphIndexForCharacter(at: text.length - 1)
+        var lineGlyphs = NSRange(location: 0, length: 0)
+        let line = layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: &lineGlyphs)
+        let room = layout.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: container)
+        // TextKit 1 puts the location of an attachment at the bottom of its bounds, not on the baseline: the room is
+        // as tall as the meta and stands on the line's baseline as the meta's words should, so the meta takes its
+        // top. (The bounding rect of the room is as tall as its whole line.)
+        let attachmentSize = layout.attachmentSize(forGlyphAt: glyph)
+        let roomHeight = attachmentSize.height > 0 ? attachmentSize.height : trailingMetaSize.height
+        let roomTop = line.minY + layout.location(forGlyphAt: glyph).y - roomHeight
+        let inset = textView.textContainerInset
+        let column = textView.frame
+        let width = meta.bounds.width
+
+        // The words on the room's line, without the room and the space before it.
+        var words: CGRect?
+        if glyph > lineGlyphs.location {
+            let range = NSRange(location: lineGlyphs.location, length: glyph - lineGlyphs.location)
+            let rect = layout.boundingRect(forGlyphRange: range, in: container)
+            if rect.width > 0.5 {
+                words = rect
+            }
+        }
+
+        let x: CGFloat
+        if let words = words, trailingMetaRightToLeft, room.minX >= words.midX {
+            // A line that ends at the right in a right-to-left row: the meta ends the room there.
+            x = column.minX + inset.left + room.maxX - width
+        }
+        else if let words = words, !trailingMetaRightToLeft, room.maxX <= words.midX {
+            // A line that ends at the left in a left-to-right row: the meta starts the room there.
+            x = column.minX + inset.left + room.minX
+        }
+        else {
+            x = trailingMetaRightToLeft ? column.minX : column.maxX - width
+        }
+        meta.frame.origin = CGPoint(x: x, y: column.minY + inset.top + roomTop)
     }
 
     fileprivate func ensureMapImageView() {
@@ -390,9 +701,9 @@ class BubbleView: UIView {
             }
 
             // KHANDAQ (#iOS edited-marker): the bubble bottom is now the lowest visible of
-            // {textView, reactionsView, editedLabel, unverifiedLabel} — only pin textView to the
-            // bottom when every one of them is hidden.
-            if reactionsView.isHidden && editedLabel.isHidden && unverifiedLabel.isHidden {
+            // {textView, reactionsView, editedLabel} — only pin textView to the bottom when every
+            // one of them is hidden.
+            if reactionsView.isHidden && editedLabel.isHidden {
                 $0.bottom.equalTo(self).offset(-verticalInset)
             }
             $0.leading.equalTo(self).offset(horizontalInset)
@@ -409,7 +720,7 @@ class BubbleView: UIView {
             $0.leading.equalTo(self).offset(noteInset)
             $0.trailing.lessThanOrEqualTo(self).offset(-horizontalInset)
             // pin to bottom only when it's the last visible row (nothing below it).
-            if !reactionsView.isHidden && editedLabel.isHidden && unverifiedLabel.isHidden {
+            if !reactionsView.isHidden && editedLabel.isHidden {
                 $0.bottom.equalTo(self).offset(-noteBottomInset)
             }
         }
@@ -425,26 +736,7 @@ class BubbleView: UIView {
             }
             $0.leading.equalTo(self).offset(noteInset)
             $0.trailing.lessThanOrEqualTo(self).offset(-horizontalInset)
-            if !editedLabel.isHidden && unverifiedLabel.isHidden {
-                $0.bottom.equalTo(self).offset(-noteBottomInset)
-            }
-        }
-
-        // KHANDAQ (audit#2 finding 1): the unverified note is the LAST sub-row, so it owns the bubble
-        // bottom whenever it is visible.
-        unverifiedLabel.snp.remakeConstraints {
             if !editedLabel.isHidden {
-                $0.top.equalTo(editedLabel.snp.bottom).offset(1.0)
-            }
-            else if !reactionsView.isHidden {
-                $0.top.equalTo(reactionsView.snp.bottom).offset(1.0)
-            }
-            else {
-                $0.top.equalTo(textView.snp.bottom).offset(1.0)
-            }
-            $0.leading.equalTo(self).offset(noteInset)
-            $0.trailing.lessThanOrEqualTo(self).offset(-horizontalInset)
-            if !unverifiedLabel.isHidden {
                 $0.bottom.equalTo(self).offset(-noteBottomInset)
             }
         }
@@ -478,7 +770,12 @@ class BubbleView: UIView {
         layer.cornerRadius = 16.0
         layer.masksToBounds = true
 
-        textView = UITextView()
+        if #available(iOS 16.0, *) {
+            textView = BubbleTextView(usingTextLayoutManager: false)
+        }
+        else {
+            textView = BubbleTextView()
+        }
         textView.backgroundColor = .clear
         textView.isEditable = false
         textView.isScrollEnabled = false
@@ -516,15 +813,6 @@ class BubbleView: UIView {
         editedLabel.font = UIFont.italicSystemFont(ofSize: 11.0)
         editedLabel.isHidden = true
         addSubview(editedLabel)
-
-        // KHANDAQ (audit#2 finding 1): wraps rather than truncates — a marker nobody can read in full
-        // is a marker that does not warn. Coloured, not dimmed like «изменено»: this one is a caveat
-        // about the message, not a note about its history.
-        unverifiedLabel.font = UIFont.systemFont(ofSize: 11.0)
-        unverifiedLabel.numberOfLines = 0
-        unverifiedLabel.textColor = UIColor(red: 0.85, green: 0.47, blue: 0.10, alpha: 1.0)
-        unverifiedLabel.isHidden = true
-        addSubview(unverifiedLabel)
 
         textView.snp.makeConstraints {
             $0.top.equalTo(self).offset(Constants.TextViewVerticalOffset)

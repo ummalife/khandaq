@@ -122,6 +122,7 @@ private slots:
     void testSequencesAreAsBigAsThePictures();
     void testEmojiFontRangesLeaveBlockedSequencesApart();
     void testPlainTextAsRichTextKeepsTheText();
+    void testPicturesOfASetAreThoseAMessageShows();
 private:
     std::unique_ptr<QGuiApplication> app;
     std::unique_ptr<MockSettings> settings;
@@ -590,6 +591,45 @@ void TestSmileyPack::testPlainTextAsRichTextKeepsTheText()
     QTextDocument apart;
     apart.setHtml(SmileyPack::plainTextAsRichText(twoFathers));
     QCOMPARE(apart.toPlainText(), QStringLiteral("👨👨"));
+}
+
+/**
+ * @brief KHANDAQ (inbox #37): the sample of a set in the settings has the pictures a message has
+ * with that set, and leaves as text what the set leaves as text
+ */
+void TestSmileyPack::testPicturesOfASetAreThoseAMessageShows()
+{
+    const QStringList sample{QStringLiteral(":)"), QStringLiteral(";)"), QStringLiteral("😎"),
+                             QStringLiteral("not an emoticon")};
+
+    // The set the mock settings have: a picture for what it smileyfies, nothing for the rest.
+    const QHash<QString, QString> emojione =
+        SmileyPack::picturesOf(QStringLiteral(":/smileys/emojione/emoticons.xml"), sample);
+    QCOMPARE(emojione.size(), 3);
+    QCOMPARE(emojione.value(QStringLiteral(":)")), QStringLiteral(":/smileys/emojione/263a"));
+    QCOMPARE(emojione.value(QStringLiteral(";)")), QStringLiteral(":/smileys/emojione/1f609"));
+    QCOMPARE(emojione.value(QStringLiteral("😎")), QStringLiteral(":/smileys/emojione/1f60e"));
+    SmileyPack smileyPack{*settings};
+    for (const QString& emoticon : sample) {
+        const bool smileyfied = smileyPack.smileyfied(emoticon) != emoticon;
+        QCOMPARE(emojione.contains(emoticon), smileyfied);
+    }
+
+    // The ASCII set leaves the typed smileys as text; its pictures are those of the other folder,
+    // and each can be drawn.
+    const QHash<QString, QString> ascii =
+        SmileyPack::picturesOf(QStringLiteral(":/smileys/ASCII+emojione/emoticons.xml"), sample);
+    QCOMPARE(ascii.size(), 1);
+    QCOMPARE(ascii.value(QStringLiteral("😎")),
+             QStringLiteral(":/smileys/ASCII+emojione/../emojione/1f60e"));
+    for (const QString& picture : emojione.values() + ascii.values()) {
+        QVERIFY2(!QIcon(picture).pixmap(QSize(PICTURE_SIZE, PICTURE_SIZE)).isNull(),
+                 qPrintable(picture));
+    }
+
+    // A set that cannot be read has no pictures.
+    QVERIFY(SmileyPack::picturesOf(QStringLiteral(":/smileys/none/emoticons.xml"), sample)
+                .isEmpty());
 }
 
 QTEST_GUILESS_MAIN(TestSmileyPack)

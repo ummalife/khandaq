@@ -1029,7 +1029,7 @@
 "air_group_role_moderator" = "管理员";
 "air_group_role_user" = "成员";
 "air_group_role_observer" = "旁观者";
-"air_group_you_founder" = "你创建了这个群组：可以任命管理员，把任何人设为成员或旁观者，移除成员，并更改群组设置。";
+"air_group_you_founder" = "你创建了这个群组：管理成员、管理员和群组设置。";
 "air_group_you_moderator" = "你是管理员：可以把成员设为旁观者、把旁观者设为成员，也可以将他们移出群组。";
 "air_group_you_user" = "你是成员：可以在群组中发言，群组由创建者和管理员管理。";
 "air_group_you_observer" = "你是旁观者：可以阅读群组，但不能发言。管理员可以授予你发言权。";

@@ -289,7 +289,7 @@
     <string name="air_group_role_moderator">moderator</string>
     <string name="air_group_role_user">member</string>
     <string name="air_group_role_observer">observer</string>
-    <string name="air_group_you_founder">You founded the group. You name moderators, make anyone a member or an observer, remove members and change the group settings.</string>
+    <string name="air_group_you_founder">You founded the group. You manage its members, moderators and settings.</string>
     <string name="air_group_you_moderator">You are a moderator. You make members observers and observers members, and you can remove them from the group.</string>
     <string name="air_group_you_user">You are a member. You write in the group; the founder and the moderators manage it.</string>
     <string name="air_group_you_observer">You are an observer. You read the group but cannot write; a moderator can give you the right to write.</string>

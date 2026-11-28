@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-28T05:06:02Z",
+  "generated_at": "2026-11-28T06:14:58Z",
   "repo": "ummalife/khandaq",
   "github_url": "https://github.com/ummalife/khandaq",
   "severities": [
@@ -25,6 +25,23 @@
     }
   ],
   "releases": [
+    {
+      "version": "0.2.79",
+      "date": "2026-11-28",
+      "title": "A message no longer brings up a hidden window",
+      "summary": "On the desktop a message no longer brings up a window hidden in the tray: Open the window on a new message starts off for everyone, and turning it on again in Settings, Notifications is kept. The desktop gets 0.2.79; Android stays at 0.2.78 and the iPhone at TestFlight build 143017 (1.4.34).",
+      "commits": [],
+      "changes": [
+        {
+          "severity": "important",
+          "title": "Desktop: a message no longer brings up a hidden window",
+          "description": "With the window hidden in the tray, every message showed it and made it the active one, in front of the work at hand: Open the window on a new message (Settings, Notifications) was on for everyone who had never turned it off. It now starts off for everyone, and turning it on again is kept. The system notification, the sign on the tray icon and the sound come as before.",
+          "platforms": [
+            "desktop"
+          ]
+        }
+      ]
+    },
     {
       "version": "0.2.78",
       "date": "2026-11-28",

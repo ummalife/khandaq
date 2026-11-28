@@ -6,35 +6,35 @@
   "platforms": {
     "linux-deb-amd64": {
       "file": "khandaq-messenger_amd64.deb",
-      "sha256": "f2a69c4410d083da7cf0a22ef874feef79645b72a27e0c0d012263d5fce9da1b",
-      "size": 39529520,
-      "version": "0.2.73"
+      "sha256": "f4cdbcb79312ae4347e0116f927909547c9f8663955d3ddeae6ada58a49ac8ad",
+      "size": 39537044,
+      "version": "0.2.76"
     },
     "linux-portable-x86_64": {
       "file": "khandaq-linux-x86_64-portable.tar.gz",
-      "sha256": "9ad45565e18b13439e9caa4606a4bd94b511598aae4b451ddf6bf271980f04a6",
-      "size": 50087363,
-      "version": "0.2.73"
+      "sha256": "6f4b93246c3b66e26d8956dcc4c7bc63f5ccaf7a8bd28a9fcd331253b96c3c98",
+      "size": 50091275,
+      "version": "0.2.76"
     },
     "macos-zip": {
       "file": "khandaq-macos.zip",
-      "sha256": "8ec4be7b18f8b3fd82467526704943ecb3364c8aff7e1bd51970db8a737f5ac1",
-      "size": 31801890,
-      "version": "0.2.73"
+      "sha256": "66313700769f3177901a3009d12d6314938068d5607c8ebc5ff5c6afa15c7bdc",
+      "size": 31802909,
+      "version": "0.2.76"
     },
     "windows-x86_64-installer": {
       "file": "khandaq-windows-installer.exe",
-      "sha256": "8d77485b2a4b54db4aecb52f35a993c754aa2eed558a7200c08dcdf33ef31dd0",
-      "size": 18107195,
-      "version": "0.2.73"
+      "sha256": "2875372f1e37eec4869dff5265d9f73e3a36e4fe4a8685f4885dcf0905239317",
+      "size": 18107982,
+      "version": "0.2.76"
     },
     "windows-x86_64-zip": {
       "file": "khandaq-windows-x86_64.zip",
-      "sha256": "ab4f8f5cbf6e8c137107c056f1456ee4be2d238186b550ba9f6d1da6302dcbc0",
-      "size": 26059744,
-      "version": "0.2.73"
+      "sha256": "2f1e3ef4cee3c75180b99c1a5ba68debba1268095c8d8b08d71105abee247b39",
+      "size": 26064627,
+      "version": "0.2.76"
     }
   },
   "schema": "khandaq-desktop-update/1",
-  "serial": 1795795531
+  "serial": 1795839586
 }

@@ -12,9 +12,9 @@
     <!-- A horizontal swipe on the list longer than this, or faster than the velocity, changes the filter. -->
     <dimen name="air_swipe_distance">60dp</dimen>
     <dimen name="air_swipe_velocity">400dp</dimen>
-    <!-- The conversation: where an entry's text starts (16 to the time, the 38dp column, 10 after it), -->
+    <!-- The conversation: where an entry's text starts, the 16 margin (owner, 28.11.2026: no time column before it), -->
     <!-- and the room above and below an entry (4 of its own and half of the 2 between entries). -->
-    <dimen name="air_entry_text_start">64dp</dimen>
+    <dimen name="air_entry_text_start">16dp</dimen>
     <dimen name="air_entry_inset">5dp</dimen>
     <!-- The tile beside the name in the chat header: the desk tile, as on iOS, so a 360dp phone keeps
          about ten characters of the name. -->

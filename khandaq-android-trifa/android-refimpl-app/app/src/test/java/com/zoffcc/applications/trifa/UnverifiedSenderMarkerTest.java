@@ -18,6 +18,9 @@ import static org.junit.Assert.assertTrue;
  * These exist because the positive case is hard to reach on a device — it needs an incoming row that
  * arrived via history sync, which needs a second live group peer. The rule is covered here even while
  * that is not reproducible, so a later refactor cannot quietly drop the marker.
+ *
+ * KHANDAQ (owner, 28.11.2026): the entries of the transcript no longer show the marker (AirTranscriptCompactTest);
+ * the rule stays, for the old bubble row that still draws it.
  */
 public class UnverifiedSenderMarkerTest
 {

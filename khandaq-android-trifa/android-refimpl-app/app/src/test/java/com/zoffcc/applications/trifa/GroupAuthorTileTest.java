@@ -32,6 +32,8 @@ import static org.junit.Assert.assertTrue;
  * KHANDAQ (tester 21.11, 8255): the sender's tile beside the messages of a group, as Telegram has it and as iOS has
  * it since a260002f: at the bottom of a run of one member's messages, with the name kept over the first, a tap on it
  * opening the member as the name does, and the plain tile, which opens nobody, beside a message nobody confirmed.
+ * KHANDAQ (owner, 28.11.2026): history brought without a signature has the member's own tile, and the column of
+ * the tile starts at the 16 margin, with no time column before it.
  * Our own messages and the conversation with one person keep their rows. The rules are pure and tested here; views
  * cannot be built in a JVM test here, so the layouts and the wiring are read from the resources and the sources
  * (comments left out), as GroupAuthorTapTest does.
@@ -71,9 +73,9 @@ public class GroupAuthorTileTest
         return m;
     }
 
-    private static boolean plain(final GroupMessage m, final boolean verified, final boolean named)
+    private static boolean plain(final GroupMessage m, final boolean named)
     {
-        return GroupMessageListHolder_text_incoming_not_read.should_show_plain_author_tile(m, verified, named);
+        return GroupMessageListHolder_text_incoming_not_read.should_show_plain_author_tile(m, named);
     }
 
     // ---- where a run ends ----
@@ -203,9 +205,10 @@ public class GroupAuthorTileTest
         // Only an entry that shows the tile is at least as tall as it: a one-line text grows to it, the others not.
         assertTrue(place.contains(bare("final int height = slot == TileSlot.SHOWN"
                                        + " ? res.getDimensionPixelSize(R.dimen.kq_size_tile_compact) : 0;")));
-        // The text and the name stand 8 after the tile, or 10 after the time without the column.
-        assertTrue(place.contains(bare("setMarginStart(body, res.getDimensionPixelSize(slot == TileSlot.NONE"
-                                       + " ? R.dimen.kq_space_10 : R.dimen.kq_space_8));")));
+        // The text and the name stand 8 after the tile, or at the 16 margin themselves without the column: there is no
+        // time column before them any more (owner, 28.11.2026).
+        assertTrue(place.contains(bare("setMarginStart(body, slot == TileSlot.NONE ? 0"
+                                       + " : res.getDimensionPixelSize(R.dimen.kq_space_8));")));
         // A tile worked out for another message (a recycled row not bound again) stands for nobody here.
         assertTrue(place.contains(bare("final AuthorTile model = (tag instanceof AuthorTile && ((AuthorTile) tag).messageId"
                                        + " == m.id) ? (AuthorTile) tag : null;")));
@@ -219,29 +222,29 @@ public class GroupAuthorTileTest
     @Test
     public void a_member_who_wrote_the_entry_has_their_own_tile()
     {
-        assertFalse(plain(incoming(utc(2026, 11, 21, 12, 0)), false, true));
-        // History the author signed is theirs too.
-        assertFalse(plain(relayed(TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS.value), true, true));
+        assertFalse(plain(incoming(utc(2026, 11, 21, 12, 0)), true));
+        // History the author signed is theirs, and so, since 28.11.2026 (owner), is history without a signature:
+        // every row of a client that does not sign is drawn as the member's other entries, tile and all.
+        final GroupMessage unsigned = relayed(TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS.value);
+        assertTrue(GroupMessageListHolder_text_incoming_not_read.should_mark_unverified_sender(false, unsigned, false));
+        assertFalse(plain(unsigned, true));
+        // A file the history brought, which never carries a signature, too.
+        final GroupMessage file = relayed(TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS.value);
+        file.TRIFA_MESSAGE_TYPE = TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE.value;
+        assertFalse(plain(file, true));
+        assertTrue(bare(body(code("GroupMessageListHolder_file_incoming_state_cancel.java"),
+                             "public void bindMessageList(")).contains(
+                bare("should_show_plain_author_tile(m, author_named)")));
     }
 
     @Test
     public void an_author_nobody_confirmed_has_the_plain_tile()
     {
-        // "Relayed from history, sender not verified" under the text: the tile does not vouch for the name either.
-        assertTrue(plain(relayed(TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS.value), false, true));
-        // "Author not confirmed" (KQ-03), even were the row signed.
-        assertTrue(plain(relayed(TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS_UNATTRIBUTED.value), true,
-                         true));
+        // "Author not confirmed" (KQ-03), whatever the row carries.
+        assertTrue(plain(relayed(TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS_UNATTRIBUTED.value), true));
         // "A member": the entry names nobody.
-        assertTrue(plain(incoming(utc(2026, 11, 21, 12, 0)), false, false));
-        assertTrue(plain(null, true, true));
-        // A file the history brought: a file record never carries a signature, so the file holder passes false.
-        final GroupMessage file = relayed(TRIFAGlobals.TRIFA_SYNC_TYPE.TRIFA_SYNC_TYPE_NGC_PEERS.value);
-        file.TRIFA_MESSAGE_TYPE = TRIFAGlobals.TRIFA_MSG_TYPE.TRIFA_MSG_FILE.value;
-        assertTrue(plain(file, false, true));
-        assertTrue(bare(body(code("GroupMessageListHolder_file_incoming_state_cancel.java"),
-                             "public void bindMessageList(")).contains(
-                bare("should_show_plain_author_tile(m, false, author_named)")));
+        assertTrue(plain(incoming(utc(2026, 11, 21, 12, 0)), false));
+        assertTrue(plain(null, true));
     }
 
     @Test
@@ -279,8 +282,10 @@ public class GroupAuthorTileTest
         final String entry = bare(body(code("GroupMessageListHolder_text_incoming_not_read.java"),
                                        "private void bindEntry("));
         assertTrue(entry.contains(bare("tile = new AirTranscript.AuthorTile(m.id, should_show_plain_author_tile(m,"
-                                       + " verified, tileName != null), tileName, tileTone, openAuthor);")));
-        assertTrue(entry.contains(bare("entry.senderUnverified = should_mark_unverified_sender(false, m, verified);")));
+                                       + " tileName != null), tileName, tileTone, openAuthor);")));
+        // KHANDAQ (owner, 28.11.2026): the entry no longer asks whether relayed history was signed.
+        assertFalse(entry.contains("should_mark_unverified_sender"));
+        assertFalse(entry.contains("NgcSignedHistory.isAuthorVerified"));
         assertTrue(entry.contains(bare("AirTranscript.bindAuthorTile(entry_tile, entry_body, layout_message_container,"
                                        + " m, position, tile);")));
         // After the entry is drawn, as the name's tap.
@@ -297,14 +302,14 @@ public class GroupAuthorTileTest
         assertTrue(file.contains(bare("AirTranscript.bindAuthorTile(file_tile, file_body, layout_message_container, m,"
                                       + " this.getAdapterPosition(), is_system_message ? null : new"
                                       + " AirTranscript.AuthorTile( m.id, GroupMessageListHolder_text_incoming_not_read"
-                                      + " .should_show_plain_author_tile(m, false, author_named), tile_name,"
+                                      + " .should_show_plain_author_tile(m, author_named), tile_name,"
                                       + " AirModel.Tone.index(tone_key), open_author));")));
     }
 
     // ---- the rows ----
 
     @Test
-    public void the_text_entry_has_the_tile_between_the_time_and_the_text_gone_by_default()
+    public void the_text_entry_has_the_tile_before_the_text_gone_by_default()
     {
         // air_entry_text is the row of every text: of a group, ours, and the conversation with one person. Gone,
         // the tile leaves each of them as it was; only a group entry of another member puts it.
@@ -322,17 +327,17 @@ public class GroupAuthorTileTest
     @Test
     public void the_column_takes_from_the_text_what_the_photo_box_leaves_for_it()
     {
-        // The column is the tile and 8 after it in place of the 10 after the time: 10 + 28 + 8 instead of 10.
+        // The column is the tile and 8 after it, from the 16 margin: 28 + 8 (owner, 28.11.2026: no time column).
         assertEquals(28.0, dp("@dimen/kq_size_tile_compact"), 0.0);
         assertEquals(8.0, dp("@dimen/kq_space_8"), 0.0);
-        assertEquals(10.0, dp("@dimen/kq_space_10"), 0.0);
         final String room = bare(body(code("AirTranscript.java"), "static int authorTileRoom("));
         assertTrue(room.contains(bare("return res.getDimensionPixelSize(R.dimen.kq_size_tile_compact)"
                                       + " + res.getDimensionPixelSize(R.dimen.kq_space_8);")));
         // A photo or a video is sized for the screen less what stands beside it: now the column too, or the box of
-        // a wide photo ran past the end of the narrower column.
+        // a wide photo ran past the end of the narrower column; and the meta beside it, unless a caption takes it.
         final String box = bare(body(code("AirFileEntry.java"), "private static void box("));
-        assertTrue(box.contains(bare("+ AirTranscript.authorTileRoom(v.tile);")));
+        assertTrue(box.contains(bare("final int column = AirTranscript.authorTileRoom(v.tile) + (visible(v.caption)"
+                                     + " ? 0 : metaRoom(v, e));")));
     }
 
     @Test
@@ -372,9 +377,10 @@ public class GroupAuthorTileTest
     // ---- the layouts ----
 
     /**
-     * The tile stands between the time column and the content, 28 square, 10 after the time, level with the bottom
-     * of the row, gone until a group entry puts it, out of TalkBack's way; start and end only, so right to left
-     * mirrors it. The content keeps its 10 after the time by default.
+     * The tile stands first in the row, at the 16 margin, before the content, 28 square, level with the bottom of
+     * the row, gone until a group entry puts it, out of TalkBack's way; start and end only, so right to left mirrors
+     * it. KHANDAQ (owner, 28.11.2026): no time column before it and no margin of its own; the content has none by
+     * default either (8 after the tile, AirTranscript.placeAuthorTile).
      */
     private static void checkRow(final String layout, final String tileId, final String bodyId)
     {
@@ -383,20 +389,20 @@ public class GroupAuthorTileTest
         assertEquals("com.zoffcc.applications.trifa.AirTileView", tile.getTagName());
         assertEquals("@dimen/kq_size_tile_compact", tile.getAttribute("android:layout_width"));
         assertEquals("@dimen/kq_size_tile_compact", tile.getAttribute("android:layout_height"));
-        assertEquals("@dimen/kq_space_10", tile.getAttribute("android:layout_marginStart"));
+        assertEquals("", tile.getAttribute("android:layout_marginStart"));
         assertEquals("bottom", tile.getAttribute("android:layout_gravity"));
         assertEquals("gone", tile.getAttribute("android:visibility"));
         assertEquals("no", tile.getAttribute("android:importantForAccessibility"));
         assertNoLeftOrRight(layout, tile);
 
-        final Element time = previousElement(tile);
-        assertNotNull(time);
-        assertEquals("@+id/date_time", time.getAttribute("android:id"));
+        assertEquals("nothing before the tile", null, previousElement(tile));
         final Element body = nextElement(tile);
         assertNotNull(body);
         assertEquals(bodyId, body.getAttribute("android:id"));
-        assertEquals("@dimen/kq_space_10", body.getAttribute("android:layout_marginStart"));
+        assertEquals("", body.getAttribute("android:layout_marginStart"));
+        assertEquals("", body.getAttribute("android:layout_marginEnd"));
         assertEquals("1", body.getAttribute("android:layout_weight"));
+        assertEquals("the mark column is gone", null, nextElement(body));
         assertNoLeftOrRight(layout, body);
         final Element container = (Element) tile.getParentNode();
         assertEquals("@+id/layout_message_container", container.getAttribute("android:id"));

@@ -46,11 +46,12 @@ import static com.zoffcc.applications.trifa.TrifaToxService.orma;
 
 /**
  * KHANDAQ (redesign, stage 3b): a file, a photo, a video or a voice note as an entry of the transcript
- * (design/DESIGN.md, "Files, voice and calls on the phone"), the same row as a text: the time in its column,
- * the author over the first entry of a run, the glyph, the name and the size, the 6dp bar while it moves,
- * one line of state in words and the actions in words under it; ours take the mark at the far end. A photo
- * or a video stands in a box of its own shape before its picture is there, the caption under it; a voice
- * note is its player.
+ * (design/DESIGN.md, "Files, voice and calls on the phone"), the same row as a text: the author over the first
+ * entry of a run, the glyph, the name and the size, the 6dp bar while it moves, one line of state in words and
+ * the actions in words under it. A photo or a video stands in a box of its own shape before its picture is there,
+ * the caption under it; a voice note is its player. KHANDAQ (owner, 28.11.2026): the time and the mark of ours
+ * are the entry's meta at its trailing edge, beside the bottom of the file, the player or the photo, or on the
+ * last line of a caption (AirEntryMetaLayout); there is no time column and no mark column.
  *
  * The row holders and the transfer helpers keep their work: the state is read from the message and its
  * transfer as they are, and every action calls what the old buttons called. This class only draws, after
@@ -649,13 +650,14 @@ final class AirFileEntry
 
     // ---- drawing ----
 
-    /** The time column, the day mark lined up with the content, the author, and none of the old chrome. */
+    /**
+     * The time of the meta, the day mark, the author, and none of the old chrome. KHANDAQ (owner, 28.11.2026): the
+     * time is no column any more and the day mark stays at the 16 margin where the entry starts, as the layout has it.
+     */
     private static void frame(final Views v, final CharSequence time, final String fullAuthor,
                               @Nullable final String shownAuthor, final int authorColor)
     {
         final Context context = v.root.getContext();
-        final Resources res = context.getResources();
-        int column = res.getDimensionPixelSize(R.dimen.kq_size_time_column_phone);
         if (v.time != null)
         {
             // The bubble's time style comes off: a caption in tabular figures, in the third ink.
@@ -667,23 +669,14 @@ final class AirFileEntry
             v.time.setGravity(Gravity.START | Gravity.TOP);
             v.time.setText(time);
             v.time.setVisibility(View.VISIBLE);
-            column = AirTranscript.timeColumnWidth(v.time);
-            final ViewGroup.LayoutParams params = v.time.getLayoutParams();
-            if (params != null && params.width != column)
-            {
-                params.width = column;
-                v.time.setLayoutParams(params);
-            }
+        }
+        if (v.frame != null)
+        {
+            // Under a photo with a caption the meta follows the caption's last line, as after a text.
+            v.frame.setTailText(v.caption);
         }
         if (v.dayRow != null)
         {
-            final int start = res.getDimensionPixelSize(R.dimen.kq_space_16) + column
-                              + res.getDimensionPixelSize(R.dimen.kq_space_10);
-            if (v.dayRow.getPaddingStart() != start)
-            {
-                v.dayRow.setPaddingRelative(start, v.dayRow.getPaddingTop(), v.dayRow.getPaddingEnd(),
-                                            v.dayRow.getPaddingBottom());
-            }
             v.dayRow.setBackground(null);
         }
         AirTranscript.styleDayMark(v.dayLabel);
@@ -710,7 +703,6 @@ final class AirFileEntry
             v.caption.setBackground(null);
         }
         hideLegacy(v);
-        firstLine(v, res);
     }
 
     private static void render(final Context context, final Views v, final Entry e)
@@ -836,7 +828,8 @@ final class AirFileEntry
         {
             if (e.status == AirConversationModel.EntryStatus.NONE)
             {
-                v.mark.setVisibility(View.INVISIBLE);
+                // KHANDAQ (owner, 28.11.2026): gone, no column waits for it; the meta ends with the time.
+                v.mark.setVisibility(View.GONE);
             }
             else
             {
@@ -847,7 +840,6 @@ final class AirFileEntry
             }
         }
 
-        firstLine(v, res);
         describe(context, v, e);
     }
 
@@ -901,31 +893,6 @@ final class AirFileEntry
         {
             ((LinearLayout) v.fileRow).setGravity(Gravity.START | Gravity.TOP);
         }
-    }
-
-    /** The time and the mark sit on the first line: the author's, the file's, the player's or the photo's top. */
-    private static void firstLine(final Views v, final Resources res)
-    {
-        final int line;
-        if (visible(v.author))
-        {
-            line = res.getDimensionPixelSize(R.dimen.kq_line_label);
-        }
-        else if (visible(v.player))
-        {
-            line = res.getDimensionPixelSize(R.dimen.kq_size_target_android);
-        }
-        else if (visible(v.preview))
-        {
-            line = res.getDimensionPixelSize(R.dimen.kq_line_caption);
-        }
-        else
-        {
-            line = Math.max(res.getDimensionPixelSize(R.dimen.kq_line_label),
-                            res.getDimensionPixelSize(R.dimen.kq_size_icon));
-        }
-        setTopMargin(v.time, Math.max(0, (line - res.getDimensionPixelSize(R.dimen.kq_line_caption)) / 2));
-        setTopMargin(v.mark, Math.max(0, (line - res.getDimensionPixelSize(R.dimen.kq_size_mark)) / 2));
     }
 
     /** One sentence for TalkBack: who, when, what, how big, the state, and the mark of our own. */
@@ -991,10 +958,8 @@ final class AirFileEntry
             box.setClipToOutline(true);
         }
         // KHANDAQ (tester 21.11, 8255): beside the column of a member's tile the content is narrower by it.
-        final int column = (v.time != null ? AirTranscript.timeColumnWidth(v.time)
-                                           : preview.getResources().getDimensionPixelSize(
-                                                   R.dimen.kq_size_time_column_phone))
-                           + AirTranscript.authorTileRoom(v.tile);
+        // KHANDAQ (owner, 28.11.2026): and by the meta beside the photo, unless a caption under it takes the meta.
+        final int column = AirTranscript.authorTileRoom(v.tile) + (visible(v.caption) ? 0 : metaRoom(v, e));
         final String key = e.path == null ? "" : e.path;
         preview.setTag(R.id.air_file_aspect_key, key);
         final Float known = key.isEmpty() ? null : ASPECTS.get(key);
@@ -1069,6 +1034,26 @@ final class AirFileEntry
         return parent instanceof FrameLayout ? (View) parent : preview;
     }
 
+    /**
+     * The width the meta takes beside a body that is not a text, with the gap before it (AirEntryMetaLayout): the
+     * time as it is written and, for ours, the mark.
+     */
+    private static int metaRoom(final Views v, final Entry e)
+    {
+        final Resources res = v.root.getResources();
+        int room = 0;
+        if (v.time != null && v.time.getText() != null)
+        {
+            room += (int) Math.ceil(v.time.getPaint().measureText(v.time.getText().toString()));
+        }
+        if (e.status != AirConversationModel.EntryStatus.NONE)
+        {
+            room += res.getDimensionPixelSize(R.dimen.kq_space_4) + res.getDimensionPixelSize(R.dimen.kq_size_mark);
+        }
+        return room > 0 ? room + res.getDimensionPixelSize(R.dimen.kq_space_8) : 0;
+    }
+
+    /** The box of a photo: the screen less its margins and {@code column}, what stands beside the photo. */
     private static void size(final View preview, final float shape, final int column)
     {
         final View box = boxOf(preview);
@@ -1076,9 +1061,7 @@ final class AirFileEntry
         final Resources res = context.getResources();
         final float aspect = Math.max(MIN_ASPECT, Math.min(MAX_ASPECT, shape));
         final int room = Math.round(res.getConfiguration().screenWidthDp * res.getDisplayMetrics().density)
-                         - 2 * res.getDimensionPixelSize(R.dimen.kq_space_16)
-                         - 2 * res.getDimensionPixelSize(R.dimen.kq_space_10) - column
-                         - res.getDimensionPixelSize(R.dimen.kq_size_mark);
+                         - 2 * res.getDimensionPixelSize(R.dimen.kq_space_16) - column;
         int width = Math.max(1, Math.min(ChatBubbleUiHelper.media_thumb_max_w_px(context), room));
         int height = Math.max(1, Math.round(width / aspect));
         final int highest = ChatBubbleUiHelper.media_thumb_max_h_px(context);
@@ -1274,6 +1257,9 @@ final class AirFileEntry
         final ViewGroup bubble;
         @Nullable
         final ImageView mark;
+        /** KHANDAQ (owner, 28.11.2026): the content and its meta, the time and our mark. */
+        @Nullable
+        final AirEntryMetaLayout frame;
         @Nullable
         final View previewContainer;
         @Nullable
@@ -1334,6 +1320,7 @@ final class AirFileEntry
             }
             bubble = found;
             mark = root.findViewById(R.id.m_icon);
+            frame = root.findViewById(R.id.air_file_frame);
             previewContainer = root.findViewById(R.id.ft_preview_container);
             preview = root.findViewById(R.id.ft_preview_image);
             player = root.findViewById(R.id.ft_audio_player);

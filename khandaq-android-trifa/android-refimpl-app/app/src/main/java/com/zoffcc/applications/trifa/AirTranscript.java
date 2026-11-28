@@ -53,8 +53,10 @@ import static com.zoffcc.applications.trifa.TRIFAGlobals.TRIFA_SYSTEM_MESSAGE_PE
  * KHANDAQ (redesign, stage 2): a text message of the conversation with one person as an entry of the
  * transcript in design/system/index.html (02-plan.md, screen 5), as AirEntryTextCell on iOS. The row
  * holders keep their data binding (links, location, reactions, selection, swipe to reply) and hand the
- * look to this class: the time in a column of tabular figures, the author over the first entry of a run
- * in their tone, our own mark at the far end, no bubble, the day where the text starts.
+ * look to this class: the author over the first entry of a run in their tone, no bubble, the day where the
+ * text starts. KHANDAQ (owner, 28.11.2026): no time column and no mark column any more: the time, our own mark
+ * and the edited word are the entry's meta at its trailing edge, on the last line of the text when it has room
+ * (AirEntryMetaLayout), as Telegram has them.
  *
  * <p>While the person is away, our texts without a receipt are not entries: they wait in the "in
  * transit" tray of {@link AirChatPanel} and join the log when the person comes online, rising into it.
@@ -225,7 +227,6 @@ final class AirTranscript
     private static final class Views
     {
         final ViewGroup container;
-        final ViewGroup dayRow;
         final ViewGroup group;
         final TextView time;
         final TextView author;
@@ -236,16 +237,17 @@ final class AirTranscript
         final TextView more;
         final ImageView mark;
         final EmojiTextViewLinks text;
-        /** Group entries only: the private-message line over the text and the unverified-sender line. */
+        /** KHANDAQ (owner, 28.11.2026): the text and its meta, the edited word, the time and our mark. */
+        @Nullable
+        final AirEntryMetaLayout frame;
+        /** Group entries only: the private-message line over the text. */
         final TextView note;
-        final TextView unverified;
         /** What TalkBack says of the quote over a reply ({@link #spokenQuote}), kept for {@link #refreshState}. */
         String spokenQuote = "";
 
         Views(final View itemView)
         {
             container = itemView.findViewById(R.id.layout_message_container);
-            dayRow = itemView.findViewById(R.id.message_text_date);
             group = itemView.findViewById(R.id.text_block_group);
             time = itemView.findViewById(R.id.date_time);
             author = itemView.findViewById(R.id.air_entry_author);
@@ -260,8 +262,8 @@ final class AirTranscript
             }
             mark = itemView.findViewById(R.id.m_icon);
             text = itemView.findViewById(R.id.m_text);
+            frame = itemView.findViewById(R.id.air_entry_frame);
             note = itemView.findViewById(R.id.air_entry_note);
-            unverified = itemView.findViewById(R.id.air_entry_unverified);
         }
     }
 
@@ -370,8 +372,13 @@ final class AirTranscript
         TextViewCompat.setCompoundDrawablesRelative(views.text, callNote ? callGlyph(context) : null, null,
                                                     null, null);
         views.text.setCompoundDrawablePadding(callNote ? res.getDimensionPixelSize(R.dimen.kq_space_8) : 0);
+        if (views.frame != null)
+        {
+            // A call row is not a text: its meta stands beside it, level with its bottom, as beside a file.
+            views.frame.setTextBody(!callNote);
+        }
 
-        bindTime(views, res, timeText(context, m, outgoing));
+        bindTime(views, timeText(context, m, outgoing));
 
         if (views.group != null)
         {
@@ -413,28 +420,14 @@ final class AirTranscript
         return views.more != null && views.more.getVisibility() == View.VISIBLE;
     }
 
-    /** The time column, widened for the text size, and the day mark lined up with the text after it. */
-    private static void bindTime(final Views views, final Resources res, final CharSequence time)
+    /**
+     * The time of the entry's meta. KHANDAQ (owner, 28.11.2026): it is no column any more, so it takes its own width,
+     * and the day mark stays where the layout puts it, at the 16 margin where the entry starts.
+     */
+    private static void bindTime(final Views views, final CharSequence time)
     {
         views.time.setText(time);
         views.time.setVisibility(View.VISIBLE);
-        final int column = timeColumnWidth(views.time);
-        final ViewGroup.LayoutParams timeParams = views.time.getLayoutParams();
-        if (timeParams != null && timeParams.width != column)
-        {
-            timeParams.width = column;
-            views.time.setLayoutParams(timeParams);
-        }
-        if (views.dayRow != null)
-        {
-            final int start = res.getDimensionPixelSize(R.dimen.kq_space_16) + column
-                              + res.getDimensionPixelSize(R.dimen.kq_space_10);
-            if (views.dayRow.getPaddingStart() != start)
-            {
-                views.dayRow.setPaddingRelative(start, views.dayRow.getPaddingTop(), views.dayRow.getPaddingEnd(),
-                                                views.dayRow.getPaddingBottom());
-            }
-        }
     }
 
     /** The phone glyph of a call entry, in the second ink and the size of the design's icons. */
@@ -468,7 +461,6 @@ final class AirTranscript
     private static void bindState(final Views views, final Message m, final int position)
     {
         final Context context = views.text.getContext();
-        final Resources res = context.getResources();
         final boolean outgoing = m.direction == 1;
         final boolean saved = FavoritesChatHelper.isFavoritesChat(m.tox_friendpubkey);
         final boolean callNote = HelperMessageEdit.isLocalCallLogRow(m);
@@ -510,13 +502,6 @@ final class AirTranscript
             }
         }
 
-        // The time and the mark sit on the first line: the author's, or the text's.
-        final float factor = textFactor();
-        final int firstLine = shownAuthor != null ? res.getDimensionPixelSize(R.dimen.kq_line_label)
-                                                  : Math.round(res.getDimension(R.dimen.kq_line_body) * factor);
-        setTopMargin(views.time, Math.max(0, (firstLine - res.getDimensionPixelSize(R.dimen.kq_line_caption)) / 2));
-        setTopMargin(views.mark, Math.max(0, (firstLine - res.getDimensionPixelSize(R.dimen.kq_size_mark)) / 2));
-
         final AirConversationModel.EntryStatus status = statusOf(m);
         showMark(views.mark, status, m.id, true);
 
@@ -527,9 +512,10 @@ final class AirTranscript
             views.retry.setOnClickListener(failed ? v -> AirChatPanel.retryEntry(v.getContext(), m) : null);
             views.retry.setClickable(failed);
         }
+        // The row under the text holds Read more and Retry; the edited word is in the meta (owner, 28.11.2026).
         if (views.meta != null)
         {
-            views.meta.setVisibility(failed || m.edited || showsMore(views) ? View.VISIBLE : View.GONE);
+            views.meta.setVisibility(failed || showsMore(views) ? View.VISIBLE : View.GONE);
         }
 
         if (views.container != null)
@@ -664,9 +650,11 @@ final class AirTranscript
         mark.animate().cancel();
         if (status == AirConversationModel.EntryStatus.NONE)
         {
+            // KHANDAQ (owner, 28.11.2026): gone, not kept invisible: no column waits for a mark, the meta ends
+            // with the time.
             mark.setImageDrawable(null);
             mark.setAlpha(1f);
-            mark.setVisibility(View.INVISIBLE);
+            mark.setVisibility(View.GONE);
             return;
         }
         final float alpha = markAlpha(status);
@@ -750,7 +738,6 @@ final class AirTranscript
         int authorColor;
         /** "Private message to you" or "Private message to Amina"; null for a message to the group. */
         String privateNote;
-        boolean senderUnverified;
         boolean mentionsYou;
         boolean system;
         AirConversationModel.EntryStatus status = AirConversationModel.EntryStatus.NONE;
@@ -791,8 +778,12 @@ final class AirTranscript
         views.text.setTextColor(AirUi.color(context, entry.system ? R.color.kq_ink_2 : R.color.kq_ink));
         TextViewCompat.setCompoundDrawablesRelative(views.text, null, null, null, null);
         views.text.setCompoundDrawablePadding(0);
+        if (views.frame != null)
+        {
+            views.frame.setTextBody(true);
+        }
 
-        bindTime(views, res, AirUi.localDigits(context, HelperGeneric.format_group_message_time(m, outgoing)));
+        bindTime(views, AirUi.localDigits(context, HelperGeneric.format_group_message_time(m, outgoing)));
         if (views.group != null)
         {
             styleQuote(views.group);
@@ -805,7 +796,7 @@ final class AirTranscript
         bindMore(views, cut, AirLongTextActivity.KIND_GROUP, m.id);
         if (views.meta != null)
         {
-            views.meta.setVisibility(m.edited || showsMore(views) ? View.VISIBLE : View.GONE);
+            views.meta.setVisibility(showsMore(views) ? View.VISIBLE : View.GONE);
         }
         if (views.retry != null)
         {
@@ -877,10 +868,10 @@ final class AirTranscript
 
     /**
      * KHANDAQ (tester 21.11, 8255): the tile of the member who wrote a group entry, as Telegram has it. Every entry
-     * of another member keeps a column for it between the time and the text, and the last entry of a run shows it,
+     * of another member keeps a column for it before the text, and the last entry of a run shows it,
      * level with the bottom of the entry, while the name stays over the first one. It is the member's tile of the
-     * band and the dossier (initials in their tone), or the plain one of an author nobody confirmed. The holder
-     * works it out, as it does the author.
+     * band and the dossier (initials in their tone), or the plain one of an author the group could not confirm
+     * (KQ-03) or of none. The holder works it out, as it does the author.
      */
     static final class AuthorTile
     {
@@ -975,8 +966,9 @@ final class AirTranscript
             params.height = height;
             tile.setLayoutParams(params);
         }
-        setMarginStart(body, res.getDimensionPixelSize(slot == TileSlot.NONE ? R.dimen.kq_space_10
-                                                                             : R.dimen.kq_space_8));
+        // KHANDAQ (owner, 28.11.2026): the column starts at the 16 margin, no time before it; without it the content
+        // starts there itself.
+        setMarginStart(body, slot == TileSlot.NONE ? 0 : res.getDimensionPixelSize(R.dimen.kq_space_8));
     }
 
     /** The width the column of the tile takes from the content of an entry: the tile and the gap after it, or none. */
@@ -994,7 +986,6 @@ final class AirTranscript
                                        final boolean selected, final GroupEntry entry)
     {
         final Context context = views.text.getContext();
-        final Resources res = context.getResources();
 
         final String shownAuthor = (!entry.system && !TextUtils.isEmpty(entry.author)
                                     && startsGroupRun(context, m, position)) ? entry.author : null;
@@ -1013,30 +1004,8 @@ final class AirTranscript
             views.note.setVisibility(privateEntry ? View.VISIBLE : View.GONE);
             bindPrivateNote(views.note, privateEntry);
         }
-        if (views.unverified != null)
-        {
-            views.unverified.setText(entry.senderUnverified ? context.getString(R.string.group_msg_sender_unverified)
-                                                            : null);
-            views.unverified.setVisibility(entry.senderUnverified ? View.VISIBLE : View.GONE);
-        }
-
-        // The time and the mark sit on the first line: the author's, the private note's, or the text's.
-        final float factor = textFactor();
-        final int firstLine;
-        if (shownAuthor != null)
-        {
-            firstLine = res.getDimensionPixelSize(R.dimen.kq_line_label);
-        }
-        else if (!TextUtils.isEmpty(entry.privateNote))
-        {
-            firstLine = res.getDimensionPixelSize(R.dimen.kq_line_caption);
-        }
-        else
-        {
-            firstLine = Math.round(res.getDimension(R.dimen.kq_line_body) * factor);
-        }
-        setTopMargin(views.time, Math.max(0, (firstLine - res.getDimensionPixelSize(R.dimen.kq_line_caption)) / 2));
-        setTopMargin(views.mark, Math.max(0, (firstLine - res.getDimensionPixelSize(R.dimen.kq_size_mark)) / 2));
+        // KHANDAQ (owner, 28.11.2026): relayed history without a signature no longer says "sender not verified"
+        // under its text, nor to TalkBack: it reads as every other entry of the member (KQ-03 keeps its own name).
         showMark(views.mark, outgoingStatus(m, entry), m.id, false);
 
         if (views.container != null)
@@ -1061,10 +1030,6 @@ final class AirTranscript
             if (!TextUtils.isEmpty(entry.privateNote))
             {
                 append(spokenText, entry.privateNote);
-            }
-            if (entry.senderUnverified)
-            {
-                append(spokenText, context.getString(R.string.group_msg_sender_unverified));
             }
             if (entry.mentionsYou && m.direction != 1)
             {
@@ -1312,15 +1277,16 @@ final class AirTranscript
     private static String widthLocale = null;
     private static int widthPx = 0;
 
-    /** The clock of a message, in the time column and the tray, in the digits of the app's language. */
+    /** The clock of a message, in the entry's meta and the tray, in the digits of the app's language. */
     static String timeText(final Context context, final Message m, final boolean outgoing)
     {
         return AirUi.localDigits(context, HelperGeneric.format_chat_message_time(m, outgoing));
     }
 
     /**
-     * The 38dp time column, widened with the system text size (and for wider digits) so "23:59" stays
-     * whole, at most twice as wide. Measured with the paint of {@code time}, a caption in tabular figures.
+     * The 38dp time column of the in transit tray, widened with the system text size (and for wider digits) so
+     * "23:59" stays whole, at most twice as wide. Measured with the paint of {@code time}, a caption in tabular
+     * figures. The entries of the log have no time column since 28.11.2026: their time is in the meta.
      */
     static int timeColumnWidth(final TextView time)
     {
@@ -1358,20 +1324,6 @@ final class AirTranscript
             widthPx = width;
         }
         return width;
-    }
-
-    private static void setTopMargin(final View view, final int top)
-    {
-        if (view == null || !(view.getLayoutParams() instanceof ViewGroup.MarginLayoutParams))
-        {
-            return;
-        }
-        final ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) view.getLayoutParams();
-        if (params.topMargin != top)
-        {
-            params.topMargin = top;
-            view.setLayoutParams(params);
-        }
     }
 
     /** The margin on the side the text starts from, so that it follows a right-to-left layout. */

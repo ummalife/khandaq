@@ -478,6 +478,7 @@ enum class Text
     FileWaitsAccept,
     FileWaitsMembers,
     FileDownloadStopped,
+    FileCancelledThere,
     FileNotSent,
     FileWaitsConnection,
     FileNameAndSize,

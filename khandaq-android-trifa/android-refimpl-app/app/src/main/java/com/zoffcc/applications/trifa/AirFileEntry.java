@@ -322,7 +322,13 @@ final class AirFileEntry
                 e.cancel = view -> calls.onCancel();
                 break;
             case FAILED:
-                if (!outgoing && !online)
+                if (!outgoing && m.ft_cancelled_there)
+                {
+                    // KHANDAQ (inbox #36): its sender cancelled it. Nothing went wrong here and nothing here
+                    // brings it back, so no alarm and no Retry; it comes again only if they send it again.
+                    e.note = context.getString(R.string.air_file_cancelled_there);
+                }
+                else if (!outgoing && !online)
                 {
                     e.note = context.getString(R.string.file_transfer_sender_offline);
                 }

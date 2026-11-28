@@ -139,6 +139,12 @@ public class Message
     @Column(indexed = true, helpers = Column.Helpers.ALL)
     public boolean ft_outgoing_preparing;
 
+    // KHANDAQ (inbox #36): a file of theirs whose sender cancelled it before it was whole here (their CANCEL,
+    // HelperFiletransfer.cancel_filetransfer); its entry says so instead of "The download stopped". Cleared when
+    // they offer it again.
+    @Column(helpers = Column.Helpers.ALL)
+    public boolean ft_cancelled_there;
+
     static Message deep_copy(Message in)
     {
         Message out = new Message();
@@ -179,6 +185,7 @@ public class Message
         out.reactions_pending = in.reactions_pending;
         out.ft_id_anchor_hex = in.ft_id_anchor_hex;
         out.ft_outgoing_preparing = in.ft_outgoing_preparing;
+        out.ft_cancelled_there = in.ft_cancelled_there;
 
         return out;
     }
@@ -186,7 +193,7 @@ public class Message
     @Override
     public String toString()
     {
-        return "id=" + id + ", message_id=" + message_id + ", tox_friendpubkey=" + tox_friendpubkey + ", direction=" + direction + ", TOX_MESSAGE_TYPE=" + TOX_MESSAGE_TYPE + ", TRIFA_MESSAGE_TYPE=" + TRIFA_MESSAGE_TYPE + ", state=" + state + ", ft_accepted=" + ft_accepted + ", ft_outgoing_started=" + ft_outgoing_started + ", filedb_id=" + filedb_id + ", filetransfer_id=" + filetransfer_id + ", sent_timestamp=" + sent_timestamp + ", sent_timestamp_ms=" + sent_timestamp_ms + ", rcvd_timestamp=" + rcvd_timestamp + ", rcvd_timestamp_ms=" + rcvd_timestamp_ms + ", read=" + read + ", send_retries=" + send_retries + ", is_new=" + is_new + ", text=" + text + ", filename_fullpath=" + filename_fullpath + ", msg_id_hash=" + msg_id_hash + ", raw_msgv2_bytes=" + raw_msgv2_bytes + ", msg_version=" + msg_version + ", resend_count=" + resend_count + ", storage_frame_work=" + storage_frame_work + ", ft_outgoing_queued=" + ft_outgoing_queued + ", msg_at_relay=" + msg_at_relay + ", msg_idv3_hash=" + msg_idv3_hash + ", sent_push=" + sent_push + ", filetransfer_kind=" + filetransfer_kind + ", edited=" + edited + ", edited_timestamp=" + edited_timestamp + ", edit_pending=" + edit_pending + ", reactions=" + reactions + ", reactions_pending=" + reactions_pending + ", ft_id_anchor_hex=" + ft_id_anchor_hex + ", ft_outgoing_preparing=" + ft_outgoing_preparing;
+        return "id=" + id + ", message_id=" + message_id + ", tox_friendpubkey=" + tox_friendpubkey + ", direction=" + direction + ", TOX_MESSAGE_TYPE=" + TOX_MESSAGE_TYPE + ", TRIFA_MESSAGE_TYPE=" + TRIFA_MESSAGE_TYPE + ", state=" + state + ", ft_accepted=" + ft_accepted + ", ft_outgoing_started=" + ft_outgoing_started + ", filedb_id=" + filedb_id + ", filetransfer_id=" + filetransfer_id + ", sent_timestamp=" + sent_timestamp + ", sent_timestamp_ms=" + sent_timestamp_ms + ", rcvd_timestamp=" + rcvd_timestamp + ", rcvd_timestamp_ms=" + rcvd_timestamp_ms + ", read=" + read + ", send_retries=" + send_retries + ", is_new=" + is_new + ", text=" + text + ", filename_fullpath=" + filename_fullpath + ", msg_id_hash=" + msg_id_hash + ", raw_msgv2_bytes=" + raw_msgv2_bytes + ", msg_version=" + msg_version + ", resend_count=" + resend_count + ", storage_frame_work=" + storage_frame_work + ", ft_outgoing_queued=" + ft_outgoing_queued + ", msg_at_relay=" + msg_at_relay + ", msg_idv3_hash=" + msg_idv3_hash + ", sent_push=" + sent_push + ", filetransfer_kind=" + filetransfer_kind + ", edited=" + edited + ", edited_timestamp=" + edited_timestamp + ", edit_pending=" + edit_pending + ", reactions=" + reactions + ", reactions_pending=" + reactions_pending + ", ft_id_anchor_hex=" + ft_id_anchor_hex + ", ft_outgoing_preparing=" + ft_outgoing_preparing + ", ft_cancelled_there=" + ft_cancelled_there;
     }
 
 
@@ -271,6 +278,7 @@ public class Message
                 out.reactions_pending = rs.getBoolean("reactions_pending");
                 out.ft_id_anchor_hex = rs.getString("ft_id_anchor_hex");
                 out.ft_outgoing_preparing = rs.getBoolean("ft_outgoing_preparing");
+                out.ft_cancelled_there = rs.getBoolean("ft_cancelled_there");
 
                 list.add(out);
             }
@@ -348,6 +356,7 @@ public class Message
                     + ",reactions_pending"
                     + ",ft_id_anchor_hex"
                     + ",ft_outgoing_preparing"
+                    + ",ft_cancelled_there"
                     + ")" +
                     "values" +
                     "("
@@ -387,6 +396,7 @@ public class Message
                     + ",?34"
                     + ",?35"
                     + ",?36"
+                    + ",?37"
                     + ")";
 
             insert_pstmt = sqldb.prepareStatement(insert_pstmt_sql);
@@ -428,6 +438,7 @@ public class Message
             insert_pstmt.setBoolean(34, this.reactions_pending);
             insert_pstmt.setString(35, this.ft_id_anchor_hex);
             insert_pstmt.setBoolean(36, this.ft_outgoing_preparing);
+            insert_pstmt.setBoolean(37, this.ft_cancelled_there);
             // @formatter:on
 
             if (ORMA_TRACE)
@@ -1166,6 +1177,22 @@ public class Message
         }
         this.sql_set = this.sql_set + " ft_outgoing_preparing=?" + (BINDVAR_OFFSET_SET + bind_set_count) + " ";
         bind_set_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, ft_outgoing_preparing));
+        bind_set_count++;
+        return this;
+    }
+
+    public Message ft_cancelled_there(boolean ft_cancelled_there)
+    {
+        if (this.sql_set.equals(""))
+        {
+            this.sql_set = " set ";
+        }
+        else
+        {
+            this.sql_set = this.sql_set + " , ";
+        }
+        this.sql_set = this.sql_set + " ft_cancelled_there=?" + (BINDVAR_OFFSET_SET + bind_set_count) + " ";
+        bind_set_vars.add(new OrmaBindvar(BINDVAR_TYPE_Boolean, ft_cancelled_there));
         bind_set_count++;
         return this;
     }

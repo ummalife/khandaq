@@ -150,6 +150,11 @@ enum class FileNote
     WaitsMembers,
     /** Theirs stopped before the end; Tox cannot ask for it again, only they can send it again. */
     DownloadStopped,
+    /**
+     * KHANDAQ (inbox #36): theirs, cancelled by its sender before the end. Nothing went wrong
+     * here: it comes again only if they send it again.
+     */
+    CancelledThere,
     /** Ours stopped before the end. */
     NotSent,
     /**
@@ -179,6 +184,8 @@ struct FileFacts
     bool canSendAgain = false;
     /** KHANDAQ (0.2.57): the friend went offline in the middle of it (ToxFile::connectionLost). */
     bool waitsConnection = false;
+    /** KHANDAQ (inbox #36): theirs, and its sender cancelled it (ToxFile::cancelledThere). */
+    bool cancelledThere = false;
     /**
      * KHANDAQ (0.2.57): a group file of someone else that came and waits for Accept to be written
      * (Air::Community::HeldFiles); only Khandaq Community holds its files.

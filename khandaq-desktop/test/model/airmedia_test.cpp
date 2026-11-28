@@ -18,6 +18,7 @@
 */
 
 #include "src/model/air/airmedia.h"
+#include "src/widget/air/airstrings.h"
 
 #include <QBuffer>
 #include <QFile>
@@ -110,6 +111,7 @@ private slots:
     void aMovingFileSaysWhatIsLeft();
     void onlyTheSideThatPausedGoesOn();
     void aStoppedFileSaysWhichWayItWent();
+    void aFileItsSenderCancelledSaysSo();
     void aFileThatIsHereOpens();
     void aGroupFileHasNothingToAnswer();
     void aHeldGroupFileWaitsForAcceptAlone();
@@ -344,6 +346,28 @@ void TestAirMedia::aStoppedFileSaysWhichWayItWent()
         QCOMPARE(Air::fileEntryState(ours).actions, QVector<FileAction>{FileAction::SendAgain});
         QVERIFY(Air::fileEntryState(ours).isProblem());
     }
+}
+
+void TestAirMedia::aFileItsSenderCancelledSaysSo()
+{
+    // KHANDAQ (inbox #36): testers read "The download stopped" and could not tell why.
+    Air::FileFacts theirs = facts(ToxFile::CANCELED, true);
+    theirs.cancelledThere = true;
+    const Air::FileEntryState state = Air::fileEntryState(theirs);
+    QCOMPARE(state.note, FileNote::CancelledThere);
+    // Nothing went wrong here, and nothing here brings it back: only they can send it again.
+    QVERIFY(!state.isProblem());
+    QVERIFY(state.actions.isEmpty());
+    QVERIFY(state.progress < 0);
+    QCOMPARE(AirStrings::fileNoteText(state, QString(), QLocale::c()),
+             QStringLiteral("The sender cancelled it"));
+
+    // A transfer that broke was cancelled by nobody, and a file of ours says how it went for us.
+    theirs.status = ToxFile::BROKEN;
+    QCOMPARE(Air::fileEntryState(theirs).note, FileNote::DownloadStopped);
+    Air::FileFacts ours = facts(ToxFile::CANCELED, false);
+    ours.cancelledThere = true;
+    QCOMPARE(Air::fileEntryState(ours).note, FileNote::NotSent);
 }
 
 void TestAirMedia::aFileThatIsHereOpens()

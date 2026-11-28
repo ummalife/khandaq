@@ -119,6 +119,13 @@ struct ToxFile
      */
     bool refusedHere = false;
     /**
+     * KHANDAQ (inbox #36): its sender cancelled this file of theirs before it was whole here
+     * (their CANCEL), so its entry says so instead of "The download stopped". For this run of the
+     * app only: the history keeps no word of who stopped a file; an offer of it again is a new
+     * ToxFile, without it.
+     */
+    bool cancelledThere = false;
+    /**
      * KHANDAQ (0.2.57): a file of a group that a member relayed (history sync) instead of its
      * sender: toxcore vouches for nobody, so the key its entry names is what that member says. It
      * is never taken for ours, and a Report on it names no author.

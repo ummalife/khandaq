@@ -2409,6 +2409,11 @@
         <translation>下载已中断</translation>
     </message>
     <message>
+        <source>The sender cancelled it</source>
+        <comment>file entry of theirs: the person who sent it cancelled the transfer before it was all here</comment>
+        <translation>发送方已取消发送</translation>
+    </message>
+    <message>
         <source>Not sent</source>
         <comment>file entry of ours that broke or was cancelled</comment>
         <translation>未发送</translation>

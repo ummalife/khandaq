@@ -346,7 +346,8 @@ void FileTransferWidget::onFileTransferUpdate(ToxFile file)
                            && file.pauseStatus.localPaused() == fileInfo.pauseStatus.localPaused()
                            && file.pauseStatus.remotePaused() == fileInfo.pauseStatus.remotePaused()
                            && file.filePath == fileInfo.filePath
-                           && file.connectionLost == fileInfo.connectionLost;
+                           && file.connectionLost == fileInfo.connectionLost
+                           && file.cancelledThere == fileInfo.cancelledThere;
     fileInfo = file;
     // KHANDAQ (0.2.57): Send again goes on in this entry, so it can be offered again once that
     // transfer has ended too.
@@ -414,6 +415,7 @@ Air::FileFacts FileTransferWidget::facts() const
     result.here = fileInfo.status == ToxFile::FINISHED && onDisk;
     result.canSendAgain = !result.incoming && !group && !resent && personOnline && onDisk;
     result.waitsConnection = fileInfo.connectionLost;
+    result.cancelledThere = fileInfo.cancelledThere;
     // KHANDAQ (0.2.57): a group file that is not on this computer yet came and waits for Accept;
     // every other group file is written as it comes, its path known from the start.
     result.held = group && result.incoming && fileInfo.status == ToxFile::INITIALIZING

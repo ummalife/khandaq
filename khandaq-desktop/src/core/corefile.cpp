@@ -633,6 +633,8 @@ void CoreFile::onFileControlCallback(Tox* tox, uint32_t friendId, uint32_t fileI
         if (file->fileKind != TOX_FILE_KIND_AVATAR)
             qDebug() << "File transfer" << friendId << ":" << fileId << "cancelled by friend";
         file->status = ToxFile::CANCELED;
+        // KHANDAQ (inbox #36): a file of theirs that its sender cancelled says so in its entry.
+        file->cancelledThere = file->direction == ToxFile::RECEIVING;
         // The last byte of a file that is here already: nothing shows it.
         if (!coreFile->quietFiles.contains(getFriendKey(friendId, fileId))) {
             coreFile->dropPart(*file);

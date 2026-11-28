@@ -547,8 +547,9 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
      * KHANDAQ (redesign, stage 3b): this row as an entry of the transcript (AirTranscript.bindGroupText).
      * The text keeps its mentions, links, location and quote. The author is named in full, in the tone of
      * their key, with the founder's or a moderator's role; relayed history naming an author whose signing
-     * key went stale reads "Author not confirmed" instead of the name (KQ-03), and relayed history without
-     * a signature carries the "sender not verified" line (audit2 #1).
+     * key went stale reads "Author not confirmed" instead of the name (KQ-03). KHANDAQ (owner, 28.11.2026):
+     * relayed history without a signature reads as every other entry of its member, with no "sender not
+     * verified" line and with the member's own tile; it still never notifies.
      */
     private void bindEntry(final GroupMessage m)
     {
@@ -600,7 +601,6 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
         AirTranscript.AuthorTile tile = null;
         if (!is_system_message)
         {
-            final boolean verified = NgcSignedHistory.isAuthorVerified(m);
             String tileName = null;
             int tileTone = 0;
             if (should_hide_claimed_author(false, m))
@@ -620,13 +620,12 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
                 tileTone = AirModel.Tone.index(keyless ? name : peerPubkey);
                 entry.authorColor = AirUi.toneColor(context, tileTone);
             }
-            entry.senderUnverified = should_mark_unverified_sender(false, m, verified);
             if (m.private_message == 1)
             {
                 entry.privateNote = context.getString(R.string.air_group_private_note_to_you);
             }
-            tile = new AirTranscript.AuthorTile(m.id, should_show_plain_author_tile(m, verified, tileName != null),
-                                                tileName, tileTone, openAuthor);
+            tile = new AirTranscript.AuthorTile(m.id, should_show_plain_author_tile(m, tileName != null), tileName,
+                                                tileTone, openAuthor);
         }
 
         textView.setCustomRegex(TOXURL_PATTERN);
@@ -818,19 +817,16 @@ public class GroupMessageListHolder_text_incoming_not_read extends RecyclerView.
      * initials nor a tone and no tap, instead of the member's own. Pure, so it can be unit tested; the file holder
      * asks it too.
      *
-     * <p>The plain tile stands for no member: the history brought the entry without a signature over it (it says
-     * "sender not verified" under its text, and a file record never has one), the group could not confirm the
-     * author it names (KQ-03), or it names nobody. A member's tile beside such an entry would vouch for an author
-     * the entry itself does not.
+     * <p>The plain tile stands for no member: the group could not confirm the author the entry names (KQ-03), or it
+     * names nobody. A member's tile beside such an entry would vouch for an author the entry itself does not.
+     * KHANDAQ (owner, 28.11.2026): history brought without a signature (every row of a client that does not sign,
+     * every file record) is drawn as the member's other entries, with their tile, as it is with their name.
      *
-     * @param author_signature_verified the author's history-signing key verified a signature over this row
-     * @param author_named              the entry names its author: a name the group or the message knows
+     * @param author_named the entry names its author: a name the group or the message knows
      */
-    static boolean should_show_plain_author_tile(final GroupMessage m, final boolean author_signature_verified,
-                                                 final boolean author_named)
+    static boolean should_show_plain_author_tile(final GroupMessage m, final boolean author_named)
     {
-        return m == null || !author_named || should_hide_claimed_author(false, m)
-               || should_mark_unverified_sender(false, m, author_signature_verified);
+        return m == null || !author_named || should_hide_claimed_author(false, m);
     }
 
     /**

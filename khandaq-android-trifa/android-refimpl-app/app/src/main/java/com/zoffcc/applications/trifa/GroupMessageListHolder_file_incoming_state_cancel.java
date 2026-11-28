@@ -558,15 +558,15 @@ public class GroupMessageListHolder_file_incoming_state_cancel extends RecyclerV
         AirTranscript.bindAuthorTap(file_author, layout_message_container, open_author);
 
         // KHANDAQ (tester 21.11, 8255): the member's tile beside the last entry of their run, as beside a text, in the
-        // tone the author takes over this entry (AirFileEntry.bindGroup). A file record never carries a signature, so
-        // one the history brought has the plain tile; AirFileEntry.bindGroup puts the tile again as neighbours change.
+        // tone the author takes over this entry (AirFileEntry.bindGroup); AirFileEntry.bindGroup puts the tile again
+        // as neighbours change. KHANDAQ (owner, 28.11.2026): one the history brought has the member's tile too.
         final boolean author_named = (tile_name != null) && !tile_name.trim().isEmpty() && !"-1".equals(tile_name);
         final String tone_key = ((m.tox_group_peer_pubkey == null) || m.tox_group_peer_pubkey.isEmpty())
                                 ? tile_name : m.tox_group_peer_pubkey;
         AirTranscript.bindAuthorTile(file_tile, file_body, layout_message_container, m, this.getAdapterPosition(),
                                      is_system_message ? null : new AirTranscript.AuthorTile(
                                              m.id, GroupMessageListHolder_text_incoming_not_read
-                                                     .should_show_plain_author_tile(m, false, author_named),
+                                                     .should_show_plain_author_tile(m, author_named),
                                              tile_name, AirModel.Tone.index(tone_key), open_author));
 
         // --------- peer name (show only if different from previous message) ---------

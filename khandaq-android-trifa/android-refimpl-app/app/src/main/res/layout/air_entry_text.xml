@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     KHANDAQ (redesign, stage 2): a text message of the conversation with one person as an entry of the
-    transcript in design/system/index.html, as AirEntryTextCell on iOS: the time in a column of tabular
-    figures, the author over the first entry of a run, the text, and the mark of our own messages at
-    the far end. No bubble and no wallpaper; the day heads its messages where their text starts.
-    Every id the row holders and their helpers look up is kept (m_text, m_icon, date_time,
+    transcript in design/system/index.html, as AirEntryTextCell on iOS: the author over the first entry
+    of a run, the text, and its meta. No bubble and no wallpaper; the day heads its messages where their
+    text starts. Every id the row holders and their helpers look up is kept (m_text, m_icon, date_time,
     text_block_group, layout_message_container, the day mark, the reply quote and the reactions).
     Stage 3b: the group conversation uses the same entry; only a group shows the private-message line
-    over the text and the "sender not verified" line under it.
+    over the text.
+    KHANDAQ (owner, 28.11.2026): no time column at the start and no mark column at the end: the entry
+    starts at the 16 margin and its text runs to the other one. The meta (edited, the time, our mark)
+    stands at the trailing edge, on the text's last line or under it (AirEntryMetaLayout).
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -46,17 +48,6 @@
         android:paddingEnd="@dimen/kq_space_16"
         android:paddingBottom="@dimen/air_entry_inset">
 
-        <TextView
-            android:id="@+id/date_time"
-            android:layout_width="@dimen/kq_size_time_column_phone"
-            android:layout_height="wrap_content"
-            android:fontFeatureSettings="tnum"
-            android:importantForAccessibility="no"
-            android:maxLines="1"
-            android:textAlignment="viewStart"
-            android:textAppearance="@style/TextAppearance.KQ.Caption"
-            android:textColor="@color/kq_ink_3" />
-
         <!-- KHANDAQ (tester 21.11, 8255): the tile of the member who wrote a group entry, level with the bottom of
              the last entry of their run (AirTranscript.bindAuthorTile). Gone everywhere else: our own entries, a
              service line, the conversation with one person. -->
@@ -65,7 +56,6 @@
             android:layout_width="@dimen/kq_size_tile_compact"
             android:layout_height="@dimen/kq_size_tile_compact"
             android:layout_gravity="bottom"
-            android:layout_marginStart="@dimen/kq_space_10"
             android:importantForAccessibility="no"
             android:visibility="gone" />
 
@@ -73,8 +63,6 @@
             android:id="@+id/air_entry_body"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/kq_space_10"
-            android:layout_marginEnd="@dimen/kq_space_10"
             android:layout_weight="1"
             android:orientation="vertical">
 
@@ -108,28 +96,58 @@
 
                 <include layout="@layout/chat_message_reply_quote" />
 
-                <com.luseen.autolinklibrary.EmojiTextViewLinks
-                    android:id="@+id/m_text"
+                <!-- KHANDAQ (owner, 28.11.2026): each paragraph aligns by its own direction, as on iOS, so a
+                     right-to-left one ends at the trailing edge of a left-to-right screen and its meta goes
+                     under it. One of figures without a letter runs left to right in every screen
+                     (AirEntryTextView). -->
+                <com.zoffcc.applications.trifa.AirEntryMetaLayout
+                    android:id="@+id/air_entry_frame"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textAlignment="viewStart"
-                    android:textAppearance="@style/TextAppearance.KQ.Body"
-                    android:textColor="@color/kq_ink"
-                    android:textColorLink="@color/kq_ink"
-                    app:emojiSize="@dimen/emoji_size_in_textview" />
+                    android:layout_height="wrap_content">
+
+                    <com.zoffcc.applications.trifa.AirEntryTextView
+                        android:id="@+id/m_text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textAlignment="textStart"
+                        android:textAppearance="@style/TextAppearance.KQ.Body"
+                        android:textColor="@color/kq_ink"
+                        android:textColorLink="@color/kq_ink"
+                        app:emojiSize="@dimen/emoji_size_in_textview" />
+
+                    <TextView
+                        android:id="@+id/air_entry_edited"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:importantForAccessibility="no"
+                        android:maxLines="1"
+                        android:textAppearance="@style/TextAppearance.KQ.Caption"
+                        android:textColor="@color/kq_ink_3"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/date_time"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFeatureSettings="tnum"
+                        android:importantForAccessibility="no"
+                        android:maxLines="1"
+                        android:textAppearance="@style/TextAppearance.KQ.Caption"
+                        android:textColor="@color/kq_ink_3" />
+
+                    <ImageView
+                        android:id="@+id/m_icon"
+                        android:layout_width="@dimen/kq_size_mark"
+                        android:layout_height="@dimen/kq_size_mark"
+                        android:contentDescription="@null"
+                        android:importantForAccessibility="no"
+                        android:padding="1dp"
+                        android:scaleType="fitCenter"
+                        android:visibility="gone" />
+                </com.zoffcc.applications.trifa.AirEntryMetaLayout>
 
                 <include layout="@layout/chat_reactions_row" />
             </LinearLayout>
-            <TextView
-                android:id="@+id/air_entry_unverified"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:importantForAccessibility="no"
-                android:textAlignment="viewStart"
-                android:textAppearance="@style/TextAppearance.KQ.Caption"
-                android:textColor="@color/kq_transit"
-                android:visibility="gone" />
-
             <LinearLayout
                 android:id="@+id/air_entry_meta"
                 android:layout_width="match_parent"
@@ -155,16 +173,6 @@
                     android:visibility="gone" />
 
                 <TextView
-                    android:id="@+id/air_entry_edited"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="@dimen/kq_space_8"
-                    android:importantForAccessibility="no"
-                    android:textAppearance="@style/TextAppearance.KQ.Caption"
-                    android:textColor="@color/kq_ink_3"
-                    android:visibility="gone" />
-
-                <TextView
                     android:id="@+id/air_entry_retry"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -179,15 +187,5 @@
                     android:visibility="gone" />
             </LinearLayout>
         </LinearLayout>
-
-        <ImageView
-            android:id="@+id/m_icon"
-            android:layout_width="@dimen/kq_size_mark"
-            android:layout_height="@dimen/kq_size_mark"
-            android:contentDescription="@null"
-            android:importantForAccessibility="no"
-            android:padding="1dp"
-            android:scaleType="fitCenter"
-            android:visibility="invisible" />
     </LinearLayout>
 </LinearLayout>

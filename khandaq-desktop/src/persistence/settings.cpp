@@ -68,6 +68,14 @@ QThread* Settings::settingsThread{nullptr};
 static constexpr int GLOBAL_SETTINGS_VERSION = 1;
 /** Set once the rule of Air::attachmentRuleAtUpdate was applied (0.2.57). */
 static const char autoDownloadAppliedKey[] = "autoDownloadDefaultV0257Applied";
+/**
+ * "Open the window on a new message" (Settings, Notifications). Until 0.2.79 it was kept as
+ * showWindow, on for everyone who had not turned it off: every message then brought a window
+ * hidden in the tray up, in front of the work at hand (inbox #30). Under this key it starts off
+ * for everyone, and the switch turns it on again. A Khandaq before 0.2.79 reads its own key and,
+ * finding none, opens the window as it did.
+ */
+static const char openWindowOnMessageKey[] = "openWindowOnMessage";
 static constexpr int PERSONAL_SETTINGS_VERSION = 1;
 
 namespace {
@@ -230,7 +238,7 @@ void Settings::loadGlobal()
 
     s.beginGroup("GUI");
     {
-        showWindow = s.value("showWindow", true).toBool();
+        showWindow = s.value(openWindowOnMessageKey, false).toBool();
         notify = s.value("notify", true).toBool();
         desktopNotify = s.value("desktopNotify", true).toBool();
         groupAlwaysNotify = s.value("groupAlwaysNotify", true).toBool();
@@ -766,7 +774,7 @@ void Settings::saveGlobal()
 
     s.beginGroup("GUI");
     {
-        s.setValue("showWindow", showWindow);
+        s.setValue(openWindowOnMessageKey, showWindow);
         s.setValue("notify", notify);
         s.setValue("desktopNotify", desktopNotify);
         s.setValue("groupAlwaysNotify", groupAlwaysNotify);

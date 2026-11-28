@@ -73,6 +73,8 @@ auto_test(persistence outbox "" "")
 auto_test(persistence history "" "")
 auto_test(persistence profilefile "" "")
 auto_test(persistence profileremove "" "")
+# KHANDAQ (inbox #30): "Open the window on a new message" starts off, a choice made in Settings is kept.
+auto_test(persistence settings "" "")
 if(NOT "${SMILEYS}" STREQUAL "DISABLED")
   auto_test(persistence smileypack "${SMILEY_RESOURCES}" "") # needs emojione
 endif()

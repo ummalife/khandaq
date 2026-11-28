@@ -550,8 +550,8 @@ final class AirPinnedStripView: UIControl {
 
 // MARK: - Entry rows outside the log
 
-/// One message laid out like a transcript entry: time column, text, status mark. At the accessibility
-/// text sizes the time stands above the text, as in the log (AirEntryMetrics.stacksTime).
+/// One message of the In transit tray: time column, text, status mark. At the accessibility text sizes the
+/// time stands above the text (AirEntryMetrics.stacksTime).
 final class AirEntryRowView: UIControl {
     let timeLabel = airLabel(.caption, color: KQColor.ink3)
     let textLabel = airLabel(.body, color: KQColor.ink, lines: 2)

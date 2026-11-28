@@ -38,7 +38,7 @@ All binaries are hosted on **[GitHub Releases](https://github.com/ummalife/khand
 | macOS 11 or later (Apple Silicon, tested on macOS 26) | [khandaq-macos.zip](https://github.com/ummalife/khandaq/releases/download/v0.2.79/khandaq-macos.zip) |
 | Linux x86_64 (portable, glibc 2.38 or newer) | [khandaq-linux-x86_64-portable.tar.gz](https://github.com/ummalife/khandaq/releases/download/v0.2.79/khandaq-linux-x86_64-portable.tar.gz) |
 | Debian 13 / Ubuntu 24.04 or newer (.deb) | [khandaq-messenger_amd64.deb](https://github.com/ummalife/khandaq/releases/download/v0.2.79/khandaq-messenger_amd64.deb) |
-| iOS | [TestFlight](https://testflight.apple.com/join/4ppS8ZN5) (build 143017; not distributed as IPA here) |
+| iOS | [TestFlight](https://testflight.apple.com/join/4ppS8ZN5) (build 143018; not distributed as IPA here) |
 
 Verify downloads with [SHA256SUMS.txt](https://github.com/ummalife/khandaq/releases/download/v0.2.79/SHA256SUMS.txt).
 

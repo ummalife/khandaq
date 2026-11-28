@@ -1105,14 +1105,10 @@ extension ChatGroupController: UITableViewDataSource {
                 groupStatusMemory[id] = model.status
             }
         }
-        else {
-            // KHANDAQ (audit#2 finding 1): a history-synced row names an author the transport never
-            // authenticated, only the peer that RELAYED it. Say so unless a signature over this exact
-            // message says otherwise. Live rows are unaffected: they arrive authenticated.
-            model.senderUnverified = message.groupHistorySync
-                && !message.groupSystemMessage
-                && !submanagerGroups.isGroupMessageAuthorVerified(message, in: chat)
-        }
+        // KHANDAQ (owner, 28.11.2026): a row the history brought without a signature over it is drawn as any other
+        // row of its author: the line "Relayed from history, sender not verified" under it is gone, as every row
+        // from a client that does not sign (the desktop) carried it. It still never notifies, and an author whose
+        // signing key went stale is still not named (configureGroupEntry, KQ-03).
         configureGroupEntry(model, message: message, row: indexPath.row)
 
         cell.delegate = self

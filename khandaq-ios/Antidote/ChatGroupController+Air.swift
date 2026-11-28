@@ -327,10 +327,9 @@ extension ChatGroupController {
                 opensAuthor = name
             }
             // KHANDAQ (tester 21.11, 8255): the member's tile of the band and the dossier, by the name and the key
-            // the entry kept. An entry the history brought without a signature over it (it says so under its
-            // text, senderUnverified; a file never has one) has the plain tile, and so has one with no name.
-            unconfirmed = message.groupHistorySync && !submanagerGroups.isGroupMessageAuthorVerified(message, in: chat)
-            if unconfirmed || knownName == nil {
+            // the entry kept; an entry with no name has the plain tile. KHANDAQ (owner, 28.11.2026): so has an entry
+            // the history brought without a signature over it, which opens its author as the name over the run does.
+            if knownName == nil {
                 tile = .unconfirmed
             }
             else {
@@ -374,8 +373,8 @@ extension ChatGroupController {
         }
     }
 
-    /// KHANDAQ (tester 21.11, 8255): a tap on the tile of an author nobody confirmed says so again, as the entry
-    /// does under its text, instead of opening a member who may not have written it.
+    /// KHANDAQ (tester 21.11, 8255): a tap on the tile of an author nobody confirmed (KQ-03) says so, instead of opening
+    /// a member who may not have written it.
     func sayAuthorUnconfirmed() {
         guard tableView?.isEditing != true else {
             return

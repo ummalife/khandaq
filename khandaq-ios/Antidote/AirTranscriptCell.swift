@@ -6,30 +6,38 @@ import SnapKit
 import UIKit
 
 // A text message of the conversation with one person (and of "For yourself") as an entry of the
-// transcript in design/system/index.html: the time in a 38 point column of tabular figures, the author
-// over the first entry of a run, the text, and the status mark of our own messages at the far end. No
-// bubbles and no wallpaper; the day heads its messages where their text starts (ChatMovableDateCell).
+// transcript in design/system/index.html: the author over the first entry of a run, the text, and at the
+// end of its last line the time and the status mark of our own messages (AirEntryMeta). No bubbles and no
+// wallpaper; the day heads its messages where their text starts (ChatMovableDateCell).
 
 enum AirEntryMetrics {
-    /// The 38 point time column, widened with the person's text size so "12:22" stays whole.
+    /// The 38 point time column of the rows of the In transit tray (AirConversationViews), widened with the
+    /// person's text size so "12:22" stays whole. The log has none since 28.11.2026 (logStart, AirEntryMeta).
     static func timeColumnWidth(_ category: UIContentSizeCategory = UIApplication.shared.preferredContentSizeCategory) -> CGFloat {
         let traits = UITraitCollection(preferredContentSizeCategory: category)
         let scaled = UIFontMetrics(forTextStyle: .caption1).scaledValue(for: KQSize.timeColumnPhone, compatibleWith: traits)
         return min(max(KQSize.timeColumnPhone, ceil(scaled)), 2 * KQSize.timeColumnPhone)
     }
 
-    /// At the accessibility text sizes the time leaves its column for the line above the text (with the
-    /// author, when the author shows) and the text runs from the leading margin: beside a 76 point
-    /// column a word of ten letters no longer fits the line and broke inside itself.
+    /// At the accessibility text sizes a row of the tray puts its time on the line above its text, and the
+    /// text runs from the leading margin: beside a 76 point column a word of ten letters no longer fits the
+    /// line and broke inside itself.
     static func stacksTime(_ category: UIContentSizeCategory = UIApplication.shared.preferredContentSizeCategory) -> Bool {
         return category.isAccessibilityCategory
     }
 
-    /// Where the text of an entry starts from the leading edge of the row; the day mark and the rows
-    /// outside the log line up with it.
+    /// Where the text of a row of the tray starts from the leading edge of the row, after its time column.
     static func textStart(_ category: UIContentSizeCategory = UIApplication.shared.preferredContentSizeCategory) -> CGFloat {
         return stacksTime(category) ? KQSpace.x16 : KQSpace.x16 + timeColumnWidth(category) + KQSpace.x10
     }
+
+    /// KHANDAQ (owner, 28.11.2026): where an entry of the log and the day mark over it start, the margin. The owner
+    /// found the time column took far too much of the row on the left: the time went to the end of the entry, as
+    /// Telegram has it (AirEntryMeta).
+    static let logStart: CGFloat = KQSpace.x16
+
+    /// The room between the end of an entry's text, or the side of a file or a call, and its time.
+    static let metaGap: CGFloat = KQSpace.x8
 
     /// Top and bottom room of an entry: 4 of its own and half of the 2 between entries, as .kq-log.
     static let entryInset: CGFloat = KQSpace.x4 + KQSpace.x2 / 2
@@ -37,40 +45,71 @@ enum AirEntryMetrics {
     /// KHANDAQ (tester 21.11, 8255): the room before the text and the name of an entry that has a column for its
     /// author's tile (AirAuthorTile): the tile and a gap after it. None at the accessibility text sizes, where the
     /// text takes the whole width and the name over the first entry of the run says who wrote it.
-    static func authorTileColumn(_ tile: AirAuthorTile?, stacked: Bool) -> CGFloat {
-        return tile != nil && !stacked ? KQSize.tileCompact + KQSpace.x8 : 0
+    static func authorTileColumn(_ tile: AirAuthorTile?,
+                                 category: UIContentSizeCategory = UIApplication.shared.preferredContentSizeCategory) -> CGFloat {
+        return tile != nil && !category.isAccessibilityCategory ? KQSize.tileCompact + KQSpace.x8 : 0
     }
 
-    /// The line over the first entry of a run at the accessibility text sizes: the time, then the author,
-    /// as one text from the leading margin that wraps at its words. Beside the time column a name of
-    /// eleven letters broke inside itself at AX5; here it goes whole to the next line instead.
-    static func stackedHead(time: String, author: String, color: UIColor) -> NSAttributedString {
-        let head = NSMutableAttributedString(string: time + " ", attributes: [
-            NSAttributedStringKey.font: KQFont.tabular(KQFont.font(.caption)),
-            NSAttributedStringKey.foregroundColor: KQColor.ink3,
-        ])
-        head.append(NSAttributedString(string: author, attributes: [
-            NSAttributedStringKey.font: KQFont.font(.label, weight: 600),
-            NSAttributedStringKey.foregroundColor: color,
-        ]))
-        return head
+    /// Puts the author on its label: two lines at most, as a role in a group can make it long; at the
+    /// accessibility text sizes as many as its words need, so a long name goes whole to the next line
+    /// instead of breaking inside itself.
+    static func show(author: String, color: UIColor,
+                     category: UIContentSizeCategory = UIApplication.shared.preferredContentSizeCategory,
+                     in label: UILabel) {
+        label.attributedText = nil
+        label.font = KQFont.font(.label, weight: 600)
+        label.textColor = color
+        label.text = author
+        label.numberOfLines = category.isAccessibilityCategory ? 0 : 2
+    }
+}
+
+/// KHANDAQ (owner, 28.11.2026): the end of an entry, as Telegram ends a message: "edited" when it was, the time, and
+/// the mark of our own entries, in the caption type and the third ink with figures of one width. It stands at the
+/// trailing edge of the text's last line, or on a line of its own under the text (BubbleView.showTrailingMeta), and
+/// beside the bottom of a file or a call (AirEntryFrame).
+final class AirEntryMeta: UIStackView {
+    let timeLabel = UILabel()
+    let mark = AirStatusMarkView()
+    private var fontCategory: UIContentSizeCategory?
+
+    init() {
+        super.init(frame: .zero)
+        axis = .horizontal
+        alignment = .center
+        spacing = KQSpace.x4
+        isAccessibilityElement = false
+        isUserInteractionEnabled = false
+        timeLabel.textColor = KQColor.ink3
+        timeLabel.isAccessibilityElement = false
+        timeLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        timeLabel.setContentHuggingPriority(.required, for: .horizontal)
+        addArrangedSubview(timeLabel)
+        addArrangedSubview(mark)
+        mark.isHidden = true
     }
 
-    /// Puts the author on its label: beside the time at the usual sizes (two lines at most, as a role
-    /// in a group can make it long), or after the time on a line of its own (AirEntryMetrics.stackedHead).
-    static func show(author: String, color: UIColor, time: String, stacked: Bool, in label: UILabel) {
-        if stacked {
-            label.attributedText = stackedHead(time: time, author: author, color: color)
-            label.numberOfLines = 0
+    required init(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// "edited 9:41", or "9:41". A tabular font has a fixed size: it is made again when the text size changed.
+    func show(time: String, edited: Bool) {
+        let category = UIApplication.shared.preferredContentSizeCategory
+        if category != fontCategory {
+            fontCategory = category
+            timeLabel.font = KQFont.tabular(KQFont.font(.caption))
         }
-        else {
-            // A stacked head left its first font and colour on the label: they are set again.
-            label.attributedText = nil
-            label.font = KQFont.font(.label, weight: 600)
-            label.textColor = color
-            label.text = author
-            label.numberOfLines = 2
-        }
+        timeLabel.textColor = KQColor.ink3
+        timeLabel.text = edited ? String(localized: "message_edited_marker") + " " + time : time
+    }
+
+    /// From the top of the meta to the baseline of its words, which stand on the baseline of the text's last line:
+    /// the words are centred in the meta's height, which the mark can make taller than their line.
+    var firstBaselineOffset: CGFloat {
+        let font = timeLabel.font ?? KQFont.font(.caption)
+        let height = bounds.height > 0 ? bounds.height : systemLayoutSizeFitting(UILayoutFittingCompressedSize).height
+        return (height - font.lineHeight) / 2 + font.ascender
     }
 }
 
@@ -103,7 +142,7 @@ final class AirAuthorLabel: UILabel {
     }
 
     /// Gives the name the tap of the entry it shows, or none; `name` is what VoiceOver says for the button,
-    /// the author alone (a stacked head starts with the time).
+    /// the author alone.
     func opens(_ handler: ((UIView) -> Void)?, name: String) {
         onTap = handler
         spokenName = name
@@ -302,35 +341,34 @@ final class AirAuthorTileView: UIView {
     }
 }
 
-/// The frame a file or a call entry shares with a text (AirEntryTextCell): the time in the time column,
-/// the author over the first entry of a run, and the status mark of our own entries at the far end,
-/// around the body the cell puts between them.
+/// The frame a file or a call entry shares with a text (AirEntryTextCell): the author over the first entry of a
+/// run, the author's tile of another member's entry in a group, and the meta (AirEntryMeta) at the trailing edge,
+/// level with the bottom of the body the cell puts in, which never runs under it.
 final class AirEntryFrame {
-    let timeLabel = UILabel()
     let authorLabel = AirAuthorLabel()
-    let mark = AirStatusMarkView()
+    /// KHANDAQ (owner, 28.11.2026): the time and the status mark of our own entries, beside the end of the body.
+    let meta = AirEntryMeta()
     /// KHANDAQ (tester 21.11, 8255): the author's tile of another member's entry in a group (AirAuthorTile).
     let authorTile = AirAuthorTileView()
+    private weak var body: UIView?
     private var authorTileRoom: Constraint!
-    private var timeWidthConstraint: Constraint!
-    private var timeTopConstraint: Constraint!
-    private var markTopConstraint: Constraint!
     private var bodyTopToAuthor: Constraint!
     private var bodyTopToContent: Constraint!
-    private var bodyTopToTime: Constraint!
-    private var bodyLeadingToTime: Constraint!
-    private var bodyLeadingToMargin: Constraint!
-    private var authorLeadingToTime: Constraint!
-    private var authorLeadingToMargin: Constraint!
-    private var timeFontCategory = UIApplication.shared.preferredContentSizeCategory
+    private var bodyLeading: Constraint!
+    private var authorLeading: Constraint!
+    private var metaBottom: Constraint?
+
+    /// The status mark of our own entries, in the meta.
+    var mark: AirStatusMarkView {
+        return meta.mark
+    }
+
+    /// The time, in the meta.
+    var timeLabel: UILabel {
+        return meta.timeLabel
+    }
 
     init() {
-        timeLabel.font = KQFont.tabular(KQFont.font(.caption))
-        timeLabel.textColor = KQColor.ink3
-        timeLabel.adjustsFontSizeToFitWidth = true
-        timeLabel.minimumScaleFactor = 0.7
-        timeLabel.isAccessibilityElement = false
-
         authorLabel.font = KQFont.font(.label, weight: 600)
         authorLabel.adjustsFontForContentSizeCategory = true
         authorLabel.numberOfLines = 2
@@ -339,42 +377,33 @@ final class AirEntryFrame {
 
     /// Puts the frame around `body`, which the cell has added to its movable content view.
     func install(in cell: ChatMovableDateCell, body: UIView) {
+        self.body = body
         let content: UIView = cell.movableContentView
-        content.addSubview(timeLabel)
         content.addSubview(authorLabel)
-        content.addSubview(mark)
+        content.addSubview(meta)
         content.addSubview(authorTile)
 
-        timeLabel.snp.makeConstraints {
-            $0.leading.equalTo(cell.contentView).offset(KQSpace.x16)
-            timeTopConstraint = $0.top.equalTo(content).offset(AirEntryMetrics.entryInset).constraint
-            timeWidthConstraint = $0.width.equalTo(AirEntryMetrics.timeColumnWidth()).constraint
-        }
         authorLabel.snp.makeConstraints {
             $0.top.equalTo(content).offset(AirEntryMetrics.entryInset)
-            authorLeadingToTime = $0.leading.equalTo(timeLabel.snp.trailing).offset(KQSpace.x10).constraint
-            authorLeadingToMargin = $0.leading.equalTo(cell.contentView).offset(KQSpace.x16).constraint
-            $0.trailing.equalTo(mark.snp.leading).offset(-KQSpace.x10)
+            authorLeading = $0.leading.equalTo(cell.contentView).offset(AirEntryMetrics.logStart).constraint
+            $0.trailing.equalTo(cell.contentView).offset(-KQSpace.x16)
         }
-        authorLeadingToMargin.deactivate()
         body.snp.makeConstraints {
             bodyTopToAuthor = $0.top.equalTo(authorLabel.snp.bottom).offset(KQSpace.x2).constraint
             bodyTopToContent = $0.top.equalTo(content).offset(AirEntryMetrics.entryInset).constraint
-            bodyTopToTime = $0.top.equalTo(timeLabel.snp.bottom).offset(KQSpace.x2).constraint
             $0.bottom.equalTo(content).offset(-AirEntryMetrics.entryInset)
-            bodyLeadingToTime = $0.leading.equalTo(timeLabel.snp.trailing).offset(KQSpace.x10).constraint
-            bodyLeadingToMargin = $0.leading.equalTo(cell.contentView).offset(KQSpace.x16).constraint
-            $0.trailing.equalTo(mark.snp.leading).offset(-KQSpace.x10)
+            bodyLeading = $0.leading.equalTo(cell.contentView).offset(AirEntryMetrics.logStart).constraint
+            $0.trailing.equalTo(meta.snp.leading).offset(-AirEntryMetrics.metaGap)
         }
         bodyTopToAuthor.deactivate()
-        bodyTopToTime.deactivate()
-        bodyLeadingToMargin.deactivate()
-        mark.snp.makeConstraints {
+        meta.snp.makeConstraints {
             $0.trailing.equalTo(cell.contentView).offset(-KQSpace.x16)
-            markTopConstraint = $0.top.equalTo(content).offset(AirEntryMetrics.entryInset).constraint
         }
+        meta.setContentHuggingPriority(.required, for: .horizontal)
+        meta.setContentCompressionResistancePriority(.required, for: .horizontal)
+        alignMeta(withBottomOf: nil)
         authorTile.snp.makeConstraints {
-            $0.leading.equalTo(timeLabel.snp.trailing).offset(KQSpace.x10)
+            $0.leading.equalTo(cell.contentView).offset(AirEntryMetrics.logStart)
             $0.bottom.equalTo(content).offset(-AirEntryMetrics.entryInset)
             $0.size.equalTo(KQSize.tileCompact)
             // An entry that shows the tile is at least as tall as the tile.
@@ -383,31 +412,25 @@ final class AirEntryFrame {
         authorTileRoom.deactivate()
     }
 
-    /// `firstLine` is the height of the body's first line: the time and the mark sit on it, or on the
-    /// author's line while the author shows. At the accessibility text sizes they sit on a line of their
-    /// own above the body, with the author when it shows (AirEntryMetrics.stacksTime).
-    func configure(_ model: ChatMovableDateCellModel, firstLine: CGFloat) {
-        let category = UIApplication.shared.preferredContentSizeCategory
-        if category != timeFontCategory {
-            timeFontCategory = category
-            timeLabel.font = KQFont.tabular(KQFont.font(.caption))
+    /// Puts the bottom of the meta level with the bottom of `part`, the last part of the body over the rows that
+    /// follow its content (the reactions), or with the bottom of the body when nil.
+    func alignMeta(withBottomOf part: UIView?) {
+        guard let anchor = part ?? body else {
+            return
         }
-        timeWidthConstraint.update(offset: AirEntryMetrics.timeColumnWidth(category))
-        timeLabel.text = model.timeText.isEmpty ? model.dateString : model.timeText
-        timeLabel.textColor = KQColor.ink3
+        metaBottom?.deactivate()
+        meta.snp.makeConstraints {
+            metaBottom = $0.bottom.equalTo(anchor).constraint
+        }
+    }
 
-        let stacked = AirEntryMetrics.stacksTime(category)
-        if stacked {
-            bodyLeadingToTime.deactivate()
-            bodyLeadingToMargin.activate()
-        }
-        else {
-            bodyLeadingToMargin.deactivate()
-            bodyLeadingToTime.activate()
-        }
-        let tileColumn = AirEntryMetrics.authorTileColumn(model.authorTile, stacked: stacked)
-        bodyLeadingToTime.update(offset: KQSpace.x10 + tileColumn)
-        authorLeadingToTime.update(offset: KQSpace.x10 + tileColumn)
+    /// The author, its tile and the time of `model`; the cell sets the mark (mark).
+    func configure(_ model: ChatMovableDateCellModel) {
+        meta.show(time: model.timeText.isEmpty ? model.dateString : model.timeText, edited: false)
+
+        let tileColumn = AirEntryMetrics.authorTileColumn(model.authorTile)
+        bodyLeading.update(offset: AirEntryMetrics.logStart + tileColumn)
+        authorLeading.update(offset: AirEntryMetrics.logStart + tileColumn)
         authorTile.show(tileColumn > 0 ? model.authorTile : nil)
         if authorTile.isHidden {
             authorTileRoom.deactivate()
@@ -415,43 +438,26 @@ final class AirEntryFrame {
         else {
             authorTileRoom.activate()
         }
-        let captionLine = ceil(KQFont.lineHeight(.caption))
-        let line: CGFloat
-        let headStacked = stacked && !(model.authorText ?? "").isEmpty
-        timeLabel.isHidden = headStacked
-        (headStacked ? authorLeadingToTime : authorLeadingToMargin).deactivate()
-        (headStacked ? authorLeadingToMargin : authorLeadingToTime).activate()
         if let author = model.authorText, !author.isEmpty {
-            AirEntryMetrics.show(author: author, color: model.authorColor, time: timeLabel.text ?? "", stacked: stacked, in: authorLabel)
+            AirEntryMetrics.show(author: author, color: model.authorColor, in: authorLabel)
             authorLabel.isHidden = false
             authorLabel.opens(model.onAuthorTap, name: author)
             bodyTopToContent.deactivate()
-            bodyTopToTime.deactivate()
             bodyTopToAuthor.activate()
-            line = ceil(KQFont.lineHeight(.label))
         }
         else {
             authorLabel.text = nil
             authorLabel.isHidden = true
             authorLabel.opens(nil, name: "")
             bodyTopToAuthor.deactivate()
-            if stacked {
-                bodyTopToContent.deactivate()
-                bodyTopToTime.activate()
-            }
-            else {
-                bodyTopToTime.deactivate()
-                bodyTopToContent.activate()
-            }
-            line = stacked ? captionLine : firstLine
+            bodyTopToContent.activate()
         }
-        timeTopConstraint.update(offset: AirEntryMetrics.entryInset + max(0, (line - captionLine) / 2))
-        markTopConstraint.update(offset: AirEntryMetrics.entryInset + max(0, (line - KQSize.mark) / 2))
     }
 
     /// Who wrote the entry and when, for the start of what VoiceOver says.
     func spokenLabel(_ model: ChatMovableDateCellModel) -> String {
-        return [model.spokenAuthor, timeLabel.text ?? ""].filter { !$0.isEmpty }.joined(separator: ", ")
+        let time = model.timeText.isEmpty ? model.dateString : model.timeText
+        return [model.spokenAuthor, time].filter { !$0.isEmpty }.joined(separator: ", ")
     }
 }
 
@@ -473,28 +479,27 @@ final class AirEntryTextCellModel: ChatBaseTextCellModel {
 }
 
 final class AirEntryTextCell: ChatBaseTextCell {
-    private let timeLabel = UILabel()
     private let authorLabel = AirAuthorLabel()
-    private let mark = AirStatusMarkView()
+    /// KHANDAQ (owner, 28.11.2026): "edited", the time and the status mark of our own entries, at the end of the
+    /// text's last line (BubbleView.showTrailingMeta).
+    let meta = AirEntryMeta()
     /// KHANDAQ (tester 21.11, 8255): the author's tile of another member's entry in a group (AirAuthorTile).
     let authorTile = AirAuthorTileView()
     private var authorTileRoom: Constraint!
-    private var timeWidthConstraint: Constraint!
-    private var timeTopConstraint: Constraint!
-    private var markTopConstraint: Constraint!
     private var bubbleTopToAuthor: Constraint!
     private var bubbleTopToContent: Constraint!
-    private var bubbleTopToTime: Constraint!
-    private var bubbleLeadingToTime: Constraint!
-    private var bubbleLeadingToMargin: Constraint!
-    private var authorLeadingToTime: Constraint!
-    private var authorLeadingToMargin: Constraint!
+    private var bubbleLeading: Constraint!
+    private var authorLeading: Constraint!
     private var pendingStatus: AirEntryStatus?
-    private var timeFontCategory = UIApplication.shared.preferredContentSizeCategory
     private var spokenLabel = ""
     private var spokenValue = ""
     /// KHANDAQ (0.2.58): the entry for VoiceOver while the author is a button of its own.
     private lazy var entryElement = UIAccessibilityElement(accessibilityContainer: self)
+
+    /// The status mark of our own entries, in the meta.
+    var mark: AirStatusMarkView {
+        return meta.mark
+    }
 
     override func createViews() {
         revealsTime = false
@@ -503,13 +508,6 @@ final class AirEntryTextCell: ChatBaseTextCell {
         bubbleView.useTranscriptStyle()
         bubbleView.font = KQFont.font(.body)
 
-        timeLabel.font = KQFont.tabular(KQFont.font(.caption))
-        timeLabel.textColor = KQColor.ink3
-        timeLabel.adjustsFontSizeToFitWidth = true
-        timeLabel.minimumScaleFactor = 0.7
-        timeLabel.isAccessibilityElement = false
-        contentView.addSubview(timeLabel)
-
         authorLabel.font = KQFont.font(.label, weight: 600)
         authorLabel.adjustsFontForContentSizeCategory = true
         // Two lines: in a group the name comes with the role, which large text would otherwise cut.
@@ -517,49 +515,33 @@ final class AirEntryTextCell: ChatBaseTextCell {
         authorLabel.lineBreakMode = .byTruncatingTail
         contentView.addSubview(authorLabel)
 
-        contentView.addSubview(mark)
         contentView.addSubview(authorTile)
     }
 
     override func installConstraints() {
         super.installConstraints()
 
-        timeLabel.snp.makeConstraints {
-            $0.leading.equalTo(contentView).offset(KQSpace.x16)
-            timeTopConstraint = $0.top.equalTo(movableContentView).offset(AirEntryMetrics.entryInset).constraint
-            timeWidthConstraint = $0.width.equalTo(AirEntryMetrics.timeColumnWidth()).constraint
-        }
-
+        // KHANDAQ (owner, 28.11.2026): no time column: the name and the text start at the margin, after the column of
+        // the author's tile in a group, and run to the margin at the far end, where the meta ends the text.
         authorLabel.snp.makeConstraints {
             $0.top.equalTo(movableContentView).offset(AirEntryMetrics.entryInset)
-            authorLeadingToTime = $0.leading.equalTo(timeLabel.snp.trailing).offset(KQSpace.x10).constraint
-            authorLeadingToMargin = $0.leading.equalTo(contentView).offset(KQSpace.x16).constraint
-            $0.trailing.equalTo(mark.snp.leading).offset(-KQSpace.x10)
+            authorLeading = $0.leading.equalTo(contentView).offset(AirEntryMetrics.logStart).constraint
+            $0.trailing.equalTo(contentView).offset(-KQSpace.x16)
         }
-        authorLeadingToMargin.deactivate()
 
         bubbleView.snp.makeConstraints {
             // KHANDAQ (0.2.60): the name of the author stands apart from the text under it, as over a file or a call:
             // users read the two as one block.
             bubbleTopToAuthor = $0.top.equalTo(authorLabel.snp.bottom).offset(KQSpace.x2).constraint
             bubbleTopToContent = $0.top.equalTo(movableContentView).offset(AirEntryMetrics.entryInset).constraint
-            bubbleTopToTime = $0.top.equalTo(timeLabel.snp.bottom).offset(KQSpace.x2).constraint
             $0.bottom.equalTo(movableContentView).offset(-AirEntryMetrics.entryInset)
-            bubbleLeadingToTime = $0.leading.equalTo(timeLabel.snp.trailing).offset(KQSpace.x10).constraint
-            bubbleLeadingToMargin = $0.leading.equalTo(contentView).offset(KQSpace.x16).constraint
-            $0.trailing.equalTo(mark.snp.leading).offset(-KQSpace.x10)
+            bubbleLeading = $0.leading.equalTo(contentView).offset(AirEntryMetrics.logStart).constraint
+            $0.trailing.equalTo(contentView).offset(-KQSpace.x16)
         }
         bubbleTopToAuthor.deactivate()
-        bubbleTopToTime.deactivate()
-        bubbleLeadingToMargin.deactivate()
-
-        mark.snp.makeConstraints {
-            $0.trailing.equalTo(contentView).offset(-KQSpace.x16)
-            markTopConstraint = $0.top.equalTo(movableContentView).offset(AirEntryMetrics.entryInset).constraint
-        }
 
         authorTile.snp.makeConstraints {
-            $0.leading.equalTo(timeLabel.snp.trailing).offset(KQSpace.x10)
+            $0.leading.equalTo(contentView).offset(AirEntryMetrics.logStart)
             $0.bottom.equalTo(movableContentView).offset(-AirEntryMetrics.entryInset)
             $0.size.equalTo(KQSize.tileCompact)
             // An entry that shows the tile is at least as tall as the tile: a one-line text grows to it.
@@ -582,6 +564,8 @@ final class AirEntryTextCell: ChatBaseTextCell {
         bubbleView.tintColor = KQColor.ink
         bubbleNormalBackground = nil
         bubbleView.backgroundColor = .clear
+        // KHANDAQ (owner, 28.11.2026): "edited" goes into the meta, before the time, as Telegram has it.
+        bubbleView.bindEdited(false)
         bubbleView.bindPrivateNote(entry.privateNote)
         // KHANDAQ (26.11.2026): the mentions after the font and the colour of the whole text, which would undo them.
         let mentionRanges = entry.hasLocation ? [] : GroupMentionHelper.mentionRanges(in: entry.message, mentions: entry.mentions)
@@ -598,31 +582,11 @@ final class AirEntryTextCell: ChatBaseTextCell {
             bubbleView.onMentionTap = nil
         }
 
-        // A tabular font has a fixed size: made again when the text size has changed since.
-        let category = UIApplication.shared.preferredContentSizeCategory
-        if category != timeFontCategory {
-            timeFontCategory = category
-            timeLabel.font = KQFont.tabular(KQFont.font(.caption))
-        }
-        timeWidthConstraint.update(offset: AirEntryMetrics.timeColumnWidth(category))
-        timeLabel.text = entry.timeText
-
-        // At the accessibility text sizes the time and the author stand on a line above the text, which
-        // takes the whole width (AirEntryMetrics.stacksTime).
-        let stacked = AirEntryMetrics.stacksTime(category)
-        if stacked {
-            bubbleLeadingToTime.deactivate()
-            bubbleLeadingToMargin.activate()
-        }
-        else {
-            bubbleLeadingToMargin.deactivate()
-            bubbleLeadingToTime.activate()
-        }
         // KHANDAQ (tester 21.11, 8255): the text and the name of another member's entry in a group stand after the
         // column of the author's tile, which the last entry of a run shows.
-        let tileColumn = AirEntryMetrics.authorTileColumn(entry.authorTile, stacked: stacked)
-        bubbleLeadingToTime.update(offset: KQSpace.x10 + tileColumn)
-        authorLeadingToTime.update(offset: KQSpace.x10 + tileColumn)
+        let tileColumn = AirEntryMetrics.authorTileColumn(entry.authorTile)
+        bubbleLeading.update(offset: AirEntryMetrics.logStart + tileColumn)
+        authorLeading.update(offset: AirEntryMetrics.logStart + tileColumn)
         authorTile.show(tileColumn > 0 ? entry.authorTile : nil)
         if authorTile.isHidden {
             authorTileRoom.deactivate()
@@ -630,42 +594,19 @@ final class AirEntryTextCell: ChatBaseTextCell {
         else {
             authorTileRoom.activate()
         }
-        let bodyLine = ceil(KQFont.lineHeight(.body))
-        let captionLine = ceil(KQFont.lineHeight(.caption))
-        let headStacked = stacked && !(entry.authorText ?? "").isEmpty
-        timeLabel.isHidden = headStacked
-        (headStacked ? authorLeadingToTime : authorLeadingToMargin).deactivate()
-        (headStacked ? authorLeadingToMargin : authorLeadingToTime).activate()
         if let author = entry.authorText, !author.isEmpty {
-            AirEntryMetrics.show(author: author, color: entry.authorColor, time: entry.timeText, stacked: stacked, in: authorLabel)
+            AirEntryMetrics.show(author: author, color: entry.authorColor, in: authorLabel)
             authorLabel.isHidden = false
             authorLabel.opens(entry.onAuthorTap, name: author)
             bubbleTopToContent.deactivate()
-            bubbleTopToTime.deactivate()
             bubbleTopToAuthor.activate()
-            let authorLine = ceil(KQFont.lineHeight(.label))
-            timeTopConstraint.update(offset: AirEntryMetrics.entryInset + max(0, (authorLine - captionLine) / 2))
-            markTopConstraint.update(offset: AirEntryMetrics.entryInset + max(0, (authorLine - KQSize.mark) / 2))
-        }
-        else if stacked {
-            authorLabel.text = nil
-            authorLabel.isHidden = true
-            authorLabel.opens(nil, name: "")
-            bubbleTopToAuthor.deactivate()
-            bubbleTopToContent.deactivate()
-            bubbleTopToTime.activate()
-            timeTopConstraint.update(offset: AirEntryMetrics.entryInset)
-            markTopConstraint.update(offset: AirEntryMetrics.entryInset + max(0, (captionLine - KQSize.mark) / 2))
         }
         else {
             authorLabel.text = nil
             authorLabel.isHidden = true
             authorLabel.opens(nil, name: "")
             bubbleTopToAuthor.deactivate()
-            bubbleTopToTime.deactivate()
             bubbleTopToContent.activate()
-            timeTopConstraint.update(offset: AirEntryMetrics.entryInset + max(0, (bodyLine - captionLine) / 2))
-            markTopConstraint.update(offset: AirEntryMetrics.entryInset + max(0, (bodyLine - KQSize.mark) / 2))
         }
 
         let shown = entry.previousStatus ?? entry.status
@@ -676,6 +617,9 @@ final class AirEntryTextCell: ChatBaseTextCell {
         if window != nil {
             applyPendingStatus()
         }
+        // Last: the meta keeps its room after the text as it stands now, with every style above.
+        meta.show(time: entry.timeText, edited: entry.edited && !entry.hasLocation)
+        bubbleView.showTrailingMeta(meta, gap: AirEntryMetrics.metaGap)
 
         spokenLabel = [entry.spokenAuthor, entry.timeText].filter { !$0.isEmpty }.joined(separator: ", ")
         var value = [String]()

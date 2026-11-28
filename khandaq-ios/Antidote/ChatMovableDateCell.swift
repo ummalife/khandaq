@@ -328,14 +328,14 @@ class ChatMovableDateCell: BaseCell {
         }
     }
 
-    /// The day ("Today", "Yesterday", "12 March") heads its messages where their text starts, in grey
+    /// The day ("Today", "Yesterday", "12 March") heads its messages at the margin, where they start, in grey
     /// words without a plate or rules; the unread mark sits the same way, in ink.
     fileprivate func setupTranscriptMarks(_ model: ChatMovableDateCellModel) {
         daySeparatorContainer.isHidden = true
         unreadSeparatorContainer.isHidden = true
 
-        let textStart = AirEntryMetrics.textStart()
-        transcriptLeadingConstraints.forEach { $0.update(offset: textStart) }
+        // KHANDAQ (owner, 28.11.2026): at the margin, where an entry starts now that it has no time column.
+        transcriptLeadingConstraints.forEach { $0.update(offset: AirEntryMetrics.logStart) }
 
         let dayVisible: Bool
         if let separator = model.dateSeparator, !separator.isEmpty {

@@ -5,8 +5,9 @@
 import Foundation
 @testable import Antidote
 
-/// The transcript entry of the conversation with one person (redesign stage 2): the time column, the
-/// author over the first entry of a run only, the text, and the status mark of our own messages.
+/// The transcript entry of the conversation with one person (redesign stage 2): the author over the first entry of
+/// a run only, the text, and at the end of its last line (owner, 28.11.2026: no time column) the time and the status
+/// mark of our own messages.
 class AirEntryTextCellSnapshotTest: CellSnapshotTest {
     func testIncomingRunStartUnderTheDayMark() {
         let model = entry("Salam! Are we still on for tonight?", time: "9:41")
@@ -78,13 +79,45 @@ class AirEntryTextCellSnapshotTest: CellSnapshotTest {
         verify(groupEntry(text, time: "9:43", showsTile: true))
     }
 
-    /// An entry the history brought without a signature over it: the tile of an author nobody confirmed, a question
-    /// mark in a dashed frame (it was an empty square, owner 28.11), and the note under the text.
-    func testGroupEntryOfAnUnconfirmedAuthorHasTheQuestionTileAndItsNote() {
+    /// An entry whose author's signing key went stale (KQ-03): not named, with the tile of an author nobody confirmed,
+    /// a question mark in a dashed frame (it was an empty square, owner 28.11). KHANDAQ (owner, 28.11.2026): no line
+    /// under the text says so any more.
+    func testGroupEntryOfAnUnconfirmedAuthorHasTheQuestionTile() {
         let model = groupEntry("The gate is open now.", time: "9:44", showsTile: true, style: .unconfirmed)
-        model.authorText = "Bilal"
-        model.authorColor = AirTone.color(at: 4)
-        model.senderUnverified = true
+        model.authorText = String(localized: "air_group_author_unconfirmed")
+        model.authorColor = KQColor.ink2
+        verify(model)
+    }
+
+    /// KHANDAQ (owner, 28.11.2026): two lines whose last one is short: the time ends it at the far edge.
+    func testATwoLineTextEndsItsShortLastLineWithTheTime() {
+        verify(entry("We will meet at the old gate of the city, by the fountain, as before.", time: "9:48"))
+    }
+
+    /// A last line the words fill: the time takes a line of its own under it, at the far edge.
+    func testATextWhoseLastLineIsFullHasTheTimeOnALineOfItsOwn() {
+        verify(entry(AirEntryMetaTests.fullLine(), time: "9:49"))
+    }
+
+    /// Arabic in a left-to-right row ends at the right edge, so its time stands on a line of its own; in a
+    /// right-to-left row (the second image) it ends at the left, beside its time.
+    func testArabicTextEndsWithItsTimeOnTheSideItEnds() {
+        verify(entry("السلام عليكم، هل ما زلنا على موعد الليلة؟", time: "9:50"))
+    }
+
+    func testAReplyQuotesItsMessageOverTheText() {
+        let model = entry("Yes, after maghrib.", time: "9:51", status: .delivered)
+        var meta = MessageReplyHelper.ReplyMeta()
+        meta.senderName = "Amina"
+        meta.previewText = "Are we still on for Thursday?"
+        model.replyMeta = meta
+        verify(model)
+    }
+
+    /// The reactions stay under the text, under its time.
+    func testTheReactionsStandUnderTheTime() {
+        let model = entry("The tickets are booked.", time: "9:52")
+        model.reactionChips = [AirReactionChip(emoji: "❤️", count: 2, own: true), AirReactionChip(emoji: "👍", count: 1, own: false)]
         verify(model)
     }
 
@@ -97,11 +130,10 @@ class AirEntryTextCellSnapshotTest: CellSnapshotTest {
         model.authorColor = AirTone.color(at: 4)
         model.locationLatitude = 39.92077
         model.locationLongitude = 32.85411
-        let cell = AirEntryTextCell()
-        cell.setupWithTheme(theme, model: model)
-        cell.applyLocationMapSnapshot(pinnedMap(), forKey: ChatBaseTextCell.mapSnapshotKey(latitude: 39.92077, longitude: 32.85411))
-        layoutAsTheLogDoes(cell)
-        verifyView(cell)
+        let key = ChatBaseTextCell.mapSnapshotKey(latitude: 39.92077, longitude: 32.85411)
+        verify(model) { cell in
+            cell.applyLocationMapSnapshot(self.pinnedMap(), forKey: key)
+        }
     }
 }
 
@@ -133,11 +165,20 @@ private extension AirEntryTextCellSnapshotTest {
         return model
     }
 
-    func verify(_ model: AirEntryTextCellModel) {
-        let cell = AirEntryTextCell()
-        cell.setupWithTheme(theme, model: model)
-        layoutAsTheLogDoes(cell)
-        verifyView(cell)
+    /// The entry in a left-to-right row, then in a right-to-left one, each laid out as the log lays it out. The row
+    /// turns before its setup, as an Arabic phone has it (AppLanguage): where the time goes depends on the direction
+    /// (BubbleView.showTrailingMeta), so a row turned after its layout (verifyView) would keep the height of the other.
+    func verify(_ model: AirEntryTextCellModel, after setup: (AirEntryTextCell) -> Void = { _ in }) {
+        for rightToLeft in [false, true] {
+            let cell = AirEntryTextCell()
+            if rightToLeft {
+                cell.forceRightToLeft()
+            }
+            cell.setupWithTheme(theme, model: model)
+            setup(cell)
+            layoutAsTheLogDoes(cell)
+            FBSnapshotVerifyView(cell, identifier: rightToLeft ? "right-to-left" : "normal")
+        }
     }
 
     /// An entry of another member as the group controllers make it (ChatGroupController.configureGroupEntry).
@@ -147,6 +188,306 @@ private extension AirEntryTextCellSnapshotTest {
         model.takesReadReceipts = false
         model.authorTile = AirAuthorTile(style: style, shows: showsTile, onTap: nil)
         return model
+    }
+}
+
+/// KHANDAQ (owner, 28.11.2026): an entry has no time column. Its text starts at the margin (after the column of the
+/// tile of another member in a group) and runs to the far margin, and its time, with the mark of our own entries,
+/// ends the text's last line at the far edge when that line leaves room for it, or stands on a line of its own under
+/// the text, at the same edge. A file or a call has its time beside the bottom of its body.
+class AirEntryMetaTests: CellSnapshotTest {
+    static let rowWidth: CGFloat = 320
+    /// The far margin of the text in a row: its right edge.
+    static let farEdge = rowWidth - KQSpace.x16
+
+    /// One line of words, as wide as the text of a row of 320 points takes, that leaves less room after it than the
+    /// time ("9:49") and its gap need: the time cannot end it.
+    static func fullLine(time: String = "9:49") -> String {
+        let column = rowWidth - 2 * KQSpace.x16
+        let meta = AirEntryMeta()
+        meta.show(time: time, edited: false)
+        let room = AirEntryMetrics.metaGap + ceil(meta.systemLayoutSizeFitting(UILayoutFittingCompressedSize).width)
+        let font = KQFont.font(.body)
+        func width(_ text: String) -> CGFloat {
+            return (text as NSString).size(withAttributes: [.font: font]).width
+        }
+        let words = ["Salam,", "we", "are", "at", "the", "old", "gate", "by", "the", "fountain", "of", "the", "city"]
+        var line = ""
+        for word in words {
+            let longer = line.isEmpty ? word : line + " " + word
+            guard width(longer) <= column - 1 else {
+                break
+            }
+            line = longer
+        }
+        // The last word grows until the room after the line is too small for the time.
+        while column - width(line) >= room - 1 && width(line + "s") <= column - 1 {
+            line += "s"
+        }
+        return line
+    }
+
+    func testAnEntryHasNoTimeColumn() throws {
+        let cell = textCell(entry("Done.", time: "9:46"))
+        let text = frame(of: try XCTUnwrap(cell.bubbleView), in: cell)
+        XCTAssertEqual(text.minX, AirEntryMetrics.logStart, accuracy: 0.5, "the text starts at the margin")
+        XCTAssertEqual(text.maxX, AirEntryMetaTests.rowWidth - KQSpace.x16, accuracy: 0.5, "the text runs to the far margin")
+    }
+
+    func testTheTimeEndsTheLastLineWhenTheLineLeavesItRoom() throws {
+        let cell = textCell(entry("Done.", time: "9:46", status: .delivered))
+        let lines = try lineRects(in: cell)
+        XCTAssertEqual(lines.count, 1, "the time took a line of its own beside a short word")
+        let meta = frame(of: cell.meta, in: cell)
+        XCTAssertEqual(meta.maxX, AirEntryMetaTests.rowWidth - KQSpace.x16, accuracy: 0.5, "the time stands at the far edge")
+        XCTAssertEqual(try timeBaseline(in: cell), try lastBaseline(in: cell), accuracy: 1, "the time stands on the line of the text")
+        XCTAssertFalse(cell.mark.isHidden)
+        XCTAssertGreaterThanOrEqual(frame(of: cell.mark, in: cell).minX, frame(of: cell.meta.timeLabel, in: cell).maxX,
+                                    "our mark follows the time")
+    }
+
+    func testTheTimeTakesALineOfItsOwnUnderAFullLastLine() throws {
+        let cell = textCell(entry(AirEntryMetaTests.fullLine(), time: "9:49"))
+        let lines = try lineRects(in: cell)
+        XCTAssertEqual(lines.count, 2, "the words of a full line and the time on a line under them")
+        let meta = frame(of: cell.meta, in: cell)
+        XCTAssertGreaterThanOrEqual(meta.minY, lines[0].maxY - 0.5, "the time stands under the words")
+        assertMeta(meta, standsIn: lines[1])
+        XCTAssertEqual(meta.maxX, AirEntryMetaTests.rowWidth - KQSpace.x16, accuracy: 0.5)
+        XCTAssertLessThanOrEqual(meta.maxY, frame(of: try XCTUnwrap(cell.bubbleView), in: cell).maxY + 0.5,
+                                 "the row is measured with the time")
+    }
+
+    /// Arabic in a left-to-right row stands at the right edge, where it starts, and ends at its left: the time, at
+    /// the right edge, takes the next line.
+    func testArabicInALeftToRightRowHasItsTimeOnALineOfItsOwn() throws {
+        let cell = textCell(entry("مرحبا", time: "9:50"))
+        let lines = try lineRects(in: cell)
+        XCTAssertEqual(lines.count, 2)
+        XCTAssertEqual(try line(of: "مرحبا", in: cell).maxX, AirEntryMetaTests.farEdge, accuracy: 1,
+                       "the Arabic words stand at the right edge")
+        let meta = frame(of: cell.meta, in: cell)
+        XCTAssertGreaterThanOrEqual(meta.minY, lines[0].maxY - 0.5)
+        assertMeta(meta, standsIn: lines[1])
+        XCTAssertEqual(meta.maxX, AirEntryMetaTests.farEdge, accuracy: 0.5)
+    }
+
+    func testArabicInARightToLeftRowEndsWithItsTimeAtTheLeft() throws {
+        let cell = textCell(entry("مرحبا", time: "9:50"), rightToLeft: true)
+        XCTAssertEqual(try lineRects(in: cell).count, 1)
+        XCTAssertEqual(try line(of: "مرحبا", in: cell).maxX, AirEntryMetaTests.farEdge, accuracy: 1,
+                       "the Arabic words start at the right edge")
+        XCTAssertEqual(frame(of: cell.meta, in: cell).minX, KQSpace.x16, accuracy: 0.5, "the time stands at the left edge")
+        XCTAssertEqual(try timeBaseline(in: cell), try lastBaseline(in: cell), accuracy: 1)
+    }
+
+    func testEnglishInARightToLeftRowHasItsTimeOnALineOfItsOwnAtTheLeft() throws {
+        let cell = textCell(entry("Done.", time: "9:46"), rightToLeft: true)
+        let lines = try lineRects(in: cell)
+        XCTAssertEqual(lines.count, 2)
+        XCTAssertEqual(try line(of: "Done.", in: cell).minX, KQSpace.x16, accuracy: 1, "English starts at the left edge")
+        let meta = frame(of: cell.meta, in: cell)
+        XCTAssertEqual(meta.minX, KQSpace.x16, accuracy: 0.5)
+        XCTAssertGreaterThanOrEqual(meta.minY, lines[0].maxY - 0.5)
+        assertMeta(meta, standsIn: lines[1])
+    }
+
+    /// Emoji have no direction of their own: they run as the interface does, and the time ends their line.
+    func testEmojiInARightToLeftRowEndWithTheirTimeAtTheLeft() throws {
+        let cell = textCell(entry("👍🏽🎉", time: "9:53"), rightToLeft: true)
+        XCTAssertEqual(try lineRects(in: cell).count, 1)
+        XCTAssertEqual(try line(of: "👍🏽🎉", in: cell).maxX, AirEntryMetaTests.farEdge, accuracy: 1)
+        XCTAssertEqual(frame(of: cell.meta, in: cell).minX, KQSpace.x16, accuracy: 0.5)
+        XCTAssertEqual(try timeBaseline(in: cell), try lastBaseline(in: cell), accuracy: 1)
+    }
+
+    /// Figures are read left to right in every language: the coordinates of a place or a phone number keep their
+    /// order in an Arabic interface, start at the left and have the time under them, as English does.
+    func testFiguresKeepTheirOrderInARightToLeftRow() throws {
+        let coordinates = "39.92077, 32.85411"
+        let cell = textCell(entry(coordinates, time: "9:56"), rightToLeft: true)
+        XCTAssertEqual(try line(of: coordinates, in: cell).minX, KQSpace.x16, accuracy: 1)
+        let view = try textView(in: cell)
+        let first = view.layoutManager.location(forGlyphAt: view.layoutManager.glyphIndexForCharacter(at: 0)).x
+        let last = view.layoutManager.location(forGlyphAt: view.layoutManager.glyphIndexForCharacter(at: coordinates.utf16.count - 1)).x
+        XCTAssertLessThan(first, last, "the first figure stands at the left")
+        let lines = try lineRects(in: cell)
+        XCTAssertEqual(lines.count, 2)
+        assertMeta(frame(of: cell.meta, in: cell), standsIn: lines[1])
+        XCTAssertEqual(frame(of: cell.meta, in: cell).minX, KQSpace.x16, accuracy: 0.5)
+
+        let english = textCell(entry("15:30", time: "9:57"))
+        XCTAssertEqual(try lineRects(in: english).count, 1, "in a left-to-right row the time ends the line of figures")
+    }
+
+    /// Each paragraph of a message stands by its own direction; the time follows the last one.
+    func testEachParagraphStandsByItsOwnDirection() throws {
+        let cell = textCell(entry("Salam\nمرحبا بكم", time: "9:54"))
+        XCTAssertEqual(try line(of: "Salam", in: cell).minX, KQSpace.x16, accuracy: 1)
+        XCTAssertEqual(try line(of: "مرحبا بكم", in: cell).maxX, AirEntryMetaTests.farEdge, accuracy: 1)
+        let lines = try lineRects(in: cell)
+        XCTAssertEqual(lines.count, 3, "the English line, the Arabic line and the time under it")
+        assertMeta(frame(of: cell.meta, in: cell), standsIn: lines[2])
+
+        let english = textCell(entry("مرحبا\nSee you", time: "9:55"))
+        XCTAssertEqual(try lineRects(in: english).count, 2, "the time ends the English line")
+        XCTAssertEqual(try timeBaseline(in: english), try lastBaseline(in: english), accuracy: 1)
+    }
+
+    /// "edited" left its row under the text: it stands before the time, as Telegram has it.
+    func testEditedStandsBeforeTheTime() throws {
+        let model = entry("Done.", time: "9:46")
+        model.edited = true
+        let cell = textCell(model)
+        let edited = String(localized: "message_edited_marker")
+        XCTAssertEqual(cell.meta.timeLabel.text, edited + " 9:46")
+        let bubble = try XCTUnwrap(cell.bubbleView)
+        let rows = labels(in: bubble).filter { !$0.isHidden && $0.text == edited }
+        XCTAssertTrue(rows.isEmpty, "a row of its own still says edited")
+        XCTAssertEqual(try lineRects(in: cell).count, 1)
+    }
+
+    /// The room kept for the time is not part of the text: what is copied, said and set again is the message.
+    func testTheTextKeepsNoTraceOfTheRoomForTheTime() throws {
+        let message = "Salam, see you soon"
+        let cell = textCell(entry(message, time: "9:41"))
+        let bubble = try XCTUnwrap(cell.bubbleView)
+        XCTAssertEqual(bubble.text, message)
+        XCTAssertEqual(bubble.attributedText?.string, message)
+
+        // The log draws the row again: one room, not two.
+        cell.setupWithTheme(theme, model: entry(message, time: "9:42"))
+        layoutAsTheLogDoes(cell)
+        XCTAssertEqual(bubble.text, message)
+        let raw = try XCTUnwrap(textView(in: cell).attributedText?.string)
+        XCTAssertEqual(raw, message + "\u{200B}\u{FFFC}")
+        XCTAssertEqual(try lineRects(in: cell).count, 1)
+    }
+
+    /// A row of another member of a group: the text after the column of the tile, the time at the far edge.
+    func testAGroupEntryKeepsTheColumnOfTheTileAndTheTimeAtTheFarEdge() throws {
+        let model = entry("Salam!", time: "9:41")
+        model.authorTile = AirAuthorTile(style: .person(initials: "A", tone: 2), shows: true, onTap: nil)
+        let cell = textCell(model)
+        let text = frame(of: try XCTUnwrap(cell.bubbleView), in: cell)
+        XCTAssertEqual(text.minX, AirEntryMetrics.logStart + KQSize.tileCompact + KQSpace.x8, accuracy: 0.5)
+        XCTAssertEqual(frame(of: cell.meta, in: cell).maxX, AirEntryMetaTests.rowWidth - KQSpace.x16, accuracy: 0.5)
+        XCTAssertEqual(frame(of: cell.authorTile, in: cell).minX, AirEntryMetrics.logStart, accuracy: 0.5)
+    }
+
+    func testAFileHasItsTimeBesideTheBottomOfItsRow() throws {
+        let cell = ChatOutgoingFileCell()
+        cell.setupWithTheme(theme, model: fileEntry(ChatOutgoingFileCellModel(), state: .done))
+        layoutAsTheLogDoes(cell)
+        let meta = frame(of: cell.entry.meta, in: cell)
+        let row = frame(of: cell.fileRow, in: cell)
+        XCTAssertEqual(row.minX, AirEntryMetrics.logStart, accuracy: 0.5, "the file starts at the margin")
+        XCTAssertEqual(meta.maxX, AirEntryMetaTests.rowWidth - KQSpace.x16, accuracy: 0.5)
+        XCTAssertEqual(meta.maxY, row.maxY, accuracy: 0.5, "the time stands level with the bottom of the file")
+        XCTAssertLessThanOrEqual(row.maxX, meta.minX - AirEntryMetrics.metaGap + 0.5, "the file runs under its time")
+        XCTAssertEqual(cell.entry.timeLabel.text, "9:41")
+    }
+
+    func testTheTimeOfAFileStandsOverItsReactions() throws {
+        let model = fileEntry(ChatIncomingFileCellModel(), state: .done)
+        model.reactionChips = [AirReactionChip(emoji: "👍", count: 1, own: false)]
+        let cell = ChatIncomingFileCell()
+        cell.setupWithTheme(theme, model: model)
+        layoutAsTheLogDoes(cell)
+        let meta = frame(of: cell.entry.meta, in: cell)
+        XCTAssertFalse(cell.reactionsView.isHidden)
+        XCTAssertEqual(meta.maxY, frame(of: cell.fileRow, in: cell).maxY, accuracy: 0.5)
+        XCTAssertLessThanOrEqual(meta.maxY, frame(of: cell.reactionsView, in: cell).minY + 0.5)
+    }
+}
+
+private extension AirEntryMetaTests {
+    func entry(_ text: String, time: String, status: AirEntryStatus = .none) -> AirEntryTextCellModel {
+        let model = AirEntryTextCellModel()
+        model.message = text
+        model.timeText = time
+        model.status = status
+        model.isOutgoing = status != .none
+        return model
+    }
+
+    func textCell(_ model: AirEntryTextCellModel, rightToLeft: Bool = false) -> AirEntryTextCell {
+        let cell = AirEntryTextCell()
+        if rightToLeft {
+            cell.forceRightToLeft()
+        }
+        cell.setupWithTheme(theme, model: model)
+        layoutAsTheLogDoes(cell)
+        return cell
+    }
+
+    func frame(of view: UIView, in cell: UITableViewCell) -> CGRect {
+        return view.convert(view.bounds, to: cell.contentView)
+    }
+
+    func labels(in view: UIView) -> [UILabel] {
+        return view.subviews.flatMap { ($0 as? UILabel).map { [$0] } ?? labels(in: $0) }
+    }
+
+    func textView(in cell: AirEntryTextCell) throws -> UITextView {
+        let bubble = try XCTUnwrap(cell.bubbleView)
+        return try XCTUnwrap(bubble.subviews.compactMap { $0 as? UITextView }.first)
+    }
+
+    /// The lines of the text, in the row, as the text system laid them out.
+    func lineRects(in cell: AirEntryTextCell) throws -> [CGRect] {
+        let view = try textView(in: cell)
+        let layout = view.layoutManager
+        layout.ensureLayout(for: view.textContainer)
+        var lines = [CGRect]()
+        layout.enumerateLineFragments(forGlyphRange: NSRange(location: 0, length: layout.numberOfGlyphs)) { rect, _, _, _, _ in
+            let inView = rect.offsetBy(dx: view.textContainerInset.left, dy: view.textContainerInset.top)
+            lines.append(view.convert(inView, to: cell.contentView))
+        }
+        return lines
+    }
+
+    /// How far the line of the words `part` of the message goes, its words and marks, in the row. (The bounding rect
+    /// of Arabic glyphs is far wider than the glyphs.)
+    func line(of part: String, in cell: AirEntryTextCell) throws -> CGRect {
+        let view = try textView(in: cell)
+        let layout = view.layoutManager
+        layout.ensureLayout(for: view.textContainer)
+        let message = try XCTUnwrap(cell.bubbleView.text) as NSString
+        let range = message.range(of: part)
+        XCTAssertNotEqual(range.location, NSNotFound)
+        let glyph = layout.glyphIndexForCharacter(at: range.location)
+        let used = layout.lineFragmentUsedRect(forGlyphAt: glyph, effectiveRange: nil)
+        let inView = used.offsetBy(dx: view.textContainerInset.left, dy: view.textContainerInset.top)
+        return view.convert(inView, to: cell.contentView)
+    }
+
+    /// The time on a line of its own stands within that line, which the text keeps as tall as the time.
+    func assertMeta(_ meta: CGRect, standsIn line: CGRect, file: StaticString = #filePath, line number: UInt = #line) {
+        XCTAssertGreaterThanOrEqual(meta.minY, line.minY - 0.5, "the time stands in its line", file: file, line: number)
+        XCTAssertLessThanOrEqual(meta.maxY, line.maxY + 0.5, "the time stands in its line", file: file, line: number)
+    }
+
+    /// The baseline of the text's last line, in the row: of its last character, not of the room kept after it for
+    /// the time (whose location TextKit gives at its bottom).
+    func lastBaseline(in cell: AirEntryTextCell) throws -> CGFloat {
+        let view = try textView(in: cell)
+        let layout = view.layoutManager
+        layout.ensureLayout(for: view.textContainer)
+        let message = try XCTUnwrap(cell.bubbleView.text) as NSString
+        XCTAssertGreaterThan(message.length, 0)
+        let glyph = layout.glyphIndexForCharacter(at: message.length - 1)
+        let line = layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        let y = line.minY + layout.location(forGlyphAt: glyph).y + view.textContainerInset.top
+        return view.convert(CGPoint(x: 0, y: y), to: cell.contentView).y
+    }
+
+    /// The baseline of the words of the time, in the row.
+    func timeBaseline(in cell: AirEntryTextCell) throws -> CGFloat {
+        let label = cell.meta.timeLabel
+        let font = try XCTUnwrap(label.font)
+        let y = (label.bounds.height - font.lineHeight) / 2 + font.ascender
+        return label.convert(CGPoint(x: 0, y: y), to: cell.contentView).y
     }
 }
 
@@ -216,7 +557,7 @@ class AirAuthorTileTests: CellSnapshotTest {
         let last = textCell(entry(showsTile: true, text: "Salam!"))
         let firstText = frame(of: try XCTUnwrap(first.bubbleView), in: first)
         let lastText = frame(of: try XCTUnwrap(last.bubbleView), in: last)
-        let column = AirEntryMetrics.textStart() + KQSize.tileCompact + KQSpace.x8
+        let column = AirEntryMetrics.logStart + KQSize.tileCompact + KQSpace.x8
 
         XCTAssertEqual(firstText.minX, column, accuracy: 0.5)
         XCTAssertEqual(lastText.minX, column, accuracy: 0.5)
@@ -251,9 +592,9 @@ class AirAuthorTileTests: CellSnapshotTest {
         XCTAssertFalse(hit(cell, tile, CGPoint(x: tile.bounds.midX, y: tile.bounds.midY)) === tile)
         tile.perform(Selector(("tapped")))
         XCTAssertEqual(opened, 0)
-        XCTAssertEqual(frame(of: try XCTUnwrap(cell.bubbleView), in: cell).minX, AirEntryMetrics.textStart(), accuracy: 0.5)
+        XCTAssertEqual(frame(of: try XCTUnwrap(cell.bubbleView), in: cell).minX, AirEntryMetrics.logStart, accuracy: 0.5)
         let name = try XCTUnwrap(authorLabel(in: cell))
-        XCTAssertEqual(frame(of: name, in: cell).minX, AirEntryMetrics.textStart(), accuracy: 0.5)
+        XCTAssertEqual(frame(of: name, in: cell).minX, AirEntryMetrics.logStart, accuracy: 0.5)
     }
 
     /// A file of another member keeps the same column and shows the same tile, which opens the member.
@@ -274,14 +615,14 @@ class AirAuthorTileTests: CellSnapshotTest {
         XCTAssertTrue(hit(cell, tile, CGPoint(x: tile.bounds.midX, y: tile.bounds.midY)) === tile)
         tile.perform(Selector(("tapped")))
         XCTAssertEqual(opened, 1)
-        let column = AirEntryMetrics.textStart() + KQSize.tileCompact + KQSpace.x8
+        let column = AirEntryMetrics.logStart + KQSize.tileCompact + KQSpace.x8
         XCTAssertEqual(frame(of: cell.entry.authorLabel, in: cell).minX, column, accuracy: 0.5)
 
         model.authorTile = nil
         cell.setupWithTheme(theme, model: model)
         layoutAsTheLogDoes(cell)
         XCTAssertTrue(tile.isHidden, "a file of a conversation with one person has no tile")
-        XCTAssertEqual(frame(of: cell.entry.authorLabel, in: cell).minX, AirEntryMetrics.textStart(), accuracy: 0.5)
+        XCTAssertEqual(frame(of: cell.entry.authorLabel, in: cell).minX, AirEntryMetrics.logStart, accuracy: 0.5)
     }
 
     /// A location of another member keeps its map in the column beside the tile, inside its row, on a narrow phone.

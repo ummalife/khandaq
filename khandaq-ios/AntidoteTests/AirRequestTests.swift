@@ -515,13 +515,15 @@ class AirLargeTextLayoutTests: XCTestCase {
         XCTAssertTrue(tray.isHidden, "an empty tray came back after the keyboard")
     }
 
-    func testTheHeadOfARunPutsTheAuthorAfterTheTimeAtTheLargestSizes() {
+    /// KHANDAQ (owner, 28.11.2026): the time left the head of a run for the end of the entry; at the largest sizes the
+    /// author wraps at its words.
+    func testTheAuthorOverARunWrapsAtItsWordsAtTheLargestSizes() {
         let label = UILabel()
-        AirEntryMetrics.show(author: "Максимилиан", color: KQColor.ink, time: "10:04", stacked: true, in: label)
-        XCTAssertEqual(label.attributedText?.string, "10:04 Максимилиан")
+        AirEntryMetrics.show(author: "Максимилиан", color: KQColor.ink, category: .accessibilityExtraExtraExtraLarge, in: label)
+        XCTAssertEqual(label.text, "Максимилиан", "the head starts with the time again")
         XCTAssertEqual(label.numberOfLines, 0, "the head must wrap at its words")
 
-        AirEntryMetrics.show(author: "Максимилиан", color: KQColor.ink, time: "10:04", stacked: false, in: label)
+        AirEntryMetrics.show(author: "Максимилиан", color: KQColor.ink, category: .large, in: label)
         XCTAssertEqual(label.text, "Максимилиан")
         XCTAssertEqual(label.numberOfLines, 2)
         XCTAssertEqual(label.font, KQFont.font(.label, weight: 600), "the head left its font on the author")

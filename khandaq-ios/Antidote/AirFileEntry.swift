@@ -369,11 +369,6 @@ final class AirFileRowView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// The line of the name, for the time column to sit on.
-    static var firstLineHeight: CGFloat {
-        return max(KQSize.icon, ceil(KQFont.lineHeight(.label)))
-    }
-
     /// `showsHead` is false under a preview, which already shows what the file is.
     func configure(name: String, size: String, text: AirFileEntryText, incoming: Bool, showsHead: Bool) {
         let category = UIApplication.shared.preferredContentSizeCategory

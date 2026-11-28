@@ -74,6 +74,18 @@ final class ChatPreviewEntriesTests: XCTestCase {
         XCTAssertEqual(entries[0].tile, .unconfirmed)
     }
 
+    /// KHANDAQ (owner, 28.11.2026): a row the history brought without a signature over it (every row from the desktop)
+    /// has its author's name and tile, as any other row of that member.
+    func testARowTheHistoryBroughtWithoutASignatureHasItsAuthorsTile() throws {
+        let synced = try entry("From the desktop", peerId: 3, name: "Amina", at: 0)
+        synced.groupHistorySync = true
+
+        let entries = ChatPreviewController.entries(of: [synced], in: try group(), groups: OCTSubmanagerGroupsMock())
+
+        XCTAssertEqual(entries[0].author, "Amina")
+        XCTAssertEqual(entries[0].tile, .person(initials: AirInitials.from("Amina"), tone: AirTone.index(for: "Amina")))
+    }
+
     func testAPrivateChatsPreviewHasNoAuthorsAndNoTiles() throws {
         let chat = try appClass("OCTChat", as: OCTChat.Type.self).init()
         let theirs = try entry("Hi", at: 0)

@@ -1,0 +1,4 @@
+{
+  "en-US": "Chats: a message starts at the edge of the screen, with its time at the end of its last line, and group messages from history no longer say the sender is not verified. Your video keeps its picture while it is being sent. When the sender cancels a file, the chat says so instead of The download stopped. A shorter line for the founder of a group.",
+  "ru-RU": "Чаты: сообщение начинается от края экрана, время стоит в конце его последней строки, а сообщения группы из истории больше не помечены «отправитель не подтверждён». Ваше видео при отправке показывает свой кадр. Если отправитель отменил файл, в чате так и написано, а не «Загрузка прервалась». Короче строка роли основателя группы."
+}

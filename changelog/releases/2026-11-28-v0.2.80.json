@@ -35,7 +35,7 @@
     {
       "severity": "low",
       "title": "Desktop: a sample of the smiley set",
-      "description": "Under the smiley set in Settings, Chats, a few emoticons stand as a message shows them with that set, at the size chosen, so the sets can be told apart: the ASCII sets leave typed smileys as text, Classic has pictures of its own, and emojione and Universe are drawn differently.",
+      "description": "Under the smiley set in Settings, Appearance, Conversations, a few emoticons stand as a message shows them with that set, at the size chosen, so the sets can be told apart: the ASCII sets leave typed smileys as text, Classic has pictures of its own, and emojione and Universe are drawn differently.",
       "platforms": [
         "desktop"
       ]
